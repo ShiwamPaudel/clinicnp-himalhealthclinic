@@ -29,7 +29,6 @@ const TABLES = [
   "bill_line_batches",
   "sale_returns",
   "sale_return_lines",
-  "cbms_queue",
   "audit_log",
 ] as const;
 

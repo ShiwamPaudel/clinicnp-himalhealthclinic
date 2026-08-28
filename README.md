@@ -55,15 +55,15 @@ pnpm dev            # http://localhost:3000
 ## Environment variables
 
 See `.env.example`. Required to run: `TURSO_DATABASE_URL`, `AUTH_SECRET`.
-Optional until needed: `TURSO_AUTH_TOKEN` (hosted Turso), `CBMS_*` (IRD
-transmission), `CRON_SECRET` (backup/CBMS cron auth).
+Optional until needed: `TURSO_AUTH_TOKEN` (hosted Turso), `CRON_SECRET`
+(backup cron auth), `BLOB_READ_WRITE_TOKEN` (patient files, Phase 2).
 
 ## Deploying to Vercel
 
 1. Set all env vars from `.env.example` in Project → Settings → Environment Variables
    (use a hosted Turso URL + token, and a strong `AUTH_SECRET`).
-2. `vercel.json` registers the cron jobs (`/api/cron/cbms` every minute,
-   `/api/cron/backup` nightly). They require `CRON_SECRET`.
+2. `vercel.json` registers the nightly backup cron (`/api/cron/backup`).
+   It requires `CRON_SECRET`.
 
 ## Project layout
 

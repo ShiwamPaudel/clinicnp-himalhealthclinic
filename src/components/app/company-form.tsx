@@ -28,7 +28,6 @@ export function CompanyForm({ initial }: { initial: Company }) {
       minRateIsCost: Boolean(data.minRateIsCost),
       expiryAlertDays: Number(data.expiryAlertDays) as 30 | 60 | 90,
       logoUrl: data.logoUrl || null,
-      cbmsEnabled: initial.cbmsEnabled, // managed on the Compliance tab
     });
     setSaving(false);
     if (res.ok) toast.success(strings.saved);

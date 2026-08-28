@@ -43,7 +43,6 @@ const SHOTS = [
   { slug: "22-reports-moving", path: "/reports/moving", wait: 500 },
   { slug: "23-settings-company", path: "/settings/company", wait: 400 },
   { slug: "24-settings-users", path: "/settings/users" },
-  { slug: "25-settings-compliance", path: "/settings/compliance" },
   { slug: "26-settings-backup", path: "/settings/backup" },
   { slug: "27-settings-audit", path: "/settings/audit" },
 ];

@@ -1,6 +1,6 @@
 /**
  * Phase 5: backup export → restore round-trip returns data exactly to snapshot,
- * atomically. Also exercises the CBMS queue drain no-op when disabled.
+ * atomically.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { createClient } from "@libsql/client";
@@ -87,11 +87,5 @@ describe("Phase 5 — backup / restore", () => {
     expect(Number(count.rows[0]!.n)).toBe(1); // back to snapshot
     const item = await db().execute("SELECT brand_name FROM items");
     expect(item.rows[0]!.brand_name).toBe("ABC Med");
-  });
-
-  it("CBMS drain is a no-op when disabled", async () => {
-    const { drainCbms } = await import("@/lib/repos/cbms");
-    const r = await drainCbms({ enabled: false, endpoint: "", username: "", password: "" });
-    expect(r.transmitted).toBe(false);
   });
 });

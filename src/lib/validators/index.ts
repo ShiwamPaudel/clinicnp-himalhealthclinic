@@ -172,6 +172,5 @@ export const companySchema = z.object({
   roundingOn: z.boolean(),
   expiryAlertDays: z.union([z.literal(30), z.literal(60), z.literal(90)]),
   minRateIsCost: z.boolean(),
-  cbmsEnabled: z.boolean(),
 });
 export type CompanyInput = z.infer<typeof companySchema>;

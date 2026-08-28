@@ -48,19 +48,6 @@ export async function saveCompanyAction(
   }
 }
 
-export async function setCbmsEnabledAction(
-  enabled: boolean,
-): Promise<ActionResult> {
-  try {
-    await assertAdmin();
-    const company = await getCompany();
-    await saveCompany({ ...company, cbmsEnabled: enabled });
-    revalidatePath("/settings/compliance");
-    return OK;
-  } catch (err) {
-    return handle(err);
-  }
-}
 
 export async function createUserAction(input: unknown): Promise<ActionResult> {
   try {

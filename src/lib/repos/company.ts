@@ -21,7 +21,6 @@ export interface Company {
   roundingOn: boolean;
   expiryAlertDays: ExpiryAlertDays;
   minRateIsCost: boolean;
-  cbmsEnabled: boolean;
 }
 
 const DEFAULTS: Company = {
@@ -37,7 +36,6 @@ const DEFAULTS: Company = {
   roundingOn: false,
   expiryAlertDays: 60,
   minRateIsCost: false,
-  cbmsEnabled: false,
 };
 
 function mapCompany(r: Row): Company {
@@ -54,7 +52,6 @@ function mapCompany(r: Row): Company {
     roundingOn: Number(r.rounding_on) === 1,
     expiryAlertDays: Number(r.expiry_alert_days) as ExpiryAlertDays,
     minRateIsCost: Number(r.min_rate_is_cost) === 1,
-    cbmsEnabled: Number(r.cbms_enabled ?? 0) === 1,
   };
 }
 
@@ -68,7 +65,7 @@ export async function saveCompany(c: Company): Promise<void> {
     sql: `INSERT INTO company
             (id, name, address, phone, pan_no, dda_no, vat_registered, invoice_footer,
              logo_url, print_format, rounding_on, expiry_alert_days, min_rate_is_cost,
-             cbms_enabled, updated_at)
+             updated_at)
           VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
@@ -83,7 +80,6 @@ export async function saveCompany(c: Company): Promise<void> {
             rounding_on = excluded.rounding_on,
             expiry_alert_days = excluded.expiry_alert_days,
             min_rate_is_cost = excluded.min_rate_is_cost,
-            cbms_enabled = excluded.cbms_enabled,
             updated_at = excluded.updated_at`,
     args: [
       c.name,
@@ -98,7 +94,6 @@ export async function saveCompany(c: Company): Promise<void> {
       c.roundingOn ? 1 : 0,
       c.expiryAlertDays,
       c.minRateIsCost ? 1 : 0,
-      c.cbmsEnabled ? 1 : 0,
       new Date().toISOString(),
     ],
   });

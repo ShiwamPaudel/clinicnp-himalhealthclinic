@@ -349,16 +349,6 @@ const CHAPTERS = [
         ],
       },
       {
-        img: "25-settings-compliance",
-        title: "Compliance (CBMS)",
-        blurb:
-          "If your shop reports sales to the government's billing system, ClinicNP can queue and send them here.",
-        points: [
-          "Turn it on and enter your details; ClinicNP sends bills in the background.",
-          "The status here shows what has been sent and what's still waiting.",
-        ],
-      },
-      {
         img: "26-settings-backup",
         title: "Backup &amp; restore",
         blurb:

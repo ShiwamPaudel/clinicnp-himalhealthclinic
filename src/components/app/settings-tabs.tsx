@@ -5,12 +5,11 @@ import { usePathname } from "next/navigation";
 import { Header } from "@/components/app/header";
 import { cn } from "@/lib/cn";
 
-// Phase 1 tabs. Later phases add Printing, Backup, Compliance.
+// Settings tabs. Later phases add Printing, Modules, Fiscal years.
 const TABS = [
   { href: "/settings/company", label: "Company" },
   { href: "/settings/users", label: "Users" },
   { href: "/settings/backup", label: "Backup" },
-  { href: "/settings/compliance", label: "Compliance" },
   { href: "/settings/audit", label: "Audit log" },
 ];
 

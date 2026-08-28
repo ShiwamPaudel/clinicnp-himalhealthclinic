@@ -258,24 +258,6 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
       }
     }
 
-    // Queue for CBMS transmission (drained by the cron only when enabled).
-    // Payload is our own bill summary; the IRD field mapping is applied at send time.
-    const cbmsPayload = JSON.stringify({
-      billId: input.id,
-      invoiceNo,
-      fiscalLabel: fy.bsLabel,
-      dateBs: input.dateBs,
-      totalPaisa: total,
-      vatPaisa,
-      panNo: company.panNo,
-    });
-    await tx.execute({
-      sql: `INSERT INTO cbms_queue (bill_id, payload_json, attempts, status, updated_at)
-            VALUES (?, ?, 0, 'pending', ?)
-            ON CONFLICT(bill_id) DO NOTHING`,
-      args: [input.id, cbmsPayload, now],
-    });
-
     await tx.commit();
     return {
       id: input.id,
