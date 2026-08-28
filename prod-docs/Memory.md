@@ -23,11 +23,11 @@
 
 **Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic Pvt. Ltd.** (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
-**Phase:** **Phase 1 in progress** — milestone 1 of 4 (rename) done; modules, fiscal years, stock out still to come.
+**Phase:** **Phase 1 complete** (all four milestones + CBMS removal). Ready for Phase 2 (patients, visits, files) once the outstanding items below are settled.
 **Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic` — git initialised 2083-05-12. Imported from `D:\IBN\Products Codebase\AushadhiPOS` (the v1 tree, which had no git history). The old tree is untouched and is the fallback.
 **Inherited v1 state:** all 5 v1 phases complete; `pnpm build` clean; **68 tests green** (one known flaky test-isolation failure in the phase-4 file — different test each run, always green on re-run, caused by the shared `db()` singleton across test files). Not yet deployed to Vercel.
-**Deployed URL:** — (none yet). Running on the owner's hosted Turso.
-**Live data note:** the owner's hosted Turso holds only leftover test rows ("Test Brand", inactive "cc"); seeded demo items are gone. Re-seed with `pnpm db:seed` if needed. **Capture screenshots against a throwaway local file DB, never against their Turso.**
+**Deployed URL:** — (none yet). **New hosted Turso** (`healthclinic-…`) provisioned 2083-05-13, migrated to `0007` and seeded. The old `fa…` database is abandoned — do not point at it again.
+**Live data note:** the new Turso holds seeded sample data only (2 sample medicines, 3 batches, 1 sample supplier, admin + bikash). One real stock-out (SO-2083/84-000001) was recorded against it while verifying Phase 1. No patient or clinical data exists yet. **Once the clinic enters real data, go back to capturing against a throwaway local file DB.**
 
 **Schema state (inherited):** `0001_init.sql`, `0002_auth_security.sql` (`login_throttle`), `0003_bill_line_short.sql`, `0004_compliance.sql` (`company.cbms_enabled`), `0005_item_shape.sql`. Extra columns vs the original spec: `items.preferred_supplier_id`, `company.min_rate_is_cost`, `items.shape`. **All five are applied on the hosted Turso** (verified 2083-05-12, `0005` at 2026-07-16T02:35Z) — the old "may still need 0005" note was stale.
 **Audit facts established 2083-05-12 (do not re-derive):**
@@ -48,15 +48,18 @@
 - **Windows notes:** libsql `file:` paths need a Windows-style path with a drive letter (a Git Bash `$(pwd)` unix path gives SQLITE_CANTOPEN 14). `next start` can leave a process holding the port — free it with `Get-NetTCPConnection -LocalPort N -State Listen | Stop-Process`.
 - **Testing note:** integration tests import repos with the vitest `@` alias plus a `server-only` stub (`tests/stubs/server-only.ts`); point `TURSO_DATABASE_URL` at a temp file DB before importing repos; `fileParallelism: false`; `__resetDbForTests()` between files.
 
-**In progress:** Phase 1. Milestone 1 (rename) committed. Next: milestone 2 (module system, `0006`).
+**In progress:** —
 
-**Next up:** `0006_modules_fy.sql` + `lib/modules.ts` + Settings → Modules + the `requireModule('pharmacy')` retrofit (18 pages, 7 server actions).
+**Next up:** Phase 2 — patients, visits, files (`0008_clinic_core.sql`, `lib/patient-no.ts`, `lib/age.ts`, the patient card, OPD slip). **Blocked on:** real ClinicNP icon art (see Known issues), and the owner's ruling on D-040.
 
 **Known issues / risks (inherited):**
 - `nepali-date-converter.toJsDate()` returns non-midnight times → `lib/bs.ts toAD()` normalises to local midnight; keep all date maths on `toAD()` output (D-006).
 - Stock valuation "salable value" uses the base-unit selling rate — a conservative proxy (D-010).
 - Offline bills print a provisional slip number; the final SI number appears on reprint after sync (D-003).
-- CSP still allows inline script (nonce CSP deferred); the login throttle is per-identity, not per-IP.
+- CSP still allows inline script (nonce CSP deferred); the login throttle is per-identity, not per-IP (API rate limiting is now per-user/IP in our own DB — D-045).
+- `public/icons/*.png` (favicon, 192, 512, maskable) are still **Faarma artwork**. Raster files cannot be redrawn here and Rules §10 forbids inventing brand assets. **The owner must supply real ClinicNP icons before go-live.**
+- The dashboard still shows pharmacy panels when the pharmacy module is off; Phases.md schedules "layout adapts when only one module is on" for Phase 4.
+- Reports are year-aware via `?fy=` (the range clamps to the chosen year). Per-report recomputation beyond the range — and the "refund a closed-year bill into the open year" path — remain Phase 4.
 
 **Requested but deliberately NOT built** *(keep this list; it is the scope fence)*
 - Lab result entry / report generation / reference ranges — belongs to Nidanyo, not ClinicNP (Rules.md §2.2).
@@ -113,6 +116,13 @@
 | D-038 | The counter's IndexedDB is renamed `faarma` → `clinicnp` with a **verified carry-over**: copy `outbox` + `held`, confirm the counts, and only then delete the old database | A queued bill is never destroyed to tidy a name. Risk is near-zero anyway (v1 never deployed), but the guard is cheap |
 | D-039 | The hosted Turso is **never** the dev target. `.env.local` in this repo points at a local file DB and carries **no** Turso credentials | Memory's standing rule: never test or capture against the clinic's data |
 | D-040 | *(assumption, pending owner)* The vocabulary sweep **excludes `db/migrations/`** | `0001_init.sql:1` carries the retired name in a comment and Rules §5 forbids editing an applied migration. The name survives in no shipped string |
+| D-041 | **CBMS removed entirely** at the owner's instruction, not left behind a toggle | The clinic does not report to the government billing system. `cbms_queue` and `company.cbms_enabled` stay in the schema (unused, empty) because removing them needs a rebuild that buys nothing |
+| D-042 | Table rebuilds use `PRAGMA foreign_keys = OFF` **outside** the transaction | Tested: `defer_foreign_keys = ON` inside the transaction fails with `SQLITE_CONSTRAINT_FOREIGNKEY` on `DROP TABLE`. `db/migrate.ts` implements this behind the `@rebuild` directive, with `@verify` row counts |
+| D-043 | **`(app)/loading.tsx` removed.** Its Suspense boundary streamed a 200 before any guard ran, so `notFound()` gave a 404 body with a 200 status | Rules §1.11 needs a real 404. Measured 200 → 404 after removal. `NavProgress` still covers navigation feedback. Reasoning kept in `src/app/(app)/README-loading.md` |
+| D-044 | Middleware does **not** enforce modules (contra Architecture §2.2) | Middleware is edge-only and D-005 keeps libSQL out of the edge runtime. Enforcement is `requireModule`/`requireModulePage` at every page, route and action — verified 200 → 404 → 200 across all 15 pharmacy routes |
+| D-045 | **Rate limiting lives in our own database** (`rate_limits`), no third-party service | Owner asked for it without external dependencies. Fixed windows keyed by window index, so one upsert is the whole algorithm; swept by the nightly cron |
+| D-046 | **`bill_line_batches` is read back by `rowid`, not `id`** | Ids are ULIDs, and two minted in the same millisecond sort backwards ~44% of the time (measured over 20,000 pairs). `ORDER BY id` was handing returned stock to the wrong batch and mis-costing COGS. This was the real cause of the "flaky phase-4 test" — it was never flakiness |
+| D-047 | Accountant is enforced read-only by `canBill()`, not just by the role label | Every existing `role !== "admin"` branch meant "staff"; without an explicit guard the new third role would have silently inherited Staff's billing rights |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -151,3 +161,12 @@ Broke/fixed: nothing broke. Counter bundle *improved* 140 kB → 135 kB by dropp
 Verified: `pnpm build` clean; **74 tests green** (68 inherited + 6 new); browser confirms `<title>` = ClinicNP and the only IndexedDB is `clinicnp`; login, dashboard and counter all read ClinicNP. Vocabulary sweep clean outside `db/migrations/` (D-040).
 Not built (requested, out of scope): none.
 Next: milestone 2 — `0006_modules_fy.sql`, `lib/modules.ts`, Settings → Modules, and the `requireModule('pharmacy')` retrofit.
+
+### C-002  ·  2083-05-13  ·  Phase 1 (milestones 2-4 + CBMS removal) — PHASE COMPLETE
+Built: **CBMS removed** entirely (D-041). **Module system** — `0006_modules_fy.sql`, `lib/modules.ts`, Settings → Modules, retrofit onto 18 pages + 7 actions, nav grouping, derived name/title. **Fiscal years** — status + close-year wizard + selector + closed-year banner + `ClosedFiscalYearError` on every write path; Accountant role wired through. **Stock out** — `0007_stock_out.sql` (stock_moves rebuild), `lib/repos/adjustments.ts`, reason-tile entry screen, register with value-by-reason, detail + 80mm note, xlsx export, and the Expired list re-routed through the one path. **Rate limiting** in our own DB.
+Decisions/assumptions: D-041 … D-047.
+Schema changes: `0006_modules_fy.sql`, `0007_stock_out.sql` — both applied to the new hosted Turso after a dry run on a scratch copy.
+Broke/fixed: **found and fixed a real pharmacy bug (D-046)** — sale returns restored stock to the wrong batch ~44% of the time because allocation order was recovered by ULID sort. This had been mis-recorded as "flaky test isolation" since v1. Also fixed: `createPurchase` briefly lost its fresh-install bootstrap; the seed created a fiscal year with no status.
+Verified: 106 tests green, 8 consecutive clean runs (the suite is no longer flaky). Build clean. Browser-verified against the live DB: all 15 pharmacy routes 200 → 404 → 200 on the module toggle; a pharmacy-only install titles itself "Faarma"; a 1-strip supplier return took stock 30 → 20, credited the supplier, wrote the purchase return and a reason-carrying ledger row, and logged the audit entry.
+Not built (requested, out of scope): none. Deferred to their scheduled phases: dashboard module-adaptive layout (Phase 4), refunds of closed-year bills into the open year (Phase 4).
+Next: Phase 2 — patients, visits and files.
