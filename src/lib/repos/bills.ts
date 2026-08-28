@@ -512,3 +512,37 @@ export async function settleCreditBill(id: string): Promise<void> {
     args: [new Date().toISOString(), id],
   });
 }
+
+export interface PatientBillRow {
+  id: string;
+  invoiceNo: number | null;
+  fiscalLabel: string;
+  dateBs: string;
+  totalPaisa: number;
+  status: string;
+  visitId: string | null;
+}
+
+/** Every bill for one patient, newest first — feeds the patient card timeline. */
+export async function listBillsForPatient(
+  patientId: string,
+): Promise<PatientBillRow[]> {
+  const res = await db().execute({
+    sql: `SELECT b.id, b.invoice_no, b.date_bs, b.total_paisa, b.status,
+                 b.visit_id, f.bs_label
+            FROM bills b
+            LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
+           WHERE b.patient_id = ?
+           ORDER BY b.date_bs DESC, b.client_created_at DESC`,
+    args: [patientId],
+  });
+  return res.rows.map((r) => ({
+    id: r.id as string,
+    invoiceNo: r.invoice_no != null ? Number(r.invoice_no) : null,
+    fiscalLabel: (r.bs_label as string) ?? "",
+    dateBs: r.date_bs as string,
+    totalPaisa: Number(r.total_paisa),
+    status: r.status as string,
+    visitId: (r.visit_id as string | null) ?? null,
+  }));
+}

@@ -12,6 +12,10 @@ import {
   BarChart3,
   Settings,
   Receipt,
+  CalendarClock,
+  Users,
+  Stethoscope,
+  Paperclip,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/lib/repos/users";
@@ -46,8 +50,16 @@ const GROUPS: NavGroup[] = [
       { href: "/billing", label: "New bill", icon: Receipt },
     ],
   },
-  // Clinic screens arrive in Phase 2; the group renders once it has items.
-  { module: "clinic", label: "Clinic", items: [] },
+  {
+    module: "clinic",
+    label: "Clinic",
+    items: [
+      { href: "/visits/today", label: "Today", icon: CalendarClock },
+      { href: "/patients", label: "Patients", icon: Users },
+      { href: "/visits", label: "Visits", icon: Stethoscope },
+      { href: "/files/pending", label: "Files pending", icon: Paperclip },
+    ],
+  },
   {
     module: "pharmacy",
     label: "Pharmacy",
