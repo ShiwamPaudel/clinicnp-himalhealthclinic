@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import { nearExpiryBatches } from "@/lib/repos/batches";
 import { getCompany } from "@/lib/repos/company";
@@ -11,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function ExpiryReportPage() {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const todayIso = adToIso(new Date());
   const company = await getCompany();
   const windowIso = adToIso(

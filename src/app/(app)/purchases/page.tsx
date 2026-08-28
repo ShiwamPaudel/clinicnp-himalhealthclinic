@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, ShoppingCart, RotateCcw } from "lucide-react";
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listPurchases } from "@/lib/repos/purchases";
 import { formatPaisa } from "@/lib/money";
 import { PageShell } from "@/components/app/page-shell";
@@ -10,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function PurchasesPage() {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const purchases = await listPurchases();
 
   return (

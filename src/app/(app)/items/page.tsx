@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Package, Pencil } from "lucide-react";
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import { itemStockMap } from "@/lib/repos/batches";
 import { adToIso } from "@/lib/bs";
@@ -14,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function ItemsPage() {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const [items, stock] = await Promise.all([
     listItems(true),
     itemStockMap(adToIso(new Date())),

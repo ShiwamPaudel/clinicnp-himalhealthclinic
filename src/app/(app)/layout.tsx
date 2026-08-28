@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/session";
-import { DEFAULT_APP_NAME } from "@/lib/app-name";
+import { getModules } from "@/lib/modules";
+import { appNameFor } from "@/lib/app-name";
 import { listUsers } from "@/lib/repos/users";
 import { Sidebar } from "@/components/app/sidebar";
 
@@ -9,6 +10,7 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+  const modules = await getModules();
   const all = await listUsers();
   const switchable = all
     .filter((u) => u.active && u.hasPin && u.id !== user.id)
@@ -19,7 +21,8 @@ export default async function AppLayout({
       <Sidebar
         user={{ name: user.name, role: user.role }}
         switchable={switchable}
-        appName={DEFAULT_APP_NAME}
+        appName={appNameFor(modules)}
+        modules={modules}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {children}

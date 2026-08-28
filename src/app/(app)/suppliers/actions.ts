@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
+import { requireModule, ModuleDisabledError } from "@/lib/modules";
 import {
   createSupplier,
   updateSupplier,
@@ -21,6 +22,7 @@ function fail(userMessage: string): ActionResult {
 }
 
 function handle(err: unknown): ActionResult {
+  if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
   console.error("[suppliers action]", err);
   return fail("Something went wrong. Please try again.");
@@ -28,6 +30,7 @@ function handle(err: unknown): ActionResult {
 
 export async function saveSupplierAction(input: unknown): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     await assertAdmin();
     const parsed = supplierSchema.safeParse(input);
     if (!parsed.success) {
@@ -50,6 +53,7 @@ export async function saveSupplierAction(input: unknown): Promise<ActionResult> 
 
 export async function recordPaymentAction(input: unknown): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     const user = await assertAdmin();
     const parsed = supplierPaymentSchema.safeParse(input);
     if (!parsed.success) {

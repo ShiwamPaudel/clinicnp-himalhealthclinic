@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { ingestBill, InsufficientStockError } from "@/lib/repos/bills";
 import { ingestBillSchema } from "@/lib/validators";
+import {
+  checkRateLimit,
+  BILL_INGEST,
+  tooManyRequestsBody,
+} from "@/lib/rate-limit";
 
 /**
  * POST /api/bills — the outbox target. Idempotent on the bill ULID:
@@ -14,6 +19,15 @@ export async function POST(req: Request) {
       { ok: false, userMessage: "Please sign in." },
       { status: 401 },
     );
+  }
+
+
+  const limit = await checkRateLimit(BILL_INGEST, session.user.id);
+  if (!limit.ok) {
+    return NextResponse.json(tooManyRequestsBody(), {
+      status: 429,
+      headers: { "Retry-After": String(limit.retryAfterSeconds) },
+    });
   }
 
   let body: unknown;

@@ -35,3 +35,10 @@ export function appDescriptionFor(modules: ModuleFlags): string {
   if (modules.clinic) return "Clinic billing, patients and visits";
   return "Pharmacy billing & stock for Nepali retail pharmacies";
 }
+
+/** The title suffix: names only the halves that are actually switched on. */
+export function appSubtitleFor(modules: ModuleFlags): string {
+  if (modules.clinic && modules.pharmacy) return "Clinic & Pharmacy Management";
+  if (modules.clinic) return "Clinic Management";
+  return "Pharmacy Management";
+}

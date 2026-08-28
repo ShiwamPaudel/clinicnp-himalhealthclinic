@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { purchaseRegister } from "@/lib/repos/reports";
 import { resolveRange } from "@/lib/date-range";
 import { formatPaisa } from "@/lib/money";
@@ -12,6 +13,7 @@ export default async function PurchaseRegisterPage({
   searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const sp = await searchParams;
   const range = resolveRange(sp);
   const rows = await purchaseRegister(range.fromIso, range.toIso);

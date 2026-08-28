@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import {
   nearExpiryBatches,
@@ -32,6 +33,7 @@ function band(days: number): { tone: BadgeTone; label: string } {
 
 export default async function NearExpiryPage() {
   await requireUser();
+  await requireModulePage("pharmacy");
   const todayIso = adToIso(new Date());
   const company = await getCompany();
   const windowIso = daysAheadIso(company.expiryAlertDays);

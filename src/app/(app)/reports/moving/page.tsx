@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { movingItems } from "@/lib/repos/reports";
 import { resolveRange } from "@/lib/date-range";
 import { adToIso } from "@/lib/bs";
@@ -14,6 +15,7 @@ export default async function MovingPage({
   searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const sp = await searchParams;
   const range = resolveRange(sp);
   const rows = await movingItems(range.fromIso, range.toIso, adToIso(new Date()));

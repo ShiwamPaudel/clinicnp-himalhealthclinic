@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { restoreAll, type BackupArchive } from "@/lib/repos/backup";
 import { recordAudit } from "@/lib/repos/audit";
+import {
+  checkRateLimit,
+  RESTORE,
+  tooManyRequestsBody,
+} from "@/lib/rate-limit";
 
 /**
  * POST /api/backup/restore — replace all data from an uploaded archive (Admin).
@@ -14,6 +19,15 @@ export async function POST(req: Request) {
       { ok: false, userMessage: "You don't have permission to do that." },
       { status: 403 },
     );
+  }
+
+
+  const limit = await checkRateLimit(RESTORE, session.user.id);
+  if (!limit.ok) {
+    return NextResponse.json(tooManyRequestsBody(), {
+      status: 429,
+      headers: { "Retry-After": String(limit.retryAfterSeconds) },
+    });
   }
 
   let body: { confirm?: string; archive?: BackupArchive };

@@ -2,7 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
-import { saveCompany, getCompany } from "@/lib/repos/company";
+import {
+  saveCompany,
+  getCompany,
+  setModuleFlags,
+  type ModuleFlags,
+} from "@/lib/repos/company";
+import { recordAudit } from "@/lib/repos/audit";
+import {
+  getModules,
+  isLastModuleOn,
+  LAST_MODULE_MESSAGE,
+} from "@/lib/modules";
 import {
   createUser,
   updateUser,
@@ -91,6 +102,33 @@ export async function updateUserAction(input: unknown): Promise<ActionResult> {
       pin: rest.pin || undefined,
     });
     revalidatePath("/settings/users");
+    return OK;
+  } catch (err) {
+    return handle(err);
+  }
+}
+
+/**
+ * Turn a module on or off. Admin only, audit-logged, and it refuses to switch
+ * off the last one (PRD §3.1). Turning a module off never deletes anything.
+ */
+export async function setModulesAction(
+  next: ModuleFlags,
+): Promise<ActionResult> {
+  try {
+    const user = await assertAdmin();
+    if (isLastModuleOn(next)) return fail(LAST_MODULE_MESSAGE);
+
+    const before = await getModules();
+    if (before.pharmacy === next.pharmacy && before.clinic === next.clinic) {
+      return OK;
+    }
+
+    await setModuleFlags(next);
+    await recordAudit(user.id, "modules.changed", { before, after: next });
+
+    // The name, the nav and every guarded route all follow the flags.
+    revalidatePath("/", "layout");
     return OK;
   } catch (err) {
     return handle(err);

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { getItem } from "@/lib/repos/items";
 import { listSuppliers } from "@/lib/repos/suppliers";
 import { PageShell } from "@/components/app/page-shell";
@@ -11,6 +12,7 @@ export default async function EditItemPage({
   params: Promise<{ id: string }>;
 }) {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const { id } = await params;
   const item = await getItem(id);
   if (!item) notFound();

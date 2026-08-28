@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import { listSuppliers } from "@/lib/repos/suppliers";
 import { PageShell } from "@/components/app/page-shell";
@@ -10,6 +11,7 @@ import { PackagePlus } from "lucide-react";
 
 export default async function NewPurchasePage() {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const [items, suppliers] = await Promise.all([
     listItems(),
     listSuppliers(),

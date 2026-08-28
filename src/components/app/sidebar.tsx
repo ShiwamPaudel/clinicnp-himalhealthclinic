@@ -9,6 +9,7 @@ import { PinSwitch, type SwitchableUser } from "@/components/app/pin-switch";
 import { strings } from "@/lib/strings";
 import { cn } from "@/lib/cn";
 import type { Role } from "@/lib/repos/users";
+import type { ModuleFlags } from "@/lib/repos/company";
 
 const STORAGE_KEY = "clinicnp:nav-collapsed";
 
@@ -16,10 +17,12 @@ export function Sidebar({
   user,
   switchable,
   appName,
+  modules,
 }: {
   user: { name: string; role: Role };
   switchable: SwitchableUser[];
   appName: string;
+  modules: ModuleFlags;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -68,7 +71,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <Nav role={user.role} collapsed={collapsed} />
+      <Nav role={user.role} modules={modules} collapsed={collapsed} />
 
       <div className="mt-auto flex flex-col gap-1 border-t border-sage-700/50 pt-3">
         {!collapsed && (

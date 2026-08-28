@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
+import { requireModule, ModuleDisabledError } from "@/lib/modules";
 import { createItem, updateItem } from "@/lib/repos/items";
 import { itemSchema } from "@/lib/validators";
 import { validateHierarchy } from "@/lib/units";
@@ -17,6 +18,7 @@ function fail(userMessage: string): ActionResult {
 }
 
 function handle(err: unknown): ActionResult {
+  if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
   console.error("[items action]", err);
   return fail("Something went wrong. Please try again.");
@@ -24,6 +26,7 @@ function handle(err: unknown): ActionResult {
 
 export async function saveItemAction(input: unknown): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     await assertAdmin();
     const parsed = itemSchema.safeParse(input);
     if (!parsed.success) {

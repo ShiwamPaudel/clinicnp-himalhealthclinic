@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { exportAll, recordBackup } from "@/lib/repos/backup";
+import {
+  checkRateLimit,
+  BACKUP,
+  tooManyRequestsBody,
+} from "@/lib/rate-limit";
 
 /** GET /api/backup/download — full data backup as a JSON archive (Admin only). */
 export async function GET() {
@@ -11,6 +16,15 @@ export async function GET() {
       { status: 403 },
     );
   }
+
+  const limit = await checkRateLimit(BACKUP, session.user.id);
+  if (!limit.ok) {
+    return NextResponse.json(tooManyRequestsBody(), {
+      status: 429,
+      headers: { "Retry-After": String(limit.retryAfterSeconds) },
+    });
+  }
+
   const archive = await exportAll();
   const body = JSON.stringify(archive);
   await recordBackup("manual", body.length);

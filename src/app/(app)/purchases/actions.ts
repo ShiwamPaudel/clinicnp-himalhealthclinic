@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
+import { requireModule, ModuleDisabledError } from "@/lib/modules";
 import { getItem } from "@/lib/repos/items";
 import {
   createPurchase,
@@ -24,6 +25,7 @@ function fail(userMessage: string): ActionResult {
 }
 
 function handle(err: unknown): ActionResult {
+  if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
   console.error("[purchases action]", err);
   return fail("Something went wrong. Please try again.");
@@ -35,6 +37,7 @@ function bsToAdIso(bsText: string): string {
 
 export async function createPurchaseAction(input: unknown): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     const user = await assertAdmin();
     const parsed = purchaseSchema.safeParse(input);
     if (!parsed.success) {
@@ -91,6 +94,7 @@ export async function createPurchaseReturnAction(
   input: unknown,
 ): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     const user = await assertAdmin();
     const parsed = purchaseReturnSchema.safeParse(input);
     if (!parsed.success) {

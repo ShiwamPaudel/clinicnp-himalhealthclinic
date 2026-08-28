@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { getSupplier, supplierLedger } from "@/lib/repos/suppliers";
 import { formatPaisa } from "@/lib/money";
 import { PageShell } from "@/components/app/page-shell";
@@ -13,6 +14,7 @@ export default async function SupplierDetailPage({
   params: Promise<{ id: string }>;
 }) {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const { id } = await params;
   const supplier = await getSupplier(id);
   if (!supplier) notFound();

@@ -3,9 +3,22 @@
  * Applies every db/migrations/*.sql in filename order that hasn't run yet.
  * Tracks applied files in a `_migrations` table. Never edit an applied migration.
  *
+ * Each file runs inside ONE transaction together with its `_migrations` row, so a
+ * failure rolls back completely rather than leaving the database half-migrated.
+ *
+ * Two directives may appear in a migration's comments:
+ *   -- @rebuild             this file rebuilds a table, so foreign keys must be
+ *                           switched off around the transaction (SQLite cannot
+ *                           defer them for DROP TABLE; PRAGMA defer_foreign_keys
+ *                           inside the transaction is NOT sufficient). A
+ *                           foreign_key_check runs afterwards and fails the
+ *                           migration if anything dangles.
+ *   -- @verify a,b,c        row counts for these tables are captured before and
+ *                           after and must match exactly (Rules.md §5).
+ *
  * Run: pnpm db:migrate
  */
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -34,6 +47,103 @@ function splitStatements(sql: string): string[] {
     .split(";")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
+}
+
+function needsRebuild(sql: string): boolean {
+  return /^--\s*@rebuild\b/m.test(sql);
+}
+
+function verifyTables(sql: string): string[] {
+  const m = sql.match(/^--\s*@verify\s+(.+)$/m);
+  if (!m) return [];
+  return m[1]!
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+async function countRows(client: Client, tables: string[]) {
+  const out: Record<string, number> = {};
+  for (const t of tables) {
+    const r = await client.execute(`SELECT COUNT(*) AS n FROM ${t}`);
+    out[t] = Number(r.rows[0]!.n);
+  }
+  return out;
+}
+
+async function applyFile(client: Client, file: string, sql: string) {
+  const statements = splitStatements(sql);
+  const rebuild = needsRebuild(sql);
+  const toVerify = verifyTables(sql);
+
+  const before = toVerify.length ? await countRows(client, toVerify) : {};
+  if (toVerify.length) {
+    console.log(
+      `  rows before: ${Object.entries(before)
+        .map(([t, n]) => `${t}=${n}`)
+        .join(" ")}`,
+    );
+  }
+
+  // PRAGMAs are connection-level and are no-ops inside a transaction: run them
+  // outside it, in order, before the transactional body.
+  const pragmas = statements.filter((s) => /^PRAGMA\b/i.test(s));
+  const body = statements.filter((s) => !/^PRAGMA\b/i.test(s));
+
+  for (const p of pragmas) await client.execute(p);
+  if (rebuild) await client.execute("PRAGMA foreign_keys = OFF");
+
+  const tx = await client.transaction("write");
+  try {
+    for (const stmt of body) await tx.execute(stmt);
+    await tx.execute({
+      sql: "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
+      args: [file, new Date().toISOString()],
+    });
+    await tx.commit();
+  } catch (err) {
+    try {
+      await tx.rollback();
+    } catch {
+      // already unwound
+    }
+    if (rebuild) await client.execute("PRAGMA foreign_keys = ON");
+    throw new Error(
+      `${file} failed and was rolled back — nothing was applied: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  if (rebuild) {
+    const dangling = await client.execute("PRAGMA foreign_key_check");
+    await client.execute("PRAGMA foreign_keys = ON");
+    if (dangling.rows.length > 0) {
+      throw new Error(
+        `${file} left ${dangling.rows.length} dangling foreign key reference(s)`,
+      );
+    }
+    console.log("  foreign keys checked: clean");
+  }
+
+  if (toVerify.length) {
+    const after = await countRows(client, toVerify);
+    console.log(
+      `  rows after:  ${Object.entries(after)
+        .map(([t, n]) => `${t}=${n}`)
+        .join(" ")}`,
+    );
+    for (const t of toVerify) {
+      if (before[t] !== after[t]) {
+        throw new Error(
+          `${file} changed the row count of ${t}: ${before[t]} -> ${after[t]}`,
+        );
+      }
+    }
+    console.log("  row counts match");
+  }
+
+  console.log(`applied ${file} (${body.length} statements)`);
 }
 
 async function main() {
@@ -65,16 +175,7 @@ async function main() {
   let ran = 0;
   for (const file of files) {
     if (applied.has(file)) continue;
-    const sql = readFileSync(join(migrationsDir, file), "utf8");
-    const statements = splitStatements(sql);
-    for (const stmt of statements) {
-      await client.execute(stmt);
-    }
-    await client.execute({
-      sql: "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
-      args: [file, new Date().toISOString()],
-    });
-    console.log(`applied ${file} (${statements.length} statements)`);
+    await applyFile(client, file, readFileSync(join(migrationsDir, file), "utf8"));
     ran++;
   }
 
@@ -84,6 +185,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });

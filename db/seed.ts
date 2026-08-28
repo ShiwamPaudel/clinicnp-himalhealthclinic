@@ -37,8 +37,8 @@ async function main() {
   const fy = await c.execute("SELECT id FROM fiscal_years WHERE bs_label = '2083/84'");
   if (fy.rows.length === 0) {
     await c.execute({
-      sql: `INSERT INTO fiscal_years (bs_label, start_ad, end_ad, active)
-            VALUES ('2083/84', '2026-07-17', '2027-07-16', 1)`,
+      sql: `INSERT INTO fiscal_years (bs_label, start_ad, end_ad, active, status)
+            VALUES ('2083/84', '2026-07-17', '2027-07-16', 1, 'open')`,
       args: [],
     });
     console.log("seeded fiscal year 2083/84");

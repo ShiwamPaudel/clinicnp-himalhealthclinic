@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
+import { requireModule, ModuleDisabledError } from "@/lib/modules";
 import { getBatch, writeOffBatch } from "@/lib/repos/batches";
 import { createPurchaseReturn } from "@/lib/repos/purchases";
 import { adToIso, toAD, bsFromDbText, today, bsToDbText } from "@/lib/bs";
@@ -16,6 +17,7 @@ function fail(userMessage: string): ActionResult {
 }
 
 function handle(err: unknown): ActionResult {
+  if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
   console.error("[stock action]", err);
   return fail("Something went wrong. Please try again.");
@@ -27,6 +29,7 @@ export async function writeOffBatchAction(
   reason: string,
 ): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     const user = await assertAdmin();
     const batch = await getBatch(batchId);
     if (!batch) return fail("That batch no longer exists.");
@@ -48,6 +51,7 @@ export async function returnExpiredBatchAction(
   batchId: string,
 ): Promise<ActionResult> {
   try {
+    await requireModule("pharmacy");
     const user = await assertAdmin();
     const batch = await getBatch(batchId);
     if (!batch) return fail("That batch no longer exists.");

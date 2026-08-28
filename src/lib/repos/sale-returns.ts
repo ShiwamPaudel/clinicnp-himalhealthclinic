@@ -76,9 +76,13 @@ export async function createSaleReturn(
 
     for (const line of input.lines) {
       if (line.returnBaseQty <= 0) continue;
-      // return stock to the ORIGINAL batches of this bill line, in allocation order
+      // Return stock to the ORIGINAL batches of this bill line, in allocation
+      // order. Ordered by rowid, not id: ids are ULIDs, and two ULIDs minted in
+      // the same millisecond sort in random order ~44% of the time, which would
+      // hand the stock back to the wrong batch and mis-cost the COGS. rowid is
+      // true insertion order.
       const allocs = await tx.execute({
-        sql: `SELECT batch_id, base_qty FROM bill_line_batches WHERE bill_line_id = ? ORDER BY id`,
+        sql: `SELECT batch_id, base_qty FROM bill_line_batches WHERE bill_line_id = ? ORDER BY rowid`,
         args: [line.billLineId],
       });
       let remaining = line.returnBaseQty;

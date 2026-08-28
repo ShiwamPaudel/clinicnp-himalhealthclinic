@@ -50,3 +50,18 @@ describe("appDescriptionFor", () => {
     }
   });
 });
+
+describe("appSubtitleFor", () => {
+  it("names only the halves that are switched on", async () => {
+    const { appSubtitleFor } = await import("@/lib/app-name");
+    expect(appSubtitleFor({ pharmacy: true, clinic: true })).toBe(
+      "Clinic & Pharmacy Management",
+    );
+    expect(appSubtitleFor({ pharmacy: false, clinic: true })).toBe(
+      "Clinic Management",
+    );
+    expect(appSubtitleFor({ pharmacy: true, clinic: false })).toBe(
+      "Pharmacy Management",
+    );
+  });
+});

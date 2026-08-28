@@ -2,16 +2,18 @@ import { requireUser } from "@/lib/session";
 import { getCompany } from "@/lib/repos/company";
 import { adToIso, bsToDbText, formatBS, today } from "@/lib/bs";
 import { PosScreen } from "@/components/pos/pos-screen";
-import { DEFAULT_APP_NAME } from "@/lib/app-name";
+import { getModules } from "@/lib/modules";
+import { appNameFor } from "@/lib/app-name";
 import type { PosConfig } from "@/components/pos/bill-table";
 
 export default async function BillingPage() {
   const user = await requireUser();
   const company = await getCompany();
+  const modules = await getModules();
   const bsToday = today();
 
   const config: PosConfig = {
-    appName: DEFAULT_APP_NAME,
+    appName: appNameFor(modules),
     vatRegistered: company.vatRegistered,
     roundingOn: company.roundingOn,
     printFormat: company.printFormat,

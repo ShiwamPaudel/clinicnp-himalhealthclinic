@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { getItem } from "@/lib/repos/items";
 import { batchesForItem, itemHistory } from "@/lib/repos/batches";
 import { adFromIso, adToIso, formatBS, toBS } from "@/lib/bs";
@@ -31,6 +32,7 @@ export default async function ItemDetailPage({
   params: Promise<{ id: string }>;
 }) {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const { id } = await params;
   const item = await getItem(id);
   if (!item) notFound();

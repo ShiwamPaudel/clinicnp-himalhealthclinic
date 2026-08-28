@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listSuppliers } from "@/lib/repos/suppliers";
 import { listItems } from "@/lib/repos/items";
 import { returnableBatches } from "@/lib/repos/batches";
@@ -10,6 +11,7 @@ import {
 
 export default async function PurchaseReturnPage() {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const [suppliers, items, batches] = await Promise.all([
     listSuppliers(),
     listItems(true),

@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { Header } from "@/components/app/header";
 import { cn } from "@/lib/cn";
 
-// Settings tabs. Later phases add Printing, Modules, Fiscal years.
+// Settings tabs. Later phases add Printing.
 const TABS = [
   { href: "/settings/company", label: "Company" },
+  { href: "/settings/modules", label: "Modules" },
   { href: "/settings/users", label: "Users" },
   { href: "/settings/backup", label: "Backup" },
   { href: "/settings/audit", label: "Audit log" },

@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import { itemStockMap, stockCounts } from "@/lib/repos/batches";
 import { listSuppliers } from "@/lib/repos/suppliers";
@@ -17,6 +18,7 @@ function daysAheadIso(days: number): string {
 
 export default async function LowStockPage() {
   await requireUser();
+  await requireModulePage("pharmacy");
   const todayIso = adToIso(new Date());
   const [items, stock, suppliers, company] = await Promise.all([
     listItems(),

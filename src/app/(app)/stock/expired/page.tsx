@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import { expiredBatches, stockCounts } from "@/lib/repos/batches";
 import { getCompany } from "@/lib/repos/company";
@@ -18,6 +19,7 @@ function daysAheadIso(days: number): string {
 
 export default async function ExpiredStockPage() {
   const user = await requireUser();
+  await requireModulePage("pharmacy");
   const isAdmin = user.role === "admin";
   const todayIso = adToIso(new Date());
   const company = await getCompany();

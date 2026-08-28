@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/session";
+import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
 import { itemStockMap, stockValuation } from "@/lib/repos/batches";
 import { adToIso } from "@/lib/bs";
@@ -9,6 +10,7 @@ import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 
 export default async function ValuationPage() {
   await requireAdmin();
+  await requireModulePage("pharmacy");
   const todayIso = adToIso(new Date());
   const [items, stock, totals] = await Promise.all([
     listItems(true),

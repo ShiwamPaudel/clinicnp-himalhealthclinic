@@ -98,3 +98,40 @@ export async function saveCompany(c: Company): Promise<void> {
     ],
   });
 }
+
+// ============================================================
+// Module flags (PRD §3.1). Kept apart from the Company profile: they are a
+// system boundary, not a business detail, and they are read on nearly every
+// request, so they travel on their own narrow query.
+// ============================================================
+
+export interface ModuleFlags {
+  pharmacy: boolean;
+  clinic: boolean;
+}
+
+/** Reads the two module switches. Callers should go through lib/modules.ts,
+ *  which caches this for the life of a request. */
+export async function getModuleFlags(): Promise<ModuleFlags> {
+  const res = await db().execute(
+    "SELECT module_pharmacy, module_clinic FROM company WHERE id = 1",
+  );
+  const r = res.rows[0];
+  // No company row yet (fresh install): pharmacy on, clinic off — the v1 shape.
+  if (!r) return { pharmacy: true, clinic: false };
+  return {
+    pharmacy: Number(r.module_pharmacy ?? 1) === 1,
+    clinic: Number(r.module_clinic ?? 0) === 1,
+  };
+}
+
+/** Writes both switches. The caller is responsible for refusing to turn the
+ *  last one off (lib/modules.ts owns that rule). */
+export async function setModuleFlags(flags: ModuleFlags): Promise<void> {
+  await db().execute({
+    sql: `UPDATE company
+             SET module_pharmacy = ?, module_clinic = ?, updated_at = ?
+           WHERE id = 1`,
+    args: [flags.pharmacy ? 1 : 0, flags.clinic ? 1 : 0, new Date().toISOString()],
+  });
+}

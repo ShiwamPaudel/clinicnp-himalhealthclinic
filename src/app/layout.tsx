@@ -1,4 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { getModules } from "@/lib/modules";
+import {
+  appNameFor,
+  appDescriptionFor,
+  appSubtitleFor,
+} from "@/lib/app-name";
 import {
   Bricolage_Grotesque,
   IBM_Plex_Sans,
@@ -36,22 +42,28 @@ const deva = Mukta({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "ClinicNP — Clinic & Pharmacy Management System",
-    template: "%s · ClinicNP",
-  },
-  applicationName: "ClinicNP",
-  description: "Clinic and pharmacy billing, patients and stock",
-  manifest: "/manifest.json",
-  icons: {
-    icon: [
-      { url: "/icons/favicon.png", type: "image/png" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/icon-192.png" }],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  // The product name follows the enabled modules (D-025), so the browser title
+  // and the install prompt follow them too.
+  const modules = await getModules();
+  const appName = appNameFor(modules);
+  return {
+    title: {
+      default: `${appName} — ${appSubtitleFor(modules)}`,
+      template: `%s · ${appName}`,
+    },
+    applicationName: appName,
+    description: appDescriptionFor(modules),
+    manifest: "/manifest.json",
+    icons: {
+      icon: [
+        { url: "/icons/favicon.png", type: "image/png" },
+        { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      ],
+      apple: [{ url: "/icons/icon-192.png" }],
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#20342a",

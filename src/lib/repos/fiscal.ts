@@ -22,7 +22,10 @@ export interface FiscalYearRow {
   nextReturnNo: number;
   nextPurchaseNo: number;
   active: boolean;
+  status: FiscalYearStatus;
 }
+
+export type FiscalYearStatus = "open" | "closed";
 
 function mapFy(r: Row): FiscalYearRow {
   return {
@@ -34,6 +37,7 @@ function mapFy(r: Row): FiscalYearRow {
     nextReturnNo: Number(r.next_return_no),
     nextPurchaseNo: Number(r.next_purchase_no),
     active: Number(r.active) === 1,
+    status: (r.status as FiscalYearStatus) ?? "closed",
   };
 }
 
@@ -54,15 +58,31 @@ export async function getActiveFiscalYear(): Promise<FiscalYearRow | null> {
   return res.rows[0] ? mapFy(res.rows[0]) : null;
 }
 
-/** Create a fiscal-year row from a computed FY (idempotent by label). */
+/** The single open year, or null before the first one exists. */
+export async function getOpenFiscalYear(): Promise<FiscalYearRow | null> {
+  const res = await db().execute(
+    "SELECT * FROM fiscal_years WHERE status = 'open' LIMIT 1",
+  );
+  return res.rows[0] ? mapFy(res.rows[0]) : null;
+}
+
+/** Create a fiscal-year row from a computed FY (idempotent by label).
+ *  A year created while another is still open comes in closed: exactly one year
+ *  is open at a time, and moving that flag is the close-year wizard's job. */
 export async function ensureFiscalYear(fy: FY): Promise<FiscalYearRow> {
   const existing = await getFiscalYearByLabel(fy.label);
   if (existing) return existing;
   const { startAd, endAd } = fiscalYearAdRange(fy);
+  const openAlready = await getOpenFiscalYear();
   await db().execute({
-    sql: `INSERT INTO fiscal_years (bs_label, start_ad, end_ad, active)
-          VALUES (?, ?, ?, 1)`,
-    args: [fy.label, adToIso(startAd), adToIso(endAd)],
+    sql: `INSERT INTO fiscal_years (bs_label, start_ad, end_ad, active, status)
+          VALUES (?, ?, ?, 1, ?)`,
+    args: [
+      fy.label,
+      adToIso(startAd),
+      adToIso(endAd),
+      openAlready ? "closed" : "open",
+    ],
   });
   const created = await getFiscalYearByLabel(fy.label);
   if (!created) throw new Error("failed to create fiscal year");

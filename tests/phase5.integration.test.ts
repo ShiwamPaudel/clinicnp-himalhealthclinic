@@ -2,14 +2,16 @@
  * Phase 5: backup export → restore round-trip returns data exactly to snapshot,
  * atomically.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@libsql/client";
 import { readFileSync, rmSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_FILE = join(__dirname, "phase5-verify.db");
+// A unique file per run: on Windows a previous run's client can still hold
+// the old file, and reusing the name is what made this suite flaky.
+const DB_FILE = join(__dirname, `phase5-verify.${process.pid}-${Date.now()}.db`);
 
 function split(sql: string): string[] {
   return sql
@@ -27,6 +29,15 @@ function isoInDays(d: number): string {
 
 let itemId: string;
 
+afterAll(() => {
+  for (const suffix of ["", "-wal", "-shm"]) {
+    try {
+      rmSync(`${DB_FILE}${suffix}`, { force: true });
+    } catch {
+      // a lingering handle on Windows — the unique name makes it harmless
+    }
+  }
+});
 beforeAll(async () => {
   process.env.TURSO_DATABASE_URL = `file:${DB_FILE}`;
   const { __resetDbForTests } = await import("@/lib/db");

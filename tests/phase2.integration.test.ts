@@ -2,14 +2,16 @@
  * Phase 2 acceptance, exercised against an isolated file database.
  * Drives the real repositories end-to-end (Phases.md Phase 2 checklist).
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@libsql/client";
 import { readFileSync, rmSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_FILE = join(__dirname, "phase2-verify.db");
+// A unique file per run: on Windows a previous run's client can still hold
+// the old file, and reusing the name is what made this suite flaky.
+const DB_FILE = join(__dirname, `phase2-verify.${process.pid}-${Date.now()}.db`);
 
 // Point the app's db() singleton at an isolated file BEFORE importing repos.
 process.env.TURSO_DATABASE_URL = `file:${DB_FILE}`;
@@ -25,6 +27,15 @@ function splitStatements(sql: string): string[] {
     .filter(Boolean);
 }
 
+afterAll(() => {
+  for (const suffix of ["", "-wal", "-shm"]) {
+    try {
+      rmSync(`${DB_FILE}${suffix}`, { force: true });
+    } catch {
+      // a lingering handle on Windows — the unique name makes it harmless
+    }
+  }
+});
 beforeAll(async () => {
   process.env.TURSO_DATABASE_URL = `file:${DB_FILE}`;
   const { __resetDbForTests } = await import("@/lib/db");
