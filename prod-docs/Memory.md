@@ -23,7 +23,7 @@
 
 **Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic Pvt. Ltd.** (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
-**Phase:** **Phase 1 complete** (all four milestones + CBMS removal). Ready for Phase 2 (patients, visits, files) once the outstanding items below are settled.
+**Phase:** **Phase 2 complete.** Phases 1 and 2 both done. Next is Phase 3 (services and clinic billing at the counter).
 **Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic` — git initialised 2083-05-12. Imported from `D:\IBN\Products Codebase\AushadhiPOS` (the v1 tree, which had no git history). The old tree is untouched and is the fallback.
 **Inherited v1 state:** all 5 v1 phases complete; `pnpm build` clean; **68 tests green** (one known flaky test-isolation failure in the phase-4 file — different test each run, always green on re-run, caused by the shared `db()` singleton across test files). Not yet deployed to Vercel.
 **Deployed URL:** — (none yet). **New hosted Turso** (`healthclinic-…`) provisioned 2083-05-13, migrated to `0007` and seeded. The old `fa…` database is abandoned — do not point at it again.
@@ -37,7 +37,7 @@
 - Hosted DB has **two** fiscal years both `active = 1`; `getActiveFiscalYear()` (`ORDER BY id DESC`) therefore returns **2082/83**, the older year, which holds 4 of the 5 bills. `ensureFiscalYear` never deactivates the prior year. Must be reconciled when `status` lands.
 - All business tables use **TEXT ULID** primary keys; only `fiscal_years` is INTEGER. Architecture's `closed_by INTEGER` / `patient_id INTEGER` are type errors.
 - v1 `/billing` bundle measured **140 kB** First Load (Rules §5 says "~130 kB"); after milestone 1 it is **135 kB**.
-**Schema plan (v2):** `0006_modules_fy.sql` · `0007_stock_out.sql` · `0008_clinic_core.sql` · `0009_services.sql` · `0010_*` as needed. Append-only; never edit an applied migration.
+**Schema applied (v2):** `0006_modules_fy.sql` · `0007_stock_out.sql` · `0008_clinic_core.sql` — all three on the hosted Turso. Next: `0009_services.sql` (Phase 3). Append-only; never edit an applied migration.
 
 **Environment quick-reference:**
 - pnpm 11.13 (installed via npm; corepack blocked by Program Files permissions) · vitest · Vercel
@@ -50,7 +50,7 @@
 
 **In progress:** —
 
-**Next up:** Phase 2 — patients, visits, files (`0008_clinic_core.sql`, `lib/patient-no.ts`, `lib/age.ts`, the patient card, OPD slip). **Blocked on:** real ClinicNP icon art (see Known issues), and the owner's ruling on D-040.
+**Next up:** Phase 3 — `0009_services.sql` (service_groups, services, doctors, lab_partners, bill_service_lines, sale_return_service_lines, lab_partner_payments), `lib/clinic-calc.ts` (follow-up rule + doctor share), the unified counter search, and the widened `/api/bills` ingest. **Still outstanding:** real ClinicNP icon art, the D-040 ruling, and `BLOB_READ_WRITE_TOKEN` before files go to production storage.
 
 **Known issues / risks (inherited):**
 - `nepali-date-converter.toJsDate()` returns non-midnight times → `lib/bs.ts toAD()` normalises to local midnight; keep all date maths on `toAD()` output (D-006).
@@ -123,6 +123,11 @@
 | D-045 | **Rate limiting lives in our own database** (`rate_limits`), no third-party service | Owner asked for it without external dependencies. Fixed windows keyed by window index, so one upsert is the whole algorithm; swept by the nightly cron |
 | D-046 | **`bill_line_batches` is read back by `rowid`, not `id`** | Ids are ULIDs, and two minted in the same millisecond sort backwards ~44% of the time (measured over 20,000 pairs). `ORDER BY id` was handing returned stock to the wrong batch and mis-costing COGS. This was the real cause of the "flaky phase-4 test" — it was never flakiness |
 | D-047 | Accountant is enforced read-only by `canBill()`, not just by the role label | Every existing `role !== "admin"` branch meant "staff"; without an explicit guard the new third role would have silently inherited Staff's billing rights |
+| D-048 | Clinic tables use **TEXT ULID primary keys**, and the id IS the client ULID — no separate `ulid` column | Matches `bills`, so an offline registration keeps one identity end to end (Phase 5). Architecture's INTEGER-key sketch would have needed a second column saying the same thing |
+| D-049 | Files go to **Vercel Blob `access:'private'`**; with no token configured they go to a gitignored `.filestore` instead | The private mode exists in @vercel/blob 2.8. The local folder is a development convenience so the upload/serve path is testable without provisioning a store — it is never used when a token is present, and it is not a second production backend |
+| D-050 | The visit vocabulary lives in **`lib/visit-types.ts`**, not in the repo | `lib/repos/*` is `server-only`, and the browser needs the same labels. Importing a value from a server-only module broke the build; types and labels now sit outside the repo layer |
+| D-051 | `lib/age.ts` shifts a notional birth date back with the **day clamped to the month end** | Without the clamp, 29 Feb minus one year became 1 March, which delayed every later birthday and cost a whole year at the leap-day boundary. Caught by a test, fixed in the module |
+| D-052 | "Files pending" currently lists **visits with no file attached** | The PRD defines it as billed services flagged "keeps a file". Services arrive in Phase 3; until then a visit with nothing attached is the honest stand-in, and the repo query narrows in Phase 3 |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -170,3 +175,12 @@ Broke/fixed: **found and fixed a real pharmacy bug (D-046)** — sale returns re
 Verified: 106 tests green, 8 consecutive clean runs (the suite is no longer flaky). Build clean. Browser-verified against the live DB: all 15 pharmacy routes 200 → 404 → 200 on the module toggle; a pharmacy-only install titles itself "Faarma"; a 1-strip supplier return took stock 30 → 20, credited the supplier, wrote the purchase return and a reason-carrying ledger row, and logged the audit entry.
 Not built (requested, out of scope): none. Deferred to their scheduled phases: dashboard module-adaptive layout (Phase 4), refunds of closed-year bills into the open year (Phase 4).
 Next: Phase 2 — patients, visits and files.
+
+### C-003  ·  2083-05-13  ·  Phase 2 — PHASE COMPLETE
+Built: `0008_clinic_core.sql` (patients, visits, attachments + `bills.patient_id/visit_id/kind`). `lib/age.ts` (+18 tests) and `lib/patient-no.ts`. Repos for patients (transactional lifetime numbering, idempotent on the client id, search, duplicate detection, Admin merge), visits (per-year numbering, today's list, cancel-with-reason) and attachments (soft delete + 30-day sweep). `lib/files.ts` + `lib/file-store.ts`. `/api/files/upload`, `/api/files/[id]`, `/api/cron/files-gc`. Screens: patients list, register, patient card with the navy header and visit timeline, edit, merge, Today, visits list, visit detail with vitals, files pending. OPD slip. Clinic nav group.
+Decisions/assumptions: D-048 … D-052.
+Schema changes: `0008_clinic_core.sql`, applied to the hosted Turso after a scratch dry run.
+Broke/fixed: fixed a leap-day bug in the age roll-forward before it shipped (D-051). Hit — and fixed — a build break from importing a runtime value out of a `server-only` repo into a client component (D-050).
+Verified: **144 tests green over three consecutive runs**; build clean. Browser-verified against the live DB: registration in 856 ms, duplicate warning inline, visit started, PDF + photo uploaded, **file URL 401 logged out / 200 with `nosniff` signed in, zero storage keys in the page source**, and with the clinic module off all eight clinic routes plus the file route return 404 (200 again when switched back on). Verification data was then removed from the database.
+Not built (requested, out of scope): none. Lab results, reference ranges and sample workflow remain out of scope (Rules §2.2) and nothing in this phase approaches them — ClinicNP stores the file it receives and does not read it.
+Next: Phase 3 — services, doctors, lab partners, and clinic billing on the shared counter.
