@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 export default async function PurchaseRegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ preset?: string; from?: string; to?: string; fy?: string }>;
 }) {
   await requireAdmin();
   await requireModulePage("pharmacy");
@@ -21,6 +21,7 @@ export default async function PurchaseRegisterPage({
 
   return (
     <ReportFrame
+      fy={sp.fy}
       title="Purchase register"
       rangeLabel={range.label}
       preset={range.preset}

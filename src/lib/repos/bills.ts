@@ -12,7 +12,13 @@ import type { Row } from "@/lib/db";
 import { allocate, type FefoBatch } from "@/lib/fefo";
 import { vatOf, roundToRupee } from "@/lib/money";
 import { fiscalYearOf, bsFromDbText } from "@/lib/bs";
-import { ensureFiscalYear } from "@/lib/repos/fiscal";
+import {
+  ensureFiscalYear,
+  getOpenFiscalYear,
+  getFiscalYearByLabel,
+  assertYearOpen,
+  assertBillYearOpen,
+} from "@/lib/repos/fiscal";
 import { getCompany } from "@/lib/repos/company";
 
 export interface IngestLine {
@@ -89,7 +95,27 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
   if (existing) return existing;
 
   const company = await getCompany();
-  const fy = await ensureFiscalYear(fiscalYearOf(bsFromDbText(input.dateBs)));
+
+  // Numbering always draws from the OPEN year (Architecture §2.4). A bill dated
+  // inside a year that has been closed is refused; a bill dated in a year that
+  // does not exist yet (the counter carried on past the year end before anyone
+  // ran the close) is booked into the year that is actually open.
+  const dateFy = fiscalYearOf(bsFromDbText(input.dateBs));
+  const openFy = await getOpenFiscalYear();
+  let fy;
+  if (!openFy) {
+    fy = await ensureFiscalYear(dateFy); // fresh install: bootstrap the first year
+  } else if (openFy.bsLabel === dateFy.label) {
+    fy = openFy;
+  } else {
+    const dated = await getFiscalYearByLabel(dateFy.label);
+    if (dated) {
+      await assertYearOpen(dated.id); // an existing, closed year -> refuse
+      fy = dated;
+    } else {
+      fy = openFy;
+    }
+  }
 
   // Resolve unit factors for every line up front (factors don't change mid-sale).
   const factorByLine = new Map<string, number>();
@@ -298,12 +324,17 @@ function mapBillRow(r: Row): BillListRow {
   };
 }
 
-export async function listBills(limit = 200): Promise<BillListRow[]> {
+export async function listBills(
+  limit = 200,
+  fiscalYearId?: number | null,
+): Promise<BillListRow[]> {
+  const filtered = fiscalYearId != null;
   const res = await db().execute({
     sql: `SELECT b.*, f.bs_label FROM bills b
           LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
+          ${filtered ? "WHERE b.fiscal_year_id = ?" : ""}
           ORDER BY b.client_created_at DESC LIMIT ?`,
-    args: [limit],
+    args: filtered ? [fiscalYearId, limit] : [limit],
   });
   return res.rows.map(mapBillRow);
 }
@@ -326,6 +357,8 @@ export interface BillDetailLine {
 }
 
 export interface BillDetail extends BillListRow {
+  /** True when this bill's fiscal year has been closed: read and print only. */
+  yearClosed: boolean;
   subtotalPaisa: number;
   discountPaisa: number;
   vatPaisa: number;
@@ -337,7 +370,7 @@ export interface BillDetail extends BillListRow {
 
 export async function getBillDetail(id: string): Promise<BillDetail | null> {
   const head = await db().execute({
-    sql: `SELECT b.*, f.bs_label, u.name AS user_name
+    sql: `SELECT b.*, f.bs_label, f.status AS fy_status, u.name AS user_name
           FROM bills b
           LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
           LEFT JOIN users u ON u.id = b.user_id
@@ -390,6 +423,9 @@ export async function getBillDetail(id: string): Promise<BillDetail | null> {
 
   return {
     ...mapBillRow(h),
+    // No fiscal year on the row means it predates year tracking — treat as open.
+    yearClosed:
+      h.fy_status != null && (h.fy_status as string) !== "open",
     subtotalPaisa: Number(h.subtotal_paisa),
     discountPaisa: Number(h.discount_paisa),
     vatPaisa: Number(h.vat_paisa),
@@ -402,6 +438,7 @@ export async function getBillDetail(id: string): Promise<BillDetail | null> {
 
 /** Cancel a bill (Admin): restore its stock, mark Cancelled, keep the number. */
 export async function cancelBill(id: string, userId: string): Promise<void> {
+  await assertBillYearOpen(id);
   const bill = await db().execute({
     sql: "SELECT status FROM bills WHERE id = ?",
     args: [id],
@@ -469,6 +506,7 @@ export async function listCreditBills(todayIso: string): Promise<CreditBillRow[]
 }
 
 export async function settleCreditBill(id: string): Promise<void> {
+  await assertBillYearOpen(id);
   await db().execute({
     sql: "UPDATE bills SET credit_settled_at = ? WHERE id = ? AND payment_method = 'credit'",
     args: [new Date().toISOString(), id],

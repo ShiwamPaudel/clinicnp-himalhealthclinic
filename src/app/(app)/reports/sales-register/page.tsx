@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 export default async function SalesRegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ preset?: string; from?: string; to?: string; fy?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
@@ -23,6 +23,7 @@ export default async function SalesRegisterPage({
 
   return (
     <ReportFrame
+      fy={sp.fy}
       title="Sales register"
       rangeLabel={range.label}
       preset={range.preset}

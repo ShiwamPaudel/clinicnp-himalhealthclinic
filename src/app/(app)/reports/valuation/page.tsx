@@ -34,7 +34,8 @@ export default async function ValuationPage() {
     .filter((r) => r.sellable > 0);
 
   return (
-    <ReportFrame title="Stock valuation" rangeLabel="As of today" showRange={false}>
+    <ReportFrame
+      showFiscalYear={false} title="Stock valuation" rangeLabel="As of today" showRange={false}>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Card label="Total at cost" value={formatPaisa(totals.costValuePaisa)} />
         <Card label="Total at selling rate" value={formatPaisa(totals.salableValuePaisa)} />

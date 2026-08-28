@@ -65,6 +65,7 @@ export const strings = {
   role: "Role",
   roleAdmin: "Admin (Owner)",
   roleStaff: "Staff (Counter)",
+  roleAccountant: "Accountant (read-only)",
   canEditRate: "Can edit rate on bill",
   active: "Active",
 

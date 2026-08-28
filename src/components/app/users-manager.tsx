@@ -142,6 +142,8 @@ export function UsersManager({ initial }: { initial: User[] }) {
                 <TD>
                   {u.role === "admin" ? (
                     <Badge tone="neutral">Admin</Badge>
+                  ) : u.role === "accountant" ? (
+                    <Badge tone="info">Accountant</Badge>
                   ) : (
                     <Badge tone="info">Staff</Badge>
                   )}
@@ -264,6 +266,7 @@ function UserFields({
             onChange={(e) => set("role", e.target.value as Role)}
           >
             <option value="staff">{strings.roleStaff}</option>
+            <option value="accountant">{strings.roleAccountant}</option>
             <option value="admin">{strings.roleAdmin}</option>
           </Select>
         </Field>

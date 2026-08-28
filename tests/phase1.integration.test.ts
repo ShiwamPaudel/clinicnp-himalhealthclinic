@@ -168,3 +168,104 @@ describe("Phase 1 — rate limiting (our own database, no third party)", () => {
     );
   });
 });
+
+describe("Phase 1 — closing a year", () => {
+  it("closes the open year, opens the next, and restarts invoice numbers", async () => {
+    const { db } = await import("@/lib/db");
+    const { closeYearAndOpenNext, getOpenFiscalYear, listFiscalYears } =
+      await import("@/lib/repos/fiscal");
+
+    // 2083/84 is open from the earlier block; give it a used sequence.
+    await db().execute(
+      "UPDATE fiscal_years SET next_invoice_no = 57 WHERE bs_label = '2083/84'",
+    );
+    await db().execute(
+      "INSERT INTO users (id, name, username, password_hash, role, created_at) VALUES ('closer','C','closer','x','admin','t')",
+    );
+
+    const res = await closeYearAndOpenNext("closer");
+    expect(res.closedLabel).toBe("2083/84");
+    expect(res.openedLabel).toBe("2084/85");
+
+    const open = await getOpenFiscalYear();
+    expect(open!.bsLabel).toBe("2084/85");
+    expect(open!.nextInvoiceNo).toBe(1); // numbering restarts
+
+    const years = await listFiscalYears();
+    const prev = years.find((y) => y.bsLabel === "2083/84")!;
+    expect(prev.status).toBe("closed");
+    expect(prev.closedAt).not.toBeNull();
+    // the closed year keeps the sequence it reached — its register is unchanged
+    expect(prev.nextInvoiceNo).toBe(57);
+
+    // still exactly one open year
+    const openCount = await db().execute(
+      "SELECT COUNT(*) AS n FROM fiscal_years WHERE status = 'open'",
+    );
+    expect(Number(openCount.rows[0]!.n)).toBe(1);
+  });
+
+  it("writes an audit entry naming both years", async () => {
+    const { db } = await import("@/lib/db");
+    const r = await db().execute(
+      "SELECT detail_json FROM audit_log WHERE action = 'fiscal_year.closed' ORDER BY at DESC LIMIT 1",
+    );
+    const detail = JSON.parse(r.rows[0]!.detail_json as string);
+    expect(detail).toEqual({ closed: "2083/84", opened: "2084/85" });
+  });
+
+  it("refuses every write into a closed year, in plain language", async () => {
+    const { assertYearOpen, ClosedFiscalYearError, listFiscalYears } =
+      await import("@/lib/repos/fiscal");
+    const closed = (await listFiscalYears()).find(
+      (y) => y.bsLabel === "2083/84",
+    )!;
+
+    await expect(assertYearOpen(closed.id)).rejects.toBeInstanceOf(
+      ClosedFiscalYearError,
+    );
+
+    const err = new ClosedFiscalYearError();
+    expect(err.userMessage).toBe(
+      "This year is closed. Record it in the current year instead.",
+    );
+    // no backend vocabulary (Rules §1.1)
+    expect(err.userMessage).not.toMatch(
+      /database|row|record it in the table|transaction|constraint|sql/i,
+    );
+  });
+
+  it("lets the open year through", async () => {
+    const { assertYearOpen, getOpenFiscalYear } = await import(
+      "@/lib/repos/fiscal"
+    );
+    const open = await getOpenFiscalYear();
+    await expect(assertYearOpen(open!.id)).resolves.toBeUndefined();
+  });
+});
+
+describe("Phase 1 — a chosen fiscal year drives every report's range", () => {
+  it("resolves a closed year to that year's AD bounds", async () => {
+    const { resolveRange } = await import("@/lib/date-range");
+    const r = resolveRange({ fy: "2082/83" });
+    expect(r.fiscalLabel).toBe("2082/83");
+    expect(r.label).toBe("Fiscal year 2082/83");
+    expect(r.fromIso < r.toIso).toBe(true);
+    // Shrawan 1 2082 falls in mid-July 2025
+    expect(r.fromIso.startsWith("2025-07")).toBe(true);
+  });
+
+  it("prefers an explicit custom range over the year", async () => {
+    const { resolveRange } = await import("@/lib/date-range");
+    const r = resolveRange({ fy: "2082/83", from: "2026-01-01", to: "2026-01-31" });
+    expect(r.fromIso).toBe("2026-01-01");
+    expect(r.label).toBe("Custom range");
+  });
+
+  it("falls back to the presets when the year in the address is nonsense", async () => {
+    const { resolveRange } = await import("@/lib/date-range");
+    const r = resolveRange({ fy: "not-a-year" });
+    expect(r.fiscalLabel).toBeUndefined();
+    expect(r.fromIso).toBeTruthy();
+  });
+});

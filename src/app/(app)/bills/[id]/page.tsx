@@ -9,6 +9,7 @@ import { PageShell } from "@/components/app/page-shell";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { BillActions } from "@/components/app/bill-actions";
+import { ClosedYearBanner } from "@/components/app/closed-year-banner";
 import type { PrintBill } from "@/lib/print-types";
 
 const METHOD: Record<string, string> = { cash: "Cash", qr: "QR / wallet", credit: "Credit" };
@@ -78,6 +79,7 @@ export default async function BillDetailPage({
 
   return (
     <PageShell title={invoiceLabel}>
+      {bill.yearClosed && <ClosedYearBanner label={bill.fiscalLabel} />}
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -92,7 +94,8 @@ export default async function BillDetailPage({
             printBill={printBill}
             printFormat={company.printFormat}
             isAdmin={user.role === "admin"}
-            canCancel={bill.status !== "cancelled"}
+            canCancel={bill.status !== "cancelled" && !bill.yearClosed}
+            yearClosed={bill.yearClosed}
             isCredit={bill.paymentMethod === "credit"}
             creditSettled={bill.creditSettledAt != null}
           />

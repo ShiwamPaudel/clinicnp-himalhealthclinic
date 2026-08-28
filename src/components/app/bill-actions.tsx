@@ -21,6 +21,7 @@ export function BillActions({
   canCancel,
   isCredit,
   creditSettled,
+  yearClosed = false,
 }: {
   billId: string;
   printBill: PrintBill;
@@ -28,6 +29,8 @@ export function BillActions({
   isAdmin: boolean;
   canCancel: boolean;
   isCredit: boolean;
+  /** A closed year is readable and printable, never changeable (D-029). */
+  yearClosed?: boolean;
   creditSettled: boolean;
 }) {
   const router = useRouter();
@@ -62,13 +65,16 @@ export function BillActions({
         <Printer className="h-4 w-4" />
         Reprint
       </Button>
-      <Link href={`/bills/${billId}/return`}>
-        <Button variant="secondary">
-          <RotateCcw className="h-4 w-4" />
-          Sales return
-        </Button>
-      </Link>
-      {isCredit && !creditSettled && (
+      {/* A closed year keeps Reprint and nothing else: read and print only. */}
+      {!yearClosed && (
+        <Link href={`/bills/${billId}/return`}>
+          <Button variant="secondary">
+            <RotateCcw className="h-4 w-4" />
+            Sales return
+          </Button>
+        </Link>
+      )}
+      {!yearClosed && isCredit && !creditSettled && (
         <Button variant="secondary" onClick={doSettle} disabled={busy}>
           <CheckCircle2 className="h-4 w-4" />
           Mark paid

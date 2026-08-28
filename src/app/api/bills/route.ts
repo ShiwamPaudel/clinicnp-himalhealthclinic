@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { canBill } from "@/lib/session";
 import { ingestBill, InsufficientStockError } from "@/lib/repos/bills";
 import { ingestBillSchema } from "@/lib/validators";
 import {
@@ -21,6 +22,13 @@ export async function POST(req: Request) {
     );
   }
 
+
+  if (!canBill(session.user.role)) {
+    return NextResponse.json(
+      { ok: false, userMessage: "You don't have permission to do that." },
+      { status: 403 },
+    );
+  }
 
   const limit = await checkRateLimit(BILL_INGEST, session.user.id);
   if (!limit.ok) {

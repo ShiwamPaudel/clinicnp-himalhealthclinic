@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 const TABS = [
   { href: "/settings/company", label: "Company" },
   { href: "/settings/modules", label: "Modules" },
+  { href: "/settings/fiscal-years", label: "Fiscal years" },
   { href: "/settings/users", label: "Users" },
   { href: "/settings/backup", label: "Backup" },
   { href: "/settings/audit", label: "Audit log" },

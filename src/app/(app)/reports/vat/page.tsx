@@ -9,7 +9,7 @@ import { ReportFrame } from "@/components/app/report-frame";
 export default async function VatReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ preset?: string; from?: string; to?: string; fy?: string }>;
 }) {
   await requireAdmin();
   const company = await getCompany();
@@ -20,7 +20,12 @@ export default async function VatReportPage({
   const v = await vatSummary(range.fromIso, range.toIso);
 
   return (
-    <ReportFrame title="VAT report" rangeLabel={range.label} preset={range.preset}>
+    <ReportFrame
+      fy={sp.fy}
+      title="VAT report"
+      rangeLabel={range.label}
+      preset={range.preset}
+    >
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel
           title="Sales (Annexure 5 — taxable sales)"

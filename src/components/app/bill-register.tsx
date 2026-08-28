@@ -19,7 +19,14 @@ function label(b: BillListRow): string {
 
 const METHOD: Record<string, string> = { cash: "Cash", qr: "QR", credit: "Credit" };
 
-export function BillRegister({ rows }: { rows: BillListRow[] }) {
+export function BillRegister({
+  rows,
+  readOnly = false,
+}: {
+  rows: BillListRow[];
+  /** A closed year is readable and printable, never changeable (D-029). */
+  readOnly?: boolean;
+}) {
   const [q, setQ] = useState("");
 
   const filtered = useMemo(() => {

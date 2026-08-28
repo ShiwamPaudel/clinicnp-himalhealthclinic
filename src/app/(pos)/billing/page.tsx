@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { requireBillingUser } from "@/lib/session";
 import { getCompany } from "@/lib/repos/company";
 import { adToIso, bsToDbText, formatBS, today } from "@/lib/bs";
 import { PosScreen } from "@/components/pos/pos-screen";
@@ -7,7 +7,7 @@ import { appNameFor } from "@/lib/app-name";
 import type { PosConfig } from "@/components/pos/bill-table";
 
 export default async function BillingPage() {
-  const user = await requireUser();
+  const user = await requireBillingUser();
   const company = await getCompany();
   const modules = await getModules();
   const bsToday = today();

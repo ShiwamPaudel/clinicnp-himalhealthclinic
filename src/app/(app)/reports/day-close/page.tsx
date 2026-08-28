@@ -8,7 +8,7 @@ import { ReportFrame } from "@/components/app/report-frame";
 export default async function DayClosePage({
   searchParams,
 }: {
-  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ preset?: string; from?: string; to?: string; fy?: string }>;
 }) {
   await requireUser();
   const sp = await searchParams;
@@ -18,7 +18,12 @@ export default async function DayClosePage({
   const dayBs = formatBS(toBS(adFromIso(day)), { form: "long", monthScript: "en" });
 
   return (
-    <ReportFrame title="Day-close" rangeLabel={dayBs} preset={range.preset}>
+    <ReportFrame
+      fy={sp.fy}
+      title="Day-close"
+      rangeLabel={dayBs}
+      preset={range.preset}
+    >
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-[10px] border border-line bg-cream-50 p-5">
           <h2 className="mb-3 text-[15px] font-semibold text-sage-900">Sales</h2>

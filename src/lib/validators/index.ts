@@ -15,7 +15,7 @@ export const pinSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, "PIN must be 4 digits"),
 });
 
-export const roleSchema = z.enum(["admin", "staff"]);
+export const roleSchema = z.enum(["admin", "staff", "accountant"]);
 
 export const newUserSchema = z.object({
   name: z.string().min(1, "Enter a name"),

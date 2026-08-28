@@ -5,23 +5,41 @@ import { listBills } from "@/lib/repos/bills";
 import { PageShell } from "@/components/app/page-shell";
 import { BillRegister } from "@/components/app/bill-register";
 import { Button } from "@/components/ui/button";
+import {
+  FiscalYearBar,
+  ClosedYearBanner,
+  resolveFiscalYear,
+} from "@/components/app/fiscal-year-bar";
 
-export default async function BillsPage() {
-  await requireUser();
-  const rows = await listBills();
+export default async function BillsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fy?: string }>;
+}) {
+  const user = await requireUser();
+  const { fy } = await searchParams;
+  const year = await resolveFiscalYear(fy);
+  const rows = await listBills(200, year.id);
+
   return (
     <PageShell
       title="Bills"
       actions={
-        <Link href="/bills/credit">
-          <Button variant="secondary">
-            <CreditCard className="h-4 w-4" />
-            Credit bills
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <FiscalYearBar role={user.role} current={year.label} />
+          {!year.isClosed && (
+            <Link href="/bills/credit">
+              <Button variant="secondary">
+                <CreditCard className="h-4 w-4" />
+                Credit bills
+              </Button>
+            </Link>
+          )}
+        </div>
       }
     >
-      <BillRegister rows={rows} />
+      {year.isClosed && <ClosedYearBanner label={year.label} />}
+      <BillRegister rows={rows} readOnly={year.isClosed} />
     </PageShell>
   );
 }

@@ -32,6 +32,24 @@ export async function requireAdmin(): Promise<SessionUser> {
   return user;
 }
 
+/** Who may create bills, returns and holds: everyone except the Accountant,
+ *  who is read-only by definition (PRD §4B.8). */
+export function canBill(role: Role): boolean {
+  return role === "admin" || role === "staff";
+}
+
+/** Counter access. An Accountant lands on the dashboard instead. */
+export async function requireBillingUser(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canBill(user.role)) redirect("/dashboard");
+  return user;
+}
+
+/** Reports and registers: Admin and Accountant read every year. */
+export function canReadAllYears(role: Role): boolean {
+  return role === "admin" || role === "accountant";
+}
+
 /** Throws an AuthError-like object for server actions (mapped to plain language). */
 export class NotAuthorizedError extends Error {
   code = "not_authorized" as const;

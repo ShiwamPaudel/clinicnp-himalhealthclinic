@@ -7,7 +7,10 @@ import "server-only";
 import { ulid } from "ulid";
 import { db } from "@/lib/db";
 import type { InStatement, Row } from "@/lib/db";
-import { getActiveFiscalYear } from "@/lib/repos/fiscal";
+import {
+  getOpenFiscalYear,
+  bootstrapCurrentFiscalYear,
+} from "@/lib/repos/fiscal";
 import { applyStockMove } from "@/lib/repos/batches";
 
 export interface PurchaseLineInput {
@@ -73,8 +76,10 @@ export function purchaseTotals(
 export async function createPurchase(
   input: PurchaseInput,
 ): Promise<{ id: string; purchaseNo: string }> {
-  const fy = await getActiveFiscalYear();
-  const seq = fy ? fy.nextPurchaseNo : 1;
+  // Purchases are booked into the open year. A database that has never had one
+  // (a fresh install) bootstraps the current year rather than refusing.
+  const fy = (await getOpenFiscalYear()) ?? (await bootstrapCurrentFiscalYear());
+  const seq = fy.nextPurchaseNo;
   const purchaseNo = fy
     ? `PI-${fy.bsLabel}-${String(seq).padStart(6, "0")}`
     : `PI-${String(seq).padStart(6, "0")}`;

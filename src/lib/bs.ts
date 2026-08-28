@@ -180,6 +180,31 @@ export function fiscalYearAdRange(fy: FiscalYear): { startAd: Date; endAd: Date 
   return { startAd, endAd };
 }
 
+/** The fiscal year that follows `fy` (2083/84 -> 2084/85). */
+export function nextFiscalYear(fy: FiscalYear): FiscalYear {
+  const startYear = fy.startYear + 1;
+  const endYear = startYear + 1;
+  return {
+    label: `${startYear}/${String(endYear).slice(-2)}`,
+    startYear,
+    endYear,
+  };
+}
+
+/** Rebuild a FiscalYear from its stored label ("2083/84"). */
+export function fiscalYearFromLabel(label: string): FiscalYear {
+  const startYear = Number(label.split("/")[0]);
+  if (!Number.isFinite(startYear)) {
+    throw new Error(`bad fiscal year label: ${label}`);
+  }
+  const endYear = startYear + 1;
+  return {
+    label: `${startYear}/${String(endYear).slice(-2)}`,
+    startYear,
+    endYear,
+  };
+}
+
 /**
  * AD range covering an entire BS month [y, m] (m is 1-indexed).
  * Computed without a days-in-month table: end = day before the 1st of the next month.

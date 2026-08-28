@@ -9,6 +9,7 @@ import {
   bsMonthRange,
   fiscalYearOf,
   fiscalYearAdRange,
+  fiscalYearFromLabel,
   bsDayOfWeek,
   type BSDate,
 } from "@/lib/bs";
@@ -25,6 +26,20 @@ export interface DateRange {
   toIso: string;
   label: string;
   preset?: PresetKey;
+  /** Set when the range came from an explicitly chosen fiscal year. */
+  fiscalLabel?: string;
+}
+
+/** The AD bounds of a fiscal year, from its stored label ("2082/83"). */
+export function rangeForFiscalYear(label: string): DateRange {
+  const fy = fiscalYearFromLabel(label);
+  const { startAd, endAd } = fiscalYearAdRange(fy);
+  return {
+    fromIso: adToIso(startAd),
+    toIso: adToIso(endAd),
+    label: `Fiscal year ${fy.label}`,
+    fiscalLabel: fy.label,
+  };
 }
 
 function isoOfBs(bs: BSDate): string {
@@ -78,14 +93,31 @@ export function rangeForPreset(preset: PresetKey): DateRange {
   }
 }
 
-/** Resolve a range from URL search params (?preset=… or ?from=&to=). */
+/**
+ * Resolve a range from URL search params (?fy=… , ?preset=… or ?from=&to=).
+ * A chosen fiscal year wins over a preset, so switching the year selector
+ * recomputes every report for that year — including a closed one.
+ */
 export function resolveRange(params: {
   preset?: string;
   from?: string;
   to?: string;
+  fy?: string;
 }): DateRange {
   if (params.from && params.to) {
-    return { fromIso: params.from, toIso: params.to, label: "Custom range" };
+    return {
+      fromIso: params.from,
+      toIso: params.to,
+      label: "Custom range",
+      fiscalLabel: params.fy,
+    };
+  }
+  if (params.fy) {
+    try {
+      return rangeForFiscalYear(params.fy);
+    } catch {
+      // an unparseable year in the address falls through to the normal presets
+    }
   }
   const preset = (params.preset as PresetKey) ?? "month";
   const valid: PresetKey[] = ["today", "yesterday", "week", "month", "fy"];

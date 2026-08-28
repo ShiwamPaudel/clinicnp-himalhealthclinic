@@ -11,10 +11,12 @@ import { useToast } from "@/components/ui/toast";
 import { strings } from "@/lib/strings";
 import { cn } from "@/lib/cn";
 
+import type { Role } from "@/lib/repos/users";
+
 export interface SwitchableUser {
   id: string;
   name: string;
-  role: "admin" | "staff";
+  role: Role;
 }
 
 export function PinSwitch({ users }: { users: SwitchableUser[] }) {

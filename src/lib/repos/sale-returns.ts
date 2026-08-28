@@ -3,6 +3,7 @@
  * sold from (PRD 4.3.6). Day/sales figures adjust because reports net out returns.
  */
 import "server-only";
+import { assertBillYearOpen } from "@/lib/repos/fiscal";
 import { ulid } from "ulid";
 import { db } from "@/lib/db";
 
@@ -42,6 +43,10 @@ export async function returnedBaseByLine(
 export async function createSaleReturn(
   input: SaleReturnInput,
 ): Promise<{ id: string; returnNo: number; totalPaisa: number }> {
+  // A closed year's reports must never change after closing (D-029). Phase 4
+  // adds the "record it in the open year, referencing the old number" path.
+  await assertBillYearOpen(input.billId);
+
   // fiscal year + SR sequence come from the original bill
   const billRes = await db().execute({
     sql: "SELECT fiscal_year_id FROM bills WHERE id = ?",

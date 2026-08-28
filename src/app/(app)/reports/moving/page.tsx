@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 export default async function MovingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ preset?: string; from?: string; to?: string; fy?: string }>;
 }) {
   await requireAdmin();
   await requireModulePage("pharmacy");
@@ -22,6 +22,7 @@ export default async function MovingPage({
 
   return (
     <ReportFrame
+      fy={sp.fy}
       title="Fast / slow moving"
       rangeLabel={range.label}
       preset={range.preset}

@@ -30,6 +30,7 @@ export default async function ExpiryReportPage() {
 
   return (
     <ReportFrame
+      showFiscalYear={false}
       title="Expiry report"
       rangeLabel={`Next ${company.expiryAlertDays} days`}
       showRange={false}

@@ -11,6 +11,8 @@ import {
   bsMonthRange,
   bsDayOfWeek,
   type BSDate,
+  fiscalYearFromLabel,
+  nextFiscalYear,
 } from "@/lib/bs";
 
 const SHRAWAN1_2083: BSDate = { year: 2083, month: 4, day: 1 };
@@ -105,5 +107,25 @@ describe("bs — weekday", () => {
     const dow = bsDayOfWeek(SHRAWAN1_2083);
     expect(dow).toBeGreaterThanOrEqual(0);
     expect(dow).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("fiscal year arithmetic", () => {
+  it("rebuilds a fiscal year from its label", () => {
+    const fy = fiscalYearFromLabel("2083/84");
+    expect(fy.startYear).toBe(2083);
+    expect(fy.endYear).toBe(2084);
+    expect(fy.label).toBe("2083/84");
+  });
+
+  it("moves to the next fiscal year", () => {
+    expect(nextFiscalYear(fiscalYearFromLabel("2083/84")).label).toBe("2084/85");
+    expect(nextFiscalYear(fiscalYearFromLabel("2099/00")).label).toBe("2100/01");
+  });
+
+  it("round-trips label -> next -> label", () => {
+    let fy = fiscalYearFromLabel("2080/81");
+    for (let i = 0; i < 5; i++) fy = nextFiscalYear(fy);
+    expect(fy.label).toBe("2085/86");
   });
 });

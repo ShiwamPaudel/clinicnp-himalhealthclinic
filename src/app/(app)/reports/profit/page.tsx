@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 export default async function ProfitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ preset?: string; from?: string; to?: string; fy?: string }>;
 }) {
   await requireAdmin();
   await requireModulePage("pharmacy");
@@ -20,6 +20,7 @@ export default async function ProfitPage({
 
   return (
     <ReportFrame
+      fy={sp.fy}
       title="Profit margin"
       rangeLabel={range.label}
       preset={range.preset}
