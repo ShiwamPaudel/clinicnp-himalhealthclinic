@@ -8,6 +8,11 @@ import {
   profitByItem,
   movingItems,
 } from "@/lib/repos/reports";
+import {
+  listStockOuts,
+  stockOutTotalsByReason,
+  STOCK_OUT_REASONS,
+} from "@/lib/repos/adjustments";
 import { formatDocNo } from "@/lib/invoice-number";
 import { adToIso } from "@/lib/bs";
 
@@ -34,6 +39,7 @@ export async function GET(
     preset: url.searchParams.get("preset") ?? undefined,
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
+    fy: url.searchParams.get("fy") ?? undefined,
   });
 
   const wb = new ExcelJS.Workbook();
@@ -122,6 +128,58 @@ export async function GET(
         dead: r.deadStock ? "Yes" : "No",
       });
     }
+  } else if (report === "stock-out") {
+    const reasonLabel = Object.fromEntries(
+      STOCK_OUT_REASONS.map((r) => [r.key, r.label]),
+    ) as Record<string, string>;
+
+    const rows = await listStockOuts(range.fromIso, range.toIso);
+    ws.columns = [
+      { header: "Number", key: "no", width: 22 },
+      { header: "Date (BS)", key: "date", width: 14 },
+      { header: "Reason", key: "reason", width: 22 },
+      { header: "Direction", key: "dir", width: 14 },
+      { header: "Supplier", key: "sup", width: 24 },
+      { header: "Lines", key: "lines", width: 8 },
+      { header: "Value", key: "value", width: 14 },
+      { header: "Note", key: "note", width: 30 },
+      { header: "Recorded by", key: "by", width: 18 },
+    ];
+    for (const r of rows) {
+      ws.addRow({
+        no:
+          r.adjustmentNo != null
+            ? `SO-${r.fiscalLabel}-${String(r.adjustmentNo).padStart(6, "0")}`
+            : "",
+        date: r.dateBs,
+        reason: reasonLabel[r.reason] ?? r.reason,
+        dir: r.direction === "in" ? "Added back" : "Taken out",
+        sup: r.supplierName ?? "",
+        lines: r.lineCount,
+        value: rupees(r.totalCostPaisa),
+        note: r.note,
+        by: r.userName,
+      });
+    }
+
+    // The number the owner actually wants: what was lost, and to what.
+    const totals = await stockOutTotalsByReason(range.fromIso, range.toIso);
+    const summary = wb.addWorksheet("By reason");
+    summary.columns = [
+      { header: "Reason", key: "reason", width: 24 },
+      { header: "Entries", key: "entries", width: 10 },
+      { header: "Base quantity", key: "qty", width: 14 },
+      { header: "Value", key: "value", width: 14 },
+    ];
+    for (const t of totals) {
+      summary.addRow({
+        reason: reasonLabel[t.reason] ?? t.reason,
+        entries: t.entries,
+        qty: t.baseQty,
+        value: rupees(t.costPaisa),
+      });
+    }
+    summary.getRow(1).font = { bold: true };
   } else {
     return NextResponse.json(
       { ok: false, userMessage: "Unknown report." },

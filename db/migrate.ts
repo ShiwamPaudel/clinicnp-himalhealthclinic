@@ -49,6 +49,38 @@ function splitStatements(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * Statements are split on `;`, and only comments at the START of a line are
+ * stripped. A trailing `-- comment; like this` therefore splits a statement in
+ * half and SQLite reports a baffling "incomplete input". Catch it here and say
+ * what actually happened.
+ */
+function assertWellFormed(file: string, statements: string[]): void {
+  const ALLOWED = [
+    "CREATE",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "DROP",
+    "ALTER",
+    "PRAGMA",
+    "WITH",
+    "REPLACE",
+  ];
+  for (const stmt of statements) {
+    const head = stmt.trimStart().toUpperCase();
+    if (!ALLOWED.some((k) => head.startsWith(k))) {
+      throw new Error(
+        `${file} produced a statement that doesn't begin with SQL:
+  "${stmt.slice(0, 80)}…"
+` +
+          "A trailing '-- comment' containing a semicolon splits a statement. " +
+          "Put comments on their own line.",
+      );
+    }
+  }
+}
+
 function needsRebuild(sql: string): boolean {
   return /^--\s*@rebuild\b/m.test(sql);
 }
@@ -73,6 +105,7 @@ async function countRows(client: Client, tables: string[]) {
 
 async function applyFile(client: Client, file: string, sql: string) {
   const statements = splitStatements(sql);
+  assertWellFormed(file, statements);
   const rebuild = needsRebuild(sql);
   const toVerify = verifyTables(sql);
 

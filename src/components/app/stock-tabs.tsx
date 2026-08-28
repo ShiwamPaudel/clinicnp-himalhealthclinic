@@ -10,6 +10,7 @@ const TABS = [
   { href: "/stock/low", label: "Low stock" },
   { href: "/stock/near-expiry", label: "Near expiry" },
   { href: "/stock/expired", label: "Expired" },
+  { href: "/stock/out", label: "Stock out" },
 ];
 
 export function StockTabs({ counts }: { counts?: Record<string, number> }) {

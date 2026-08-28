@@ -3,8 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
 import { requireModule, ModuleDisabledError } from "@/lib/modules";
-import { getBatch, writeOffBatch } from "@/lib/repos/batches";
-import { createPurchaseReturn } from "@/lib/repos/purchases";
+import { getBatch } from "@/lib/repos/batches";
+import {
+  createStockOut,
+  InvalidAdjustmentError,
+  AdjustmentShortError,
+} from "@/lib/repos/adjustments";
 import { adToIso, toAD, bsFromDbText, today, bsToDbText } from "@/lib/bs";
 
 export interface ActionResult {
@@ -19,14 +23,34 @@ function fail(userMessage: string): ActionResult {
 function handle(err: unknown): ActionResult {
   if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
+  if (err instanceof InvalidAdjustmentError) return fail(err.userMessage);
+  if (err instanceof AdjustmentShortError) return fail(err.userMessage);
   console.error("[stock action]", err);
   return fail("Something went wrong. Please try again.");
 }
 
-/** Write off an expired batch's remaining stock (disposal). Admin only. */
+function refreshStockScreens(): void {
+  revalidatePath("/stock/expired");
+  revalidatePath("/stock");
+  revalidatePath("/stock/out");
+  revalidatePath("/suppliers");
+}
+
+function todayDates() {
+  const bs = bsToDbText(today());
+  return { dateBs: bs, dateAd: adToIso(toAD(bsFromDbText(bs))) };
+}
+
+/**
+ * Dispose of an expired batch's remaining stock. Admin only.
+ *
+ * Routed through createStockOut so there is ONE stock-out path, not two: this
+ * now lands in the stock-out register with reason "disposed", carries a proper
+ * number, and prints a note like any other entry (Phases.md Phase 1).
+ */
 export async function writeOffBatchAction(
   batchId: string,
-  reason: string,
+  note?: string,
 ): Promise<ActionResult> {
   try {
     await requireModule("pharmacy");
@@ -34,19 +58,39 @@ export async function writeOffBatchAction(
     const batch = await getBatch(batchId);
     if (!batch) return fail("That batch no longer exists.");
     if (batch.remainingBaseQty <= 0) return fail("Nothing left to write off.");
-    await writeOffBatch(batchId, batch.itemId, batch.remainingBaseQty, user.id);
-    // record the disposal reason in the audit trail via stock_moves reason already;
-    // reason text kept for the toast/UX
-    void reason;
-    revalidatePath("/stock/expired");
-    revalidatePath("/stock");
+
+    const { dateBs, dateAd } = todayDates();
+    await createStockOut({
+      direction: "out",
+      reason: "disposed",
+      dateAd,
+      dateBs,
+      note: note ?? "",
+      lines: [
+        {
+          itemId: batch.itemId,
+          batchId: batch.id,
+          baseQty: batch.remainingBaseQty,
+          unitLevelEntered: 0,
+          qtyEntered: batch.remainingBaseQty,
+        },
+      ],
+      userId: user.id,
+    });
+
+    refreshStockScreens();
     return { ok: true };
   } catch (err) {
     return handle(err);
   }
 }
 
-/** Return an expired batch to its supplier (creates a purchase return). Admin only. */
+/**
+ * Send an expired batch back to its supplier. Admin only.
+ *
+ * Also routed through createStockOut, which creates the real purchase return
+ * and credits the supplier ledger — one code path for both.
+ */
 export async function returnExpiredBatchAction(
   batchId: string,
 ): Promise<ActionResult> {
@@ -57,24 +101,28 @@ export async function returnExpiredBatchAction(
     if (!batch) return fail("That batch no longer exists.");
     if (batch.remainingBaseQty <= 0) return fail("Nothing left to return.");
     if (!batch.supplierId) return fail("This batch has no supplier on record.");
-    const bs = bsToDbText(today());
-    await createPurchaseReturn({
+
+    const { dateBs, dateAd } = todayDates();
+    await createStockOut({
+      direction: "out",
+      reason: "returned_to_supplier",
+      dateAd,
+      dateBs,
       supplierId: batch.supplierId,
-      dateBs: bs,
-      dateAd: adToIso(toAD(bsFromDbText(bs))),
-      reason: "expired",
+      note: "Expired stock returned",
       lines: [
         {
-          batchId: batch.id,
           itemId: batch.itemId,
+          batchId: batch.id,
           baseQty: batch.remainingBaseQty,
-          costPaisa: batch.remainingBaseQty * batch.costPaisaPerBase,
+          unitLevelEntered: 0,
+          qtyEntered: batch.remainingBaseQty,
         },
       ],
       userId: user.id,
     });
-    revalidatePath("/stock/expired");
-    revalidatePath("/stock");
+
+    refreshStockScreens();
     return { ok: true };
   } catch (err) {
     return handle(err);

@@ -15,7 +15,15 @@ export type StockMoveReason =
   | "sale_return"
   | "purchase_return"
   | "write_off"
-  | "adjustment";
+  | "adjustment"
+  // the reasoned stock-out family (PRD §4A.2) — see lib/repos/adjustments.ts
+  | "returned_to_supplier"
+  | "disposed"
+  | "damaged"
+  | "lost"
+  | "clinic_use"
+  | "sample"
+  | "count_correction";
 
 export interface Batch {
   id: string;

@@ -23,7 +23,7 @@ export function ExpiredActions({
 
   async function writeOff() {
     setBusy(true);
-    const res = await writeOffBatchAction(batchId, "expired");
+    const res = await writeOffBatchAction(batchId, "Expired stock disposed");
     setBusy(false);
     if (res.ok) {
       toast.success("Written off");
