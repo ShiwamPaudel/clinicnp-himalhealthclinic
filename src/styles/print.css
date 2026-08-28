@@ -1,0 +1,67 @@
+/* print.css — thermal (80mm) + A5 invoice printing.
+   The .print-area is hidden on screen and revealed only when printing. */
+
+.print-area {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+}
+
+@media print {
+  /* hide everything, then reveal only the invoice */
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* 80mm thermal roll */
+  .invoice-thermal {
+    width: 72mm;
+    margin: 0 auto;
+    padding: 2mm;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #000;
+  }
+  .invoice-thermal .shop-name {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .invoice-thermal .dashed {
+    border-top: 1px dashed #000;
+    margin: 4px 0;
+  }
+
+  /* A5 sheet */
+  .invoice-a5 {
+    width: 148mm;
+    min-height: 210mm;
+    padding: 12mm;
+    color: #000;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 12px;
+  }
+  .invoice-a5 .shop-name {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .invoice-a5 .perforation {
+    border-top: 1px dashed #555;
+    margin: 8px 0;
+  }
+
+  @page {
+    margin: 4mm;
+  }
+}

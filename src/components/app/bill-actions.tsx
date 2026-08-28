@@ -1,0 +1,115 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Printer, Ban, CheckCircle2, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
+import { cancelBillAction, settleCreditAction } from "@/app/(app)/bills/actions";
+import { InvoiceThermal } from "@/components/print/invoice-thermal";
+import { InvoiceA5 } from "@/components/print/invoice-a5";
+import type { PrintBill } from "@/lib/print-types";
+import { strings } from "@/lib/strings";
+
+export function BillActions({
+  billId,
+  printBill,
+  printFormat,
+  isAdmin,
+  canCancel,
+  isCredit,
+  creditSettled,
+}: {
+  billId: string;
+  printBill: PrintBill;
+  printFormat: "thermal" | "a5";
+  isAdmin: boolean;
+  canCancel: boolean;
+  isCredit: boolean;
+  creditSettled: boolean;
+}) {
+  const router = useRouter();
+  const toast = useToast();
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function doCancel() {
+    setBusy(true);
+    const res = await cancelBillAction(billId);
+    setBusy(false);
+    setConfirmCancel(false);
+    if (res.ok) {
+      toast.success("Bill cancelled");
+      router.refresh();
+    } else toast.error(res.userMessage ?? strings.somethingWentWrong);
+  }
+
+  async function doSettle() {
+    setBusy(true);
+    const res = await settleCreditAction(billId);
+    setBusy(false);
+    if (res.ok) {
+      toast.success("Marked as paid");
+      router.refresh();
+    } else toast.error(res.userMessage ?? strings.somethingWentWrong);
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="secondary" onClick={() => window.print()}>
+        <Printer className="h-4 w-4" />
+        Reprint
+      </Button>
+      <Link href={`/bills/${billId}/return`}>
+        <Button variant="secondary">
+          <RotateCcw className="h-4 w-4" />
+          Sales return
+        </Button>
+      </Link>
+      {isCredit && !creditSettled && (
+        <Button variant="secondary" onClick={doSettle} disabled={busy}>
+          <CheckCircle2 className="h-4 w-4" />
+          Mark paid
+        </Button>
+      )}
+      {isAdmin && canCancel && (
+        <Button variant="destructive" onClick={() => setConfirmCancel(true)}>
+          <Ban className="h-4 w-4" />
+          Cancel bill
+        </Button>
+      )}
+
+      <Dialog
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        title="Cancel this bill?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmCancel(false)}>
+              Keep bill
+            </Button>
+            <Button variant="destructive" onClick={doCancel} disabled={busy}>
+              Cancel bill
+            </Button>
+          </>
+        }
+      >
+        <p className="text-[14px] text-sage-700">
+          The bill stays in the register marked <b>Cancelled</b> and keeps its
+          number. The stock goes back to the shelf.
+        </p>
+      </Dialog>
+
+      {/* hidden print area for reprint */}
+      <div className="print-area">
+        {printFormat === "a5" ? (
+          <InvoiceA5 bill={printBill} />
+        ) : (
+          <InvoiceThermal bill={printBill} />
+        )}
+      </div>
+    </div>
+  );
+}
