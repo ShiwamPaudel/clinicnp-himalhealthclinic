@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ulid } from "ulid";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowLeft, HelpCircle, PauseCircle, PlayCircle } from "lucide-react";
 import { useBillStore, linesFromHeld } from "@/stores/bill-store";
 import {
@@ -29,6 +28,7 @@ import { PaymentPane, type PaymentPaneHandle } from "@/components/pos/payment-pa
 import { BatchPicker } from "@/components/pos/batch-picker";
 import { UnitPanel } from "@/components/pos/unit-panel";
 import { ShortcutSheet } from "@/components/pos/shortcut-sheet";
+import { Wordmark } from "@/components/ui/wordmark";
 import { StatusChip } from "@/components/pos/status-chip";
 import { InvoiceThermal } from "@/components/print/invoice-thermal";
 import { InvoiceA5 } from "@/components/print/invoice-a5";
@@ -307,14 +307,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
             <ArrowLeft className="h-4 w-4" />
             Back to app
           </Link>
-          <Image
-            src="/brand/logo.png"
-            alt={strings.appName}
-            width={1875}
-            height={1000}
-            priority
-            className="h-6 w-auto"
-          />
+          <Wordmark name={config.appName} className="text-[15px]" />
           <span className="hidden text-[14px] font-semibold text-sage-900 sm:inline">
             · New bill
           </span>

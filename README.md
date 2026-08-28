@@ -1,8 +1,14 @@
-# Faarma
+# ClinicNP
 
-Pharmacy billing & stock management for Nepali retail pharmacies. Keyboard-first
-billing, batch/expiry tracking with FEFO, Bikram Sambat dates, PAN/VAT-ready
-invoices, and offline-tolerant sales that never lose a bill.
+Clinic and pharmacy management for Nepali polyclinics and retail pharmacies.
+Two modules — **Pharmacy** and **Clinic** — each switched on or off independently,
+sharing one counter, one invoice series and one set of books.
+
+Keyboard-first billing, batch/expiry tracking with FEFO, Bikram Sambat dates,
+PAN/VAT-ready invoices, and offline-tolerant sales that never lose a bill.
+
+The product name is derived from the enabled modules: with the Clinic module on it
+is **ClinicNP**; a pharmacy-only install shows **ClinicNP**.
 
 Built with Next.js 15 (App Router, TypeScript strict), Turso (libSQL), Tailwind v4,
 Auth.js, and a PWA offline layer (serwist + IndexedDB).

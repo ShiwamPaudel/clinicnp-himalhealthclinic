@@ -19,7 +19,7 @@ export async function GET() {
     status: 200,
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="faarma-backup-${date}.json"`,
+      "Content-Disposition": `attachment; filename="clinicnp-backup-${date}.json"`,
     },
   });
 }

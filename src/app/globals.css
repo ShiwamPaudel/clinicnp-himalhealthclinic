@@ -2,13 +2,14 @@
 @import "../styles/print.css";
 
 /* ============================================================
-   Faarma design tokens — "The Green Cross Counter"
+   ClinicNP design tokens — "The Green Counter and the Blue Case Sheet"
    Source of truth: Design.md. Do not introduce colors outside these.
-   Brand: deep forest green + warm orange (from the Faarma logo).
+   Sage = the counter. Cream = the paper. Magenta = the ink stamp (rare, for a
+   human decision). Navy = the case sheet, and ONLY ever about a patient.
    ============================================================ */
 
 @theme {
-  /* Sage (primary / brand) — the Faarma green */
+  /* Sage (primary / brand / pharmacy) */
   --color-sage-950: #16241b;
   --color-sage-900: #20342a;
   --color-sage-700: #35553f;
@@ -18,11 +19,14 @@
   --color-sage-150: #d5e4d7;
   --color-sage-75: #ebf2ec;
 
-  /* Brand orange (the Faarma capsule accent) — brand touches only */
-  --color-brand-600: #e07520;
-  --color-brand-500: #e87e28;
-  --color-brand-400: #ef9243;
-  --color-brand-100: #fbe8d4;
+  /* Navy (the case sheet — clinic only). Navy marks WHO something is about:
+     the patient, their visit, their file. Never a button, never a focus ring,
+     never a status. If navy appears where no patient is involved, it is wrong. */
+  --color-clinic-900: #16283f;
+  --color-clinic-700: #234a78;
+  --color-clinic-500: #3e6fa3;
+  --color-clinic-150: #dce7f3;
+  --color-clinic-75: #eef3fa;
 
   /* Cream (surfaces) */
   --color-cream-100: #faf6eb;
@@ -135,7 +139,7 @@ body {
   background: linear-gradient(
     90deg,
     var(--color-sage-500),
-    var(--color-brand-500)
+    var(--color-sage-300)
   );
   z-index: 100;
   pointer-events: none;

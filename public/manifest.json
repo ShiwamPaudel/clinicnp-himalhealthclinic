@@ -1,7 +1,7 @@
 {
-  "name": "Faarma — Pharmacy billing & stock",
-  "short_name": "Faarma",
-  "description": "Pharmacy billing & stock for Nepali retail pharmacies",
+  "name": "ClinicNP — Clinic & pharmacy management",
+  "short_name": "ClinicNP",
+  "description": "Clinic and pharmacy billing, patients and stock",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#faf6eb",

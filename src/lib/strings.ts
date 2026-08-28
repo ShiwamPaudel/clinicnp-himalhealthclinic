@@ -4,9 +4,12 @@
  * ABSOLUTE RULE: plain language only. No backend vocabulary (Rules.md §1).
  */
 
+import { DEFAULT_APP_NAME } from "@/lib/app-name";
+
 export const strings = {
-  // brand
-  appName: "Faarma",
+  // brand — derived from the enabled modules (D-025). Screens that know the
+  // module flags should call appNameFor(); this default covers the rest.
+  appName: DEFAULT_APP_NAME,
 
   // common actions
   save: "Save",

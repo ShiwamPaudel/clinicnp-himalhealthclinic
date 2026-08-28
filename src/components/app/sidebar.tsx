@@ -1,23 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Nav } from "@/components/app/nav";
+import { Wordmark, AppMark } from "@/components/ui/wordmark";
 import { PinSwitch, type SwitchableUser } from "@/components/app/pin-switch";
 import { strings } from "@/lib/strings";
 import { cn } from "@/lib/cn";
 import type { Role } from "@/lib/repos/users";
 
-const STORAGE_KEY = "faarma:nav-collapsed";
+const STORAGE_KEY = "clinicnp:nav-collapsed";
 
 export function Sidebar({
   user,
   switchable,
+  appName,
 }: {
   user: { name: string; role: Role };
   switchable: SwitchableUser[];
+  appName: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -48,23 +50,9 @@ export function Sidebar({
         )}
       >
         {collapsed ? (
-          <Image
-            src="/brand/mark.png"
-            alt={strings.appName}
-            width={200}
-            height={200}
-            priority
-            className="h-9 w-9 rounded-full bg-cream-50"
-          />
+          <AppMark name={appName} />
         ) : (
-          <Image
-            src="/brand/logo-white.png"
-            alt={strings.appName}
-            width={1875}
-            height={1000}
-            priority
-            className="h-8 w-auto"
-          />
+          <Wordmark name={appName} tone="light" className="pl-1" />
         )}
         <button
           onClick={toggle}

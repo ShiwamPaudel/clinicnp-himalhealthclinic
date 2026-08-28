@@ -1,5 +1,5 @@
 /**
- * build-guide.mjs — assembles prod-docs/guide/Faarma-User-Guide.html from the
+ * build-guide.mjs — assembles prod-docs/guide/ClinicNP-User-Guide.html from the
  * captured screenshots + the written walkthrough below. Images are embedded as
  * data URIs so the file is fully self-contained: open it in any browser and
  * "Save as PDF" (or Ctrl/Cmd+P → Save as PDF) to produce the printed guide.
@@ -38,11 +38,11 @@ const CHAPTERS = [
         img: "01-login",
         title: "Signing in",
         blurb:
-          "Faarma opens to a sign-in screen. Every person who works the counter gets their own username so the shop always knows who made each bill.",
+          "ClinicNP opens to a sign-in screen. Every person who works the counter gets their own username so the shop always knows who made each bill.",
         points: [
           "Type your <b>username</b> and <b>password</b>, then press <b>Log in</b> (or hit Enter).",
           "Demo logins for trying things out: <b>admin / admin123</b> (Owner) and <b>bikash / staff123</b> (Counter staff).",
-          "Get the password wrong too many times in a row and Faarma pauses sign-in for a few minutes. This is on purpose — it stops anyone guessing their way in. Just wait and try again.",
+          "Get the password wrong too many times in a row and ClinicNP pauses sign-in for a few minutes. This is on purpose — it stops anyone guessing their way in. Just wait and try again.",
           "Owners see every tab. Counter staff see only what they need for billing and stock — this keeps the shop's numbers safe.",
         ],
       },
@@ -80,11 +80,11 @@ const CHAPTERS = [
           "Start typing a medicine name in the <b>search box</b> and press <b>Enter</b> to add it to the bill. Keep searching to add more lines.",
           "For each line you can change the <b>quantity</b>, pick the <b>unit</b> (tablet, strip, box…), and — if you're allowed — nudge the <b>rate</b>. An edited rate shows a small mark so it's never hidden.",
           "Prefer to tap? Hit the <b>grid button</b> next to the quantity (or press <b>G</b>) to pick the amount visually — see the next page.",
-          "Faarma always sells the <b>nearest-to-expiry stock first</b>, automatically. You never sell an expired batch by accident — those are locked out.",
+          "ClinicNP always sells the <b>nearest-to-expiry stock first</b>, automatically. You never sell an expired batch by accident — those are locked out.",
           "You <b>can't oversell</b> — if a line is short on stock, saving is blocked until you lower the quantity or add the stock (record a purchase).",
-          "On the right: enter any <b>bill discount</b>, choose <b>Cash</b>, <b>QR</b>, or <b>Credit</b>, type what the customer <b>tendered</b>, and Faarma shows the <b>change</b>.",
+          "On the right: enter any <b>bill discount</b>, choose <b>Cash</b>, <b>QR</b>, or <b>Credit</b>, type what the customer <b>tendered</b>, and ClinicNP shows the <b>change</b>.",
           "Press <b>F9</b> (or <b>Save &amp; print</b>) to finish. The bill prints and stock comes down on its own.",
-          "No internet? Keep billing. Faarma works offline and quietly sends the bills the moment you're back online — the top of the screen tells you what's waiting.",
+          "No internet? Keep billing. ClinicNP works offline and quietly sends the bills the moment you're back online — the top of the screen tells you what's waiting.",
           "Not ready to finish a bill? <b>Held</b> (top right) parks it so you can start another and come back.",
           "Use <b>Back to app</b> (top left) to return to the dashboard any time.",
         ],
@@ -135,14 +135,14 @@ const CHAPTERS = [
           "Medicines that will expire soon, so you can push them, return them, or move them before they become a loss.",
         points: [
           "The 'soon' window is set in Settings (for example, the next 90 days).",
-          "Faarma already sells these first at the counter — this list is for the ones you may want to return to the supplier.",
+          "ClinicNP already sells these first at the counter — this list is for the ones you may want to return to the supplier.",
         ],
       },
       {
         img: "07-stock-expired",
         title: "Expired — pull these off the shelf",
         blurb:
-          "Anything past its expiry date. These are never sold to a customer — Faarma blocks them — but you still need to account for them.",
+          "Anything past its expiry date. These are never sold to a customer — ClinicNP blocks them — but you still need to account for them.",
         points: [
           "Use the action here to write off expired stock so your on-hand numbers stay truthful.",
           "Every write-off is recorded, so the value that left your shelf is always explainable.",
@@ -197,10 +197,10 @@ const CHAPTERS = [
         img: "10-purchases-new",
         title: "Entering a new purchase",
         blurb:
-          "Copy a supplier's invoice into Faarma: pick the supplier, add each medicine with its batch number, expiry, cost, and quantity.",
+          "Copy a supplier's invoice into ClinicNP: pick the supplier, add each medicine with its batch number, expiry, cost, and quantity.",
         points: [
           "Enter the <b>batch number</b> and <b>expiry date</b> for each line — this is what powers sell-oldest-first and the expiry warnings.",
-          "Enter the <b>cost</b> you paid; Faarma uses it to work out real profit later, batch by batch.",
+          "Enter the <b>cost</b> you paid; ClinicNP uses it to work out real profit later, batch by batch.",
           "Save, and every line lands on the shelf and in your supplier's ledger.",
         ],
       },
@@ -352,9 +352,9 @@ const CHAPTERS = [
         img: "25-settings-compliance",
         title: "Compliance (CBMS)",
         blurb:
-          "If your shop reports sales to the government's billing system, Faarma can queue and send them here.",
+          "If your shop reports sales to the government's billing system, ClinicNP can queue and send them here.",
         points: [
-          "Turn it on and enter your details; Faarma sends bills in the background.",
+          "Turn it on and enter your details; ClinicNP sends bills in the background.",
           "The status here shows what has been sent and what's still waiting.",
         ],
       },
@@ -364,7 +364,7 @@ const CHAPTERS = [
         blurb:
           "Your shop's whole record can be saved to a file and, if ever needed, put back exactly as it was.",
         points: [
-          "<b>Download a backup</b> any time to keep a copy safe off the machine. Faarma also backs up nightly on its own.",
+          "<b>Download a backup</b> any time to keep a copy safe off the machine. ClinicNP also backs up nightly on its own.",
           "<b>Restore</b> replaces everything with a backup file. It asks you to type a confirmation first, and it's all-or-nothing — it can never leave your data half-changed.",
         ],
       },
@@ -413,7 +413,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Faarma — User Guide</title>
+<title>ClinicNP — User Guide</title>
 <style>
   @page { size: A4; margin: 16mm 14mm; }
   * { box-sizing: border-box; }
@@ -504,7 +504,7 @@ const html = `<!doctype html>
 <div class="wrap">
 
   <div class="cover">
-    <img src="${logo}" alt="Faarma"/>
+    <img src="${logo}" alt="ClinicNP"/>
     <h1>User Guide</h1>
     <div class="sub">Pharmacy billing &amp; stock, made simple</div>
     <div class="rule"></div>
@@ -512,11 +512,11 @@ const html = `<!doctype html>
   </div>
 
   <div class="card">
-    <h2>Welcome to Faarma</h2>
-    <p class="lede">Faarma runs your pharmacy counter and your stock room from one place — billing customers, tracking every batch, and turning the day's work into clear numbers. This guide walks through each screen with a real picture and plain steps. No jargon.</p>
+    <h2>Welcome to ClinicNP</h2>
+    <p class="lede">ClinicNP runs your pharmacy counter and your stock room from one place — billing customers, tracking every batch, and turning the day's work into clear numbers. This guide walks through each screen with a real picture and plain steps. No jargon.</p>
     <ul class="concepts">
       <li><b>Nepali dates.</b> Every date is in Bikram Sambat, the way you already work.</li>
-      <li><b>Sells the oldest first.</b> Faarma always picks the nearest-to-expiry batch, and never sells an expired one.</li>
+      <li><b>Sells the oldest first.</b> ClinicNP always picks the nearest-to-expiry batch, and never sells an expired one.</li>
       <li><b>Works offline.</b> Keep billing with no internet; bills send themselves when you're back online.</li>
       <li><b>Two roles.</b> Owners see everything; counter staff see billing and stock. Set this up in Settings → Users.</li>
       <li><b>Try it now.</b> Sign in with <b>admin / admin123</b> to explore with sample data.</li>
@@ -530,11 +530,11 @@ const html = `<!doctype html>
 
   ${body}
 
-  <div class="foot">Faarma · User Guide · Generated ${new Date().toISOString().slice(0, 10)}</div>
+  <div class="foot">ClinicNP · User Guide · Generated ${new Date().toISOString().slice(0, 10)}</div>
 </div>
 </body>
 </html>`;
 
-const out = join(GUIDE, "Faarma-User-Guide.html");
+const out = join(GUIDE, "ClinicNP-User-Guide.html");
 writeFileSync(out, html, "utf8");
 console.log("guide written →", out, `(${(html.length / 1024 / 1024).toFixed(1)} MB)`);

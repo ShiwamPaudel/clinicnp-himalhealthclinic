@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/session";
+import { DEFAULT_APP_NAME } from "@/lib/app-name";
 import { listUsers } from "@/lib/repos/users";
 import { Sidebar } from "@/components/app/sidebar";
 
@@ -15,7 +16,11 @@ export default async function AppLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-cream-100">
-      <Sidebar user={{ name: user.name, role: user.role }} switchable={switchable} />
+      <Sidebar
+        user={{ name: user.name, role: user.role }}
+        switchable={switchable}
+        appName={DEFAULT_APP_NAME}
+      />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {children}
       </div>

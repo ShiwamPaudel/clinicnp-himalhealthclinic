@@ -23,12 +23,20 @@
 
 **Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic Pvt. Ltd.** (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
-**Phase:** *(set at the start of Phase 1)* — v2 not yet started. Inherited codebase is v1 feature-complete.
+**Phase:** **Phase 1 in progress** — milestone 1 of 4 (rename) done; modules, fiscal years, stock out still to come.
+**Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic` — git initialised 2083-05-12. Imported from `D:\IBN\Products Codebase\AushadhiPOS` (the v1 tree, which had no git history). The old tree is untouched and is the fallback.
 **Inherited v1 state:** all 5 v1 phases complete; `pnpm build` clean; **68 tests green** (one known flaky test-isolation failure in the phase-4 file — different test each run, always green on re-run, caused by the shared `db()` singleton across test files). Not yet deployed to Vercel.
 **Deployed URL:** — (none yet). Running on the owner's hosted Turso.
 **Live data note:** the owner's hosted Turso holds only leftover test rows ("Test Brand", inactive "cc"); seeded demo items are gone. Re-seed with `pnpm db:seed` if needed. **Capture screenshots against a throwaway local file DB, never against their Turso.**
 
-**Schema state (inherited):** `0001_init.sql`, `0002_auth_security.sql` (`login_throttle`), `0003_bill_line_short.sql`, `0004_compliance.sql` (`company.cbms_enabled`), `0005_item_shape.sql`. Extra columns vs the original spec: `items.preferred_supplier_id`, `company.min_rate_is_cost`, `items.shape`. **The owner's hosted Turso may still need `0005` applied** (`pnpm db:migrate`) — check before anything else.
+**Schema state (inherited):** `0001_init.sql`, `0002_auth_security.sql` (`login_throttle`), `0003_bill_line_short.sql`, `0004_compliance.sql` (`company.cbms_enabled`), `0005_item_shape.sql`. Extra columns vs the original spec: `items.preferred_supplier_id`, `company.min_rate_is_cost`, `items.shape`. **All five are applied on the hosted Turso** (verified 2083-05-12, `0005` at 2026-07-16T02:35Z) — the old "may still need 0005" note was stale.
+**Audit facts established 2083-05-12 (do not re-derive):**
+- `stock_moves.reason` **has** a CHECK → `0007` must rebuild the table. `users.role` **has** a CHECK `('admin','staff')` → Accountant needs a rebuild too.
+- Table rebuilds work **only** with `PRAGMA foreign_keys = OFF` issued *outside* the transaction. `PRAGMA defer_foreign_keys = ON` inside the transaction **fails** with `SQLITE_CONSTRAINT_FOREIGNKEY` (tested both ways).
+- Architecture's `0006` as written **fails on real data**: two `fiscal_years` rows both default to `'open'` and the partial unique index dies. Default must be `'closed'` + one explicit `UPDATE`.
+- Hosted DB has **two** fiscal years both `active = 1`; `getActiveFiscalYear()` (`ORDER BY id DESC`) therefore returns **2082/83**, the older year, which holds 4 of the 5 bills. `ensureFiscalYear` never deactivates the prior year. Must be reconciled when `status` lands.
+- All business tables use **TEXT ULID** primary keys; only `fiscal_years` is INTEGER. Architecture's `closed_by INTEGER` / `patient_id INTEGER` are type errors.
+- v1 `/billing` bundle measured **140 kB** First Load (Rules §5 says "~130 kB"); after milestone 1 it is **135 kB**.
 **Schema plan (v2):** `0006_modules_fy.sql` · `0007_stock_out.sql` · `0008_clinic_core.sql` · `0009_services.sql` · `0010_*` as needed. Append-only; never edit an applied migration.
 
 **Environment quick-reference:**
@@ -40,9 +48,9 @@
 - **Windows notes:** libsql `file:` paths need a Windows-style path with a drive letter (a Git Bash `$(pwd)` unix path gives SQLITE_CANTOPEN 14). `next start` can leave a process holding the port — free it with `Get-NetTCPConnection -LocalPort N -State Listen | Stop-Process`.
 - **Testing note:** integration tests import repos with the vitest `@` alias plus a `server-only` stub (`tests/stubs/server-only.ts`); point `TURSO_DATABASE_URL` at a temp file DB before importing repos; `fileParallelism: false`; `__resetDbForTests()` between files.
 
-**In progress:** —
+**In progress:** Phase 1. Milestone 1 (rename) committed. Next: milestone 2 (module system, `0006`).
 
-**Next up:** Phase 1 — rename to ClinicNP, module system, fiscal-year status + close-year wizard, stock out with reasons.
+**Next up:** `0006_modules_fy.sql` + `lib/modules.ts` + Settings → Modules + the `requireModule('pharmacy')` retrofit (18 pages, 7 server actions).
 
 **Known issues / risks (inherited):**
 - `nepali-date-converter.toJsDate()` returns non-midnight times → `lib/bs.ts toAD()` normalises to local midnight; keep all date maths on `toAD()` output (D-006).
@@ -100,6 +108,11 @@
 | D-033 | **Patient files: server-mediated upload and serve only**, private blobs, soft delete with a 30-day GC | A file URL that works logged-out would be a serious breach |
 | D-034 | **Offline patient registration** reuses the bill outbox pattern (client ULID → provisional number → server-assigned number on sync); duplicates are flagged for a human, never auto-merged | A clinic in a power cut still has to register the person in front of them |
 | D-035 | Stock-out reasons are a **fixed list**, not user-configurable codes | Reports depend on stable reason semantics; free-form codes make them meaningless |
+| D-036 | ClinicNP lives in a **new git repo** at `Installations/clinicnp-himalhealthclinic`, seeded from the v1 tree; the v1 tree is left untouched | v1 had no git at all, so there was no rollback net. Confirms D-023 (continuation) while giving Phase 1 a safe baseline commit |
+| D-037 | The wordmark is **typographic, not raster** (`components/ui/wordmark.tsx`) — sage with the "NP" in navy; Faarma renders in sage alone | A derived name (D-025) cannot be a fixed image. Also removed `next/image` from the counter, taking `/billing` from 140 kB → 135 kB. The old Faarma brand PNGs are deleted |
+| D-038 | The counter's IndexedDB is renamed `faarma` → `clinicnp` with a **verified carry-over**: copy `outbox` + `held`, confirm the counts, and only then delete the old database | A queued bill is never destroyed to tidy a name. Risk is near-zero anyway (v1 never deployed), but the guard is cheap |
+| D-039 | The hosted Turso is **never** the dev target. `.env.local` in this repo points at a local file DB and carries **no** Turso credentials | Memory's standing rule: never test or capture against the clinic's data |
+| D-040 | *(assumption, pending owner)* The vocabulary sweep **excludes `db/migrations/`** | `0001_init.sql:1` carries the retired name in a comment and Rules §5 forbids editing an applied migration. The name survives in no shipped string |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -130,4 +143,11 @@ Next: …(the single most important next step)
 - **S-008** · 2083-04-01 — Hard block on overselling across client, server and route (409), outbox surfaces the reason. D-019.
 - **S-009** · 2083-04-02 — Pictorial unit picker driven by item `shape` (`0005`), inline POS Unit panel, SVG unit art. D-020/021/022. 68 tests green.
 
-### C-000 · *(the first v2 session writes its entry here)*
+### C-001  ·  2083-05-12  ·  Phase 1 (milestone 1 of 4 — rename)
+Built: repo established + git baseline; **rename to ClinicNP** — package `clinicnp` v2.0.0, metadata/title template, `manifest.json`, README, guide scripts, backup filename (`clinicnp-backup-*`), xlsx creator, sidebar preference key; `lib/app-name.ts` (derived name + description, 6 tests); typographic `Wordmark`/`AppMark` replacing the raster Faarma art; IndexedDB `faarma` → `clinicnp` with a verified carry-over; Design.md tokens — Faarma orange **retired**, navy `--color-clinic-*` scale added.
+Decisions/assumptions: D-036, D-037, D-038, D-039, D-040 (assumption).
+Schema changes: none yet (`0006`/`0007` are milestones 2 and 4).
+Broke/fixed: nothing broke. Counter bundle *improved* 140 kB → 135 kB by dropping `next/image` from the POS tree.
+Verified: `pnpm build` clean; **74 tests green** (68 inherited + 6 new); browser confirms `<title>` = ClinicNP and the only IndexedDB is `clinicnp`; login, dashboard and counter all read ClinicNP. Vocabulary sweep clean outside `db/migrations/` (D-040).
+Not built (requested, out of scope): none.
+Next: milestone 2 — `0006_modules_fy.sql`, `lib/modules.ts`, Settings → Modules, and the `requireModule('pharmacy')` retrofit.

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -10,13 +9,20 @@ import { Input, Field } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { loginBlockStatus } from "@/app/(auth)/actions";
 import { strings } from "@/lib/strings";
+import { Wordmark } from "@/components/ui/wordmark";
 
 interface FormValues {
   username: string;
   password: string;
 }
 
-export function LoginForm() {
+export function LoginForm({
+  appName,
+  tagline,
+}: {
+  appName: string;
+  tagline: string;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
@@ -57,17 +63,8 @@ export function LoginForm() {
       className="w-full max-w-sm rounded-[10px] border border-line bg-cream-50 p-6 shadow-[0_1px_2px_rgb(22_36_27_/_6%),0_4px_12px_rgb(22_36_27_/_5%)]"
     >
       <div className="mb-6 flex flex-col items-center text-center">
-        <Image
-          src="/brand/logo.png"
-          alt={strings.appName}
-          width={1875}
-          height={1000}
-          priority
-          className="h-11 w-auto"
-        />
-        <p className="mt-2 text-[13px] text-sage-500">
-          Pharmacy billing &amp; stock
-        </p>
+        <Wordmark name={appName} className="text-[28px]" />
+        <p className="mt-2 text-[13px] text-sage-500">{tagline}</p>
       </div>
 
       <div className="flex flex-col gap-4">

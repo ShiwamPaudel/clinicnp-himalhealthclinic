@@ -37,7 +37,7 @@ export async function GET(
   });
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Faarma";
+  wb.creator = "ClinicNP";
   const ws = wb.addWorksheet("Report");
 
   if (report === "sales-register") {

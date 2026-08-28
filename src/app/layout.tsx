@@ -38,11 +38,11 @@ const deva = Mukta({
 
 export const metadata: Metadata = {
   title: {
-    default: "Faarma - Pharmacy Management System",
-    template: "%s · Faarma",
+    default: "ClinicNP — Clinic & Pharmacy Management System",
+    template: "%s · ClinicNP",
   },
-  applicationName: "Faarma",
-  description: "Pharmacy billing & stock for Nepali retail pharmacies",
+  applicationName: "ClinicNP",
+  description: "Clinic and pharmacy billing, patients and stock",
   manifest: "/manifest.json",
   icons: {
     icon: [

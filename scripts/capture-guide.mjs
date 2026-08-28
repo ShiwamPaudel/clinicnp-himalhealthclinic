@@ -1,5 +1,5 @@
 /**
- * capture-guide.mjs — logs into a running Faarma instance and screenshots every
+ * capture-guide.mjs — logs into a running ClinicNP instance and screenshots every
  * tab/section into prod-docs/guide/screens/. Feeds the printable user guide.
  *
  * Usage:  BASE=http://localhost:3100 node scripts/capture-guide.mjs

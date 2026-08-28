@@ -17,6 +17,7 @@ import type { PrintCompany } from "@/lib/print-types";
 import { cn } from "@/lib/cn";
 
 export interface PosConfig {
+  appName: string;
   vatRegistered: boolean;
   roundingOn: boolean;
   printFormat: "thermal" | "a5";
