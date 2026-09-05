@@ -1,4 +1,4 @@
--- 0001_init.sql — full AushadhiPOS schema (Architecture.md §3).
+-- 0001_init.sql — the inherited v1 pharmacy schema (Architecture.md §3).
 -- Append-only migrations: never edit an applied migration.
 -- All money columns are integer paisa. All dates: AD ISO text + denormalized BS text.
 

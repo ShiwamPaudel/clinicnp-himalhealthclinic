@@ -10,6 +10,9 @@
  * and is never used when a token is present. It exists so the upload/serve path
  * can be exercised end to end without provisioning a store; it is NOT a second
  * storage backend for production.
+ *
+ * A token pointing at a *public* store is refused outright — see
+ * `privateStoreAvailable` below.
  */
 import "server-only";
 import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
@@ -23,6 +26,52 @@ export interface StoredFile {
 
 function hasBlobToken(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+/**
+ * A Vercel Blob store is created either public or private, and the choice is
+ * fixed for the life of the store. A public store hands out permanent,
+ * world-readable URLs — which is exactly what patient files must never have
+ * (Rules §1.13). So the store is probed once, and if it turns out to be public
+ * the token is refused: the bytes go to local storage and the go-live checklist
+ * reports the problem, rather than a lab report quietly becoming a public URL.
+ *
+ * `null` means "not probed yet".
+ */
+let storeIsPrivate: boolean | null = null;
+let probe: Promise<boolean> | null = null;
+
+async function privateStoreAvailable(): Promise<boolean> {
+  if (!hasBlobToken()) return false;
+  if (storeIsPrivate !== null) return storeIsPrivate;
+  probe ??= (async () => {
+    const { put, del } = await import("@vercel/blob");
+    const key = `.probe/${Date.now()}`;
+    try {
+      await put(key, Buffer.from("probe"), {
+        access: "private",
+        contentType: "text/plain",
+        addRandomSuffix: false,
+      });
+      await del(key).catch(() => {});
+      storeIsPrivate = true;
+    } catch {
+      // The store rejects private writes, so it is a public store.
+      storeIsPrivate = false;
+      console.error(
+        "[files] The configured storage does not support private files, so it " +
+          "will not be used. Patient files are being kept on this machine " +
+          "instead. Create the store with private access and restart.",
+      );
+    }
+    return storeIsPrivate;
+  })();
+  return probe;
+}
+
+/** True when the configured token points at a store that is unusable as-is. */
+export async function storageMisconfigured(): Promise<boolean> {
+  return hasBlobToken() && !(await privateStoreAvailable());
 }
 
 /** Local fallback root. Kept outside `public/` so nothing is ever served statically. */
@@ -40,7 +89,7 @@ export async function putFile(
   body: Uint8Array,
   contentType: string,
 ): Promise<void> {
-  if (hasBlobToken()) {
+  if (await privateStoreAvailable()) {
     const { put } = await import("@vercel/blob");
     await put(key, Buffer.from(body), {
       access: "private",
@@ -58,7 +107,7 @@ export async function putFile(
 }
 
 export async function getFile(key: string): Promise<StoredFile | null> {
-  if (hasBlobToken()) {
+  if (await privateStoreAvailable()) {
     const { get } = await import("@vercel/blob");
     const res = await get(key, { access: "private" });
     if (!res || res.statusCode !== 200 || !res.stream) return null;
@@ -86,7 +135,7 @@ export async function getFile(key: string): Promise<StoredFile | null> {
 }
 
 export async function deleteFile(key: string): Promise<void> {
-  if (hasBlobToken()) {
+  if (await privateStoreAvailable()) {
     const { del } = await import("@vercel/blob");
     await del(key);
     return;
@@ -97,8 +146,12 @@ export async function deleteFile(key: string): Promise<void> {
 }
 
 /** Where files are going, for the settings screen and the go-live checklist. */
-export function storageDescription(): string {
-  return hasBlobToken() ? "Vercel Blob (private)" : "this machine (development)";
+export async function storageDescription(): Promise<string> {
+  if (await privateStoreAvailable()) return "secure cloud storage";
+  if (hasBlobToken()) {
+    return "this computer — the cloud storage is set up to make files public, so it is not being used";
+  }
+  return "this computer — for development only";
 }
 
 /** Local-only helper so tests can point the store somewhere disposable. */
