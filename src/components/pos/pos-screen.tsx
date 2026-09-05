@@ -9,14 +9,25 @@ import {
   billTotals,
   linePreview,
   lineAmountPaisa,
+  serviceLineAmountPaisa,
   unitByLevel,
 } from "@/lib/bill-calc";
 import { change } from "@/lib/money";
 import { adFromIso, toBS, formatBS } from "@/lib/bs";
-import type { PosItem, OutboxBill, HeldBill } from "@/lib/pos-types";
+import type {
+  PosItem,
+  PosService,
+  PosDoctor,
+  PosLabPartner,
+  OutboxBill,
+  HeldBill,
+} from "@/lib/pos-types";
 import type { PrintBill, PrintLine } from "@/lib/print-types";
 import {
   getCachedItems,
+  getCachedServices,
+  getCachedDoctors,
+  getCachedLabPartners,
   syncCatalog,
   applyLocalAllocation,
 } from "@/offline/catalog-cache";
@@ -26,6 +37,8 @@ import { SearchBox, type SearchBoxHandle } from "@/components/pos/search-box";
 import { BillTable, type PosConfig } from "@/components/pos/bill-table";
 import { PaymentPane, type PaymentPaneHandle } from "@/components/pos/payment-pane";
 import { BatchPicker } from "@/components/pos/batch-picker";
+import { ServiceLines } from "@/components/pos/service-lines";
+import { PatientBar } from "@/components/pos/patient-bar";
 import { UnitPanel } from "@/components/pos/unit-panel";
 import { ShortcutSheet } from "@/components/pos/shortcut-sheet";
 import { Wordmark } from "@/components/ui/wordmark";
@@ -38,6 +51,11 @@ import { strings, npLabels } from "@/lib/strings";
 export function PosScreen({ config }: { config: PosConfig }) {
   const toast = useToast();
   const [items, setItems] = useState<PosItem[]>([]);
+  const [services, setServices] = useState<PosService[]>([]);
+  const [doctors, setDoctors] = useState<PosDoctor[]>([]);
+  const [partners, setPartners] = useState<PosLabPartner[]>([]);
+  // bumped when `P` is pressed, so the patient bar knows to open itself
+  const [patientOpenSignal, setPatientOpenSignal] = useState(0);
   const [held, setHeld] = useState<HeldBill[]>([]);
   const [batchLineId, setBatchLineId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -54,6 +72,9 @@ export function PosScreen({ config }: { config: PosConfig }) {
 
   const refreshItems = useCallback(async () => {
     setItems(await getCachedItems());
+    setServices(await getCachedServices());
+    setDoctors(await getCachedDoctors());
+    setPartners(await getCachedLabPartners());
   }, []);
 
   const refreshHeld = useCallback(async () => {
@@ -90,16 +111,81 @@ export function PosScreen({ config }: { config: PosConfig }) {
     });
   }
 
-  const addItem = useCallback(
-    (item: PosItem) => {
-      useBillStore.getState().addItem(item);
-    },
-    [],
-  );
+  const addItem = useCallback((item: PosItem) => {
+    useBillStore.getState().addItem(item);
+  }, []);
+
+  /**
+   * Adding a service also asks the server what it should cost for this
+   * patient: only the server knows when they last saw this doctor. The line
+   * goes on the bill immediately at the full rate and is corrected a moment
+   * later, so a slow answer never blocks the counter.
+   *
+   * If the call fails — the connection is down — the full rate stands and the
+   * line says so, rather than the counter guessing at a discount.
+   */
+  const addService = useCallback(async (service: PosService) => {
+    useBillStore.getState().addService(service);
+    // Read the state again: the line we just added does not exist in the
+    // snapshot taken before the call.
+    const after = useBillStore.getState();
+    const line = after.serviceLines.at(-1);
+    const patient = after.patient;
+    if (!line || !patient) return;
+    if (!service.isConsultation || service.followupDays <= 0) return;
+
+    try {
+      const params = new URLSearchParams({
+        serviceId: service.id,
+        patientId: patient.id,
+        dateAd: config.todayIso,
+      });
+      if (line.doctorId) params.set("doctorId", line.doctorId);
+      const res = await fetch(`/api/followup?${params}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const body = (await res.json()) as {
+        ok: boolean;
+        applied: boolean;
+        ratePaisa: number;
+        note: string;
+      };
+      if (!body.ok || !body.applied) return;
+      useBillStore.getState().applyFollowup(line.lineId, {
+        ratePaisa: body.ratePaisa,
+        applied: true,
+        note: body.note,
+      });
+    } catch {
+      // Offline: the full rate stands. The server records what was actually
+      // charged rather than silently rewriting the printed total.
+    }
+  }, [config.todayIso]);
 
   const doSave = useCallback(async () => {
     const s = useBillStore.getState();
-    if (s.lines.length === 0) return;
+    if (s.lines.length === 0 && s.serviceLines.length === 0) return;
+
+    // A service belongs to somebody. A medicine-only bill may stay anonymous.
+    if (s.serviceLines.length > 0 && !s.patient) {
+      toast.error("Say who this bill is for — it has a service on it.");
+      setPatientOpenSignal((n) => n + 1);
+      return;
+    }
+    // A service that needs a doctor, or goes to an outside laboratory, cannot
+    // be saved half-answered.
+    const svcById = new Map(services.map((x) => [x.id, x]));
+    for (const line of s.serviceLines) {
+      const svc = svcById.get(line.serviceId);
+      if (svc?.doctorRequired && !line.doctorId) {
+        toast.error(`Choose the doctor for ${line.name}.`);
+        return;
+      }
+      if (svc?.outsourced && !line.labPartnerId) {
+        toast.error(`Choose which laboratory ${line.name} goes to.`);
+        return;
+      }
+    }
+
     const hasControlled = s.lines.some((l) => l.item.controlledFlag);
     if (hasControlled && s.patientName.trim() === "") {
       toast.error("Enter the patient name for the prescription item.");
@@ -160,10 +246,15 @@ export function PosScreen({ config }: { config: PosConfig }) {
       await applyLocalAllocation(line.item.id, preview.allocations);
     }
 
-    const totals = billTotals(s.lines, s.billDiscountPaisa, {
-      vatRegistered: config.vatRegistered,
-      roundingOn: config.roundingOn,
-    });
+    const totals = billTotals(
+      s.lines,
+      s.billDiscountPaisa,
+      {
+        vatRegistered: config.vatRegistered,
+        roundingOn: config.roundingOn,
+      },
+      s.serviceLines,
+    );
 
     const outbox: OutboxBill = {
       id,
@@ -174,6 +265,19 @@ export function PosScreen({ config }: { config: PosConfig }) {
       tenderedPaisa: s.tenderedPaisa,
       billDiscountPaisa: s.billDiscountPaisa,
       lines: outboxLines,
+      serviceLines: s.serviceLines.map((l) => ({
+        id: l.lineId,
+        serviceId: l.serviceId,
+        qty: l.qty,
+        ratePaisa: l.ratePaisa,
+        rateOverridden: l.rateOverridden,
+        discountPaisa: l.discountPaisa,
+        doctorId: l.doctorId,
+        labPartnerId: l.labPartnerId,
+        followupApplied: l.followupApplied,
+      })),
+      patientId: s.patient?.id,
+      visitId: s.visitId ?? undefined,
       clientCreatedAt: nowIso,
       attempts: 0,
     };
@@ -190,6 +294,24 @@ export function PosScreen({ config }: { config: PosConfig }) {
         minute: "2-digit",
       }),
       patientName: s.patientName,
+      patient: s.patient
+        ? {
+            patientNo: s.patient.patientNo,
+            name: s.patient.name,
+            ageSex: `${s.patient.ageShort} · ${s.patient.sex.toUpperCase()}`,
+          }
+        : null,
+      serviceLines: s.serviceLines.map((l) => ({
+        name: l.name,
+        doctorName:
+          doctors.find((d) => d.id === l.doctorId)?.name ?? "",
+        qty: l.qty,
+        ratePaisa: l.ratePaisa,
+        discountPaisa: l.discountPaisa,
+        amountPaisa: serviceLineAmountPaisa(l),
+        rateOverridden: l.rateOverridden,
+        followupNote: l.followupNote,
+      })),
       lines: printLines,
       subtotalPaisa: totals.subtotalPaisa,
       billDiscountPaisa: totals.billDiscountPaisa,
@@ -216,15 +338,28 @@ export function PosScreen({ config }: { config: PosConfig }) {
 
     // try to sync right away (no-op when offline; retries in the loop)
     void flushOutbox();
-  }, [config, store, toast, refreshItems]);
+  }, [config, store, toast, refreshItems, services, doctors]);
 
   const doHold = useCallback(async () => {
     const s = useBillStore.getState();
-    if (s.lines.length === 0) return;
+    if (s.lines.length === 0 && s.serviceLines.length === 0) return;
     const bill: HeldBill = {
       id: ulid(),
       heldAt: new Date().toISOString(),
       patientName: s.patientName,
+      patientId: s.patient?.id,
+      visitId: s.visitId ?? undefined,
+      serviceLines: s.serviceLines.map((l) => ({
+        serviceId: l.serviceId,
+        qty: l.qty,
+        ratePaisa: l.ratePaisa,
+        rateOverridden: l.rateOverridden,
+        discountPaisa: l.discountPaisa,
+        doctorId: l.doctorId,
+        labPartnerId: l.labPartnerId,
+        followupApplied: l.followupApplied,
+        followupNote: l.followupNote,
+      })),
       lines: s.lines.map((l) => ({
         itemId: l.item.id,
         unitLevel: l.unitLevel,
@@ -276,6 +411,9 @@ export function PosScreen({ config }: { config: PosConfig }) {
       } else if (e.key === "F9") {
         e.preventDefault();
         void doSave();
+      } else if ((e.key === "p" || e.key === "P") && !typing) {
+        e.preventDefault();
+        setPatientOpenSignal((n) => n + 1);
       } else if (e.key === "?" && !typing) {
         e.preventDefault();
         setShowShortcuts(true);
@@ -344,11 +482,33 @@ export function PosScreen({ config }: { config: PosConfig }) {
           <SearchBox
             ref={searchRef}
             items={items}
+            services={services}
             todayIso={config.todayIso}
             onPick={addItem}
+            onPickService={(svc) => void addService(svc)}
             onEmptyEnter={() => paymentRef.current?.focusTendered()}
           />
+          {services.length > 0 && (
+            <div className="mt-4">
+              <PatientBar
+                patient={store.patient}
+                required={store.serviceLines.length > 0}
+                onAttach={(p) => store.setPatient(p)}
+                onClear={() => {
+                  store.setPatient(null);
+                  store.setVisitId(null);
+                }}
+                openSignal={patientOpenSignal}
+              />
+            </div>
+          )}
           <div className="mt-4 flex min-h-[160px] flex-col rounded-[10px] border border-line bg-cream-50 p-4">
+            <ServiceLines
+              doctors={doctors}
+              partners={partners}
+              services={services}
+              canEditRate={config.canEditRate}
+            />
             <BillTable config={config} onOpenBatch={(id) => setBatchLineId(id)} />
           </div>
           <UnitPanel

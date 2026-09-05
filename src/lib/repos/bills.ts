@@ -20,6 +20,9 @@ import {
   assertBillYearOpen,
 } from "@/lib/repos/fiscal";
 import { getCompany } from "@/lib/repos/company";
+import { getServiceForBilling, lastConsultationAd } from "@/lib/repos/services";
+import { getDoctor } from "@/lib/repos/doctors";
+import { resolveFollowup, doctorSharePaisa } from "@/lib/clinic-calc";
 
 export interface IngestLine {
   id: string;
@@ -32,6 +35,20 @@ export interface IngestLine {
   overrideBatchId?: string;
 }
 
+/** A service line as it arrives from the counter. */
+export interface IngestServiceLine {
+  id: string;
+  serviceId: string;
+  qty: number;
+  ratePaisa: number;
+  rateOverridden: boolean;
+  discountPaisa: number;
+  doctorId: string | null;
+  labPartnerId: string | null;
+  /** what the counter believed about the follow-up rule */
+  followupApplied: boolean;
+}
+
 export interface IngestBillInput {
   id: string; // client ULID
   dateBs: string;
@@ -41,8 +58,23 @@ export interface IngestBillInput {
   tenderedPaisa: number;
   billDiscountPaisa: number;
   lines: IngestLine[];
+  serviceLines?: IngestServiceLine[];
+  /** the registered patient, when the bill names one */
+  patientId?: string | null;
+  /** an existing visit to hang the services on; one is opened if absent */
+  visitId?: string | null;
   userId: string;
   clientCreatedAt: string;
+}
+
+/** Raised when a service line names something that is not billable. */
+export class ServiceLineError extends Error {
+  readonly userMessage: string;
+  constructor(userMessage: string) {
+    super(userMessage);
+    this.name = "ServiceLineError";
+    this.userMessage = userMessage;
+  }
 }
 
 export interface IngestResult {
@@ -127,6 +159,117 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     const f = u.rows[0];
     if (!f) throw new Error(`missing unit for item ${line.itemId}`);
     factorByLine.set(line.id, Number(f.factor_to_base));
+  }
+
+  // Price every service line against the catalog as it stands NOW, not as the
+  // counter remembered it. The counter's numbers are a preview; these are the
+  // ones that go on the invoice (Architecture §5.3).
+  const resolvedServices: {
+    line: IngestServiceLine;
+    nameSnapshot: string;
+    ratePaisa: number;
+    amountPaisa: number;
+    partnerCostPaisa: number;
+    doctorShareBasis: string | null;
+    doctorShareValue: number;
+    doctorSharePaisa: number;
+    followupApplied: boolean;
+    followupNote: string;
+    vatApplicable: boolean;
+  }[] = [];
+
+  // A service is something done to a person: it cannot be billed to nobody
+  // (PRD §4B.4). Checked here as well as at the route, because this is the
+  // last place before the money is written down.
+  if ((input.serviceLines?.length ?? 0) > 0 && !input.patientId) {
+    throw new ServiceLineError(
+      "This bill has a service on it, so it needs a patient.",
+    );
+  }
+
+  for (const line of input.serviceLines ?? []) {
+    const service = await getServiceForBilling(line.serviceId);
+    if (!service) {
+      throw new ServiceLineError(
+        "One of the services on this bill is no longer set up. Open the bill again and re-add it.",
+      );
+    }
+    if (service.doctorRequired && !line.doctorId) {
+      throw new ServiceLineError(`${service.name} needs a doctor on the bill.`);
+    }
+    if (service.outsourced && !line.labPartnerId) {
+      throw new ServiceLineError(
+        `${service.name} needs the laboratory it was sent to.`,
+      );
+    }
+
+    // The follow-up rule, recomputed here where it is authoritative.
+    let ratePaisa = line.ratePaisa;
+    let followupApplied = line.followupApplied;
+    let followupNote = "";
+    if (service.isConsultation && service.followupDays > 0 && input.patientId) {
+      const lastAd = await lastConsultationAd(
+        input.patientId,
+        line.doctorId,
+        input.dateAd,
+      );
+      const outcome = resolveFollowup(
+        {
+          ratePaisa: service.ratePaisa,
+          followupDays: service.followupDays,
+          followupRatePaisa: service.followupRatePaisa,
+        },
+        input.dateAd,
+        lastAd,
+      );
+      // The counter can deliberately charge the full rate instead — a person
+      // made that call, it is marked on the line and it stands. What the
+      // server refuses is a rate nobody chose: a line claiming the follow-up
+      // discount when the rule does not actually allow it.
+      if (line.followupApplied && !outcome.applied) {
+        throw new ServiceLineError(
+          `${service.name} was billed as a follow-up, but this patient is outside the follow-up period. Take the line off and add it again.`,
+        );
+      }
+      if (line.followupApplied && outcome.applied) {
+        ratePaisa = outcome.ratePaisa;
+        followupNote = outcome.note;
+      }
+      followupApplied = line.followupApplied && outcome.applied;
+    }
+
+    // A rate the counter did not mark as edited must be one the catalog knows.
+    if (!line.rateOverridden && !followupApplied && ratePaisa !== service.ratePaisa) {
+      ratePaisa = service.ratePaisa;
+    }
+
+    const amountPaisa = Math.max(0, line.qty * ratePaisa - line.discountPaisa);
+
+    // The doctor's terms are snapshotted: editing them later must not move
+    // money that has already been earned.
+    const doctor = line.doctorId ? await getDoctor(line.doctorId) : null;
+    const share = doctor
+      ? doctorSharePaisa(
+          { basis: doctor.shareBasis, value: doctor.shareValue },
+          amountPaisa,
+          line.qty,
+          service.isConsultation,
+        )
+      : 0;
+
+    resolvedServices.push({
+      line,
+      nameSnapshot: service.name,
+      ratePaisa,
+      amountPaisa,
+      partnerCostPaisa: service.outsourced ? service.partnerCostPaisa : 0,
+      doctorShareBasis: doctor?.shareBasis ?? null,
+      doctorShareValue: doctor?.shareValue ?? 0,
+      doctorSharePaisa: share,
+      followupApplied,
+      followupNote,
+      vatApplicable: service.vatApplicable,
+    });
   }
 
   const now = new Date().toISOString();
@@ -225,18 +368,100 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     }
 
     // --- totals ---
+    // Medicines and services under one set of totals. With no service lines
+    // this is arithmetically identical to what v1 did.
+    const serviceSubtotal = resolvedServices.reduce(
+      (acc, r) => acc + r.amountPaisa,
+      0,
+    );
+    subtotal += serviceSubtotal;
+
     const afterBillDiscount = Math.max(0, subtotal - input.billDiscountPaisa);
-    const vatPaisa = company.vatRegistered ? vatOf(afterBillDiscount) : 0;
+
+    let vatPaisa = 0;
+    if (company.vatRegistered) {
+      // Medicines are always VAT-able; a service only when its own flag is on.
+      const vatableSubtotal =
+        subtotal -
+        serviceSubtotal +
+        resolvedServices.reduce(
+          (acc, r) => acc + (r.vatApplicable ? r.amountPaisa : 0),
+          0,
+        );
+      const discountApplied = Math.min(input.billDiscountPaisa, subtotal);
+      const vatableDiscount =
+        subtotal > 0
+          ? Math.floor((discountApplied * vatableSubtotal) / subtotal)
+          : 0;
+      vatPaisa = vatOf(Math.max(0, vatableSubtotal - vatableDiscount));
+    }
+
     let total = afterBillDiscount + vatPaisa;
     if (company.roundingOn) total = roundToRupee(total);
+
+    // What kind of bill this is, decided here and stored so reports never have
+    // to join two tables to find out (Architecture §3.4).
+    const kind =
+      lineInserts.length > 0 && resolvedServices.length > 0
+        ? "mixed"
+        : resolvedServices.length > 0
+          ? "clinic"
+          : "pharmacy";
+
+    // Services belong to a visit. If the patient has one open today it is used;
+    // otherwise one is opened, because a consultation IS a visit.
+    let visitId = input.visitId ?? null;
+    if (resolvedServices.length > 0 && input.patientId && !visitId) {
+      const openToday = await tx.execute({
+        sql: `SELECT id FROM visits
+               WHERE patient_id = ? AND date_ad = ? AND status != 'cancelled'
+               ORDER BY rowid DESC LIMIT 1`,
+        args: [input.patientId, input.dateAd],
+      });
+      if (openToday.rows[0]) {
+        visitId = openToday.rows[0].id as string;
+      } else {
+        visitId = ulid();
+        const visitSeq = await tx.execute({
+          sql: "SELECT next_visit_no FROM fiscal_years WHERE id = ?",
+          args: [fy.id],
+        });
+        const visitNo = Number(visitSeq.rows[0]!.next_visit_no);
+        await tx.execute({
+          sql: "UPDATE fiscal_years SET next_visit_no = ? WHERE id = ?",
+          args: [visitNo + 1, fy.id],
+        });
+        const firstDoctor =
+          resolvedServices.find((r) => r.line.doctorId)?.line.doctorId ?? null;
+        await tx.execute({
+          sql: `INSERT INTO visits
+                  (id, visit_no, fiscal_year_id, patient_id, date_ad, date_bs,
+                   type, doctor_id, status, user_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'new', ?, 'waiting', ?, ?, ?)`,
+          args: [
+            visitId,
+            visitNo,
+            fy.id,
+            input.patientId,
+            input.dateAd,
+            input.dateBs,
+            firstDoctor,
+            input.userId,
+            now,
+            now,
+          ],
+        });
+      }
+    }
 
     // --- bill header ---
     await tx.execute({
       sql: `INSERT INTO bills
               (id, invoice_no, fiscal_year_id, date_ad, date_bs, patient_name,
                subtotal_paisa, discount_paisa, vat_paisa, total_paisa,
-               payment_method, tendered_paisa, status, user_id, client_created_at, synced_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'saved', ?, ?, ?)`,
+               payment_method, tendered_paisa, status, user_id, client_created_at,
+               synced_at, patient_id, visit_id, kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'saved', ?, ?, ?, ?, ?, ?)`,
       args: [
         input.id,
         invoiceNo,
@@ -253,6 +478,9 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
         input.userId,
         input.clientCreatedAt,
         now,
+        input.patientId ?? null,
+        visitId,
+        kind,
       ],
     });
 
@@ -282,6 +510,54 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
           args: [ulid(), li.lineId, a.batchId, a.baseQty],
         });
       }
+    }
+
+    // Per-line VAT for the service revenue report. Each VAT-able service line
+    // gets its share of the VAT charged, in proportion to the amount it
+    // contributed to the VAT base. Medicines have no per-line VAT column and
+    // keep the remainder, exactly as they did in v1.
+    const vatBase = resolvedServices.reduce(
+      (acc, r) => acc + (r.vatApplicable ? r.amountPaisa : 0),
+      0,
+    ) + (subtotal - serviceSubtotal);
+    const serviceVat = resolvedServices.map((r) =>
+      r.vatApplicable && vatBase > 0
+        ? Math.floor((vatPaisa * r.amountPaisa) / vatBase)
+        : 0,
+    );
+
+    for (const [index, r] of resolvedServices.entries()) {
+      await tx.execute({
+        sql: `INSERT INTO bill_service_lines
+                (id, bill_id, service_id, name_snapshot, qty, rate_paisa,
+                 rate_overridden, discount_paisa, amount_paisa, vat_paisa,
+                 doctor_id, lab_partner_id, partner_cost_paisa,
+                 doctor_share_basis, doctor_share_value, doctor_share_paisa,
+                 followup_applied, followup_note, visit_id)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          r.line.id,
+          input.id,
+          r.line.serviceId,
+          r.nameSnapshot,
+          r.line.qty,
+          r.ratePaisa,
+          r.line.rateOverridden ? 1 : 0,
+          r.line.discountPaisa,
+          r.amountPaisa,
+          serviceVat[index] ?? 0,
+          r.line.doctorId,
+          r.line.labPartnerId,
+          // per test, not per line: the ledger multiplies by quantity
+          r.partnerCostPaisa,
+          r.doctorShareBasis,
+          r.doctorShareValue,
+          r.doctorSharePaisa,
+          r.followupApplied ? 1 : 0,
+          r.followupNote,
+          visitId,
+        ],
+      });
     }
 
     await tx.commit();

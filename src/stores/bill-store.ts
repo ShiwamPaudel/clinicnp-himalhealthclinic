@@ -6,14 +6,36 @@
  */
 import { create } from "zustand";
 import { ulid } from "ulid";
-import type { PosItem } from "@/lib/pos-types";
+import type { PosItem, PosService } from "@/lib/pos-types";
 import type { HeldLine } from "@/lib/pos-types";
-import { defaultUnit, unitByLevel, type BillLine } from "@/lib/bill-calc";
+import {
+  defaultUnit,
+  unitByLevel,
+  type BillLine,
+  type ServiceLine,
+} from "@/lib/bill-calc";
 
 export type PaymentMethod = "cash" | "qr" | "credit";
 
+/**
+ * The patient attached to this bill. A medicine-only bill may leave it empty;
+ * a bill with any service line may not (PRD §4B.4).
+ */
+export interface AttachedPatient {
+  id: string;
+  patientNo: number | null;
+  name: string;
+  sex: string;
+  ageShort: string;
+}
+
 interface BillState {
   lines: BillLine[];
+  serviceLines: ServiceLine[];
+  /** the patient this bill is for, once one is attached */
+  patient: AttachedPatient | null;
+  /** an open visit today, if the counter attached the bill to one */
+  visitId: string | null;
   patientName: string;
   paymentMethod: PaymentMethod;
   tenderedPaisa: number;
@@ -21,7 +43,21 @@ interface BillState {
   activeLineId: string | null;
 
   addItem: (item: PosItem) => void;
+  addService: (service: PosService) => void;
   removeLine: (lineId: string) => void;
+  removeServiceLine: (lineId: string) => void;
+  setServiceQty: (lineId: string, qty: number) => void;
+  setServiceRate: (lineId: string, ratePaisa: number) => void;
+  setServiceDiscount: (lineId: string, discountPaisa: number) => void;
+  setServiceDoctor: (lineId: string, doctorId: string | null) => void;
+  setServicePartner: (lineId: string, partnerId: string | null) => void;
+  /** the server-resolved follow-up outcome for a line, or an override back to full rate */
+  applyFollowup: (
+    lineId: string,
+    outcome: { ratePaisa: number; applied: boolean; note: string },
+  ) => void;
+  setPatient: (patient: AttachedPatient | null) => void;
+  setVisitId: (visitId: string | null) => void;
   setQty: (lineId: string, qty: number) => void;
   cycleUnit: (lineId: string) => void;
   setUnit: (lineId: string, level: number) => void;
@@ -50,8 +86,29 @@ function makeLine(item: PosItem): BillLine {
   };
 }
 
+function makeServiceLine(service: PosService): ServiceLine {
+  return {
+    lineId: ulid(),
+    serviceId: service.id,
+    name: service.name,
+    groupId: service.groupId,
+    qty: 1,
+    ratePaisa: service.ratePaisa,
+    rateOverridden: false,
+    discountPaisa: 0,
+    vatApplicable: service.vatApplicable,
+    doctorId: service.defaultDoctorId,
+    labPartnerId: service.outsourced ? service.defaultLabPartnerId : null,
+    followupApplied: false,
+    followupNote: "",
+  };
+}
+
 export const useBillStore = create<BillState>((set) => ({
   lines: [],
+  serviceLines: [],
+  patient: null,
+  visitId: null,
   patientName: "",
   paymentMethod: "cash",
   tenderedPaisa: 0,
@@ -64,8 +121,83 @@ export const useBillStore = create<BillState>((set) => ({
       return { lines: [...s.lines, line], activeLineId: line.lineId };
     }),
 
+  addService: (service) =>
+    set((s) => {
+      const line = makeServiceLine(service);
+      return {
+        serviceLines: [...s.serviceLines, line],
+        activeLineId: line.lineId,
+      };
+    }),
+
   removeLine: (lineId) =>
     set((s) => ({ lines: s.lines.filter((l) => l.lineId !== lineId) })),
+
+  removeServiceLine: (lineId) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.filter((l) => l.lineId !== lineId),
+    })),
+
+  setServiceQty: (lineId, qty) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.map((l) =>
+        l.lineId === lineId ? { ...l, qty: Math.max(1, qty) } : l,
+      ),
+    })),
+
+  setServiceRate: (lineId, ratePaisa) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.map((l) =>
+        l.lineId === lineId
+          ? { ...l, ratePaisa: Math.max(0, ratePaisa), rateOverridden: true }
+          : l,
+      ),
+    })),
+
+  setServiceDiscount: (lineId, discountPaisa) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.map((l) =>
+        l.lineId === lineId
+          ? { ...l, discountPaisa: Math.max(0, discountPaisa) }
+          : l,
+      ),
+    })),
+
+  setServiceDoctor: (lineId, doctorId) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.map((l) =>
+        l.lineId === lineId ? { ...l, doctorId } : l,
+      ),
+    })),
+
+  setServicePartner: (lineId, partnerId) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.map((l) =>
+        l.lineId === lineId ? { ...l, labPartnerId: partnerId } : l,
+      ),
+    })),
+
+  applyFollowup: (lineId, outcome) =>
+    set((s) => ({
+      serviceLines: s.serviceLines.map((l) =>
+        l.lineId === lineId
+          ? {
+              ...l,
+              ratePaisa: outcome.ratePaisa,
+              followupApplied: outcome.applied,
+              followupNote: outcome.note,
+              // Turning a free follow-up back into a full charge is a person
+              // making a call, so it is marked like any other rate override.
+              rateOverridden: !outcome.applied && l.followupApplied,
+            }
+          : l,
+      ),
+    })),
+
+  setPatient: (patient) =>
+    set({ patient, patientName: patient?.name ?? "" }),
+
+  setVisitId: (visitId) => set({ visitId }),
 
   setQty: (lineId, qty) =>
     set((s) => ({
@@ -144,6 +276,9 @@ export const useBillStore = create<BillState>((set) => ({
   reset: () =>
     set({
       lines: [],
+      serviceLines: [],
+      patient: null,
+      visitId: null,
       patientName: "",
       paymentMethod: "cash",
       tenderedPaisa: 0,

@@ -2,8 +2,9 @@
 
 /**
  * idb.ts — the single IndexedDB database for the counter.
- * Stores: catalog (item cache), meta (catalog version), outbox (pending bills),
- * held (parked bills). Never use localStorage for bills/queue (Rules §6).
+ * Stores: catalog (item cache), services (service cache), meta (catalog
+ * version, doctors and laboratories), outbox (pending bills), held (parked
+ * bills). Never use localStorage for bills/queue (Rules §6).
  *
  * The database was called "faarma" in v1 and is "clinicnp" from v2 on. The
  * carry-over below moves anything still queued on a device that used the old
@@ -11,11 +12,21 @@
  * in the new one. A bill waiting to be sent is never destroyed to tidy a name.
  */
 import { openDB, deleteDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { PosItem, OutboxBill, HeldBill } from "@/lib/pos-types";
+import type {
+  PosItem,
+  PosService,
+  PosDoctor,
+  PosLabPartner,
+  OutboxBill,
+  HeldBill,
+} from "@/lib/pos-types";
 
 interface PosDB extends DBSchema {
   catalog: { key: string; value: PosItem };
-  meta: { key: string; value: string };
+  services: { key: string; value: PosService };
+  // the version string, plus the doctor and laboratory lists, which are short
+  // enough that a store of their own would be ceremony
+  meta: { key: string; value: string | PosDoctor[] | PosLabPartner[] };
   outbox: { key: string; value: OutboxBill };
   held: { key: string; value: HeldBill };
 }
@@ -30,10 +41,15 @@ const CARRIED_STORES = ["outbox", "held"] as const;
 let dbPromise: Promise<IDBPDatabase<PosDB>> | null = null;
 
 function createStores(db: IDBPDatabase<PosDB>): void {
-  db.createObjectStore("catalog", { keyPath: "id" });
-  db.createObjectStore("meta");
-  db.createObjectStore("outbox", { keyPath: "id" });
-  db.createObjectStore("held", { keyPath: "id" });
+  if (!db.objectStoreNames.contains("catalog"))
+    db.createObjectStore("catalog", { keyPath: "id" });
+  if (!db.objectStoreNames.contains("services"))
+    db.createObjectStore("services", { keyPath: "id" });
+  if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
+  if (!db.objectStoreNames.contains("outbox"))
+    db.createObjectStore("outbox", { keyPath: "id" });
+  if (!db.objectStoreNames.contains("held"))
+    db.createObjectStore("held", { keyPath: "id" });
 }
 
 /** True when a database with the old name is still on this device. */
@@ -100,7 +116,9 @@ async function carryOverFromLegacy(db: IDBPDatabase<PosDB>): Promise<void> {
 export function posDB(): Promise<IDBPDatabase<PosDB>> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const db = await openDB<PosDB>(DB_NAME, 1, { upgrade: createStores });
+      // Version 2 adds the services store. `createStores` is guarded so the
+      // upgrade adds only what is missing and never touches a queued bill.
+      const db = await openDB<PosDB>(DB_NAME, 2, { upgrade: createStores });
       await carryOverFromLegacy(db);
       return db;
     })();

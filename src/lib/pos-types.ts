@@ -34,6 +34,38 @@ export interface PosItem {
 export interface PosCatalog {
   version: string;
   items: PosItem[];
+  services: PosService[];
+  doctors: PosDoctor[];
+  labPartners: PosLabPartner[];
+}
+
+/** A service line as it travels to the server. */
+export interface OutboxServiceLine {
+  id: string;
+  serviceId: string;
+  qty: number;
+  ratePaisa: number;
+  rateOverridden: boolean;
+  discountPaisa: number;
+  doctorId: string | null;
+  labPartnerId: string | null;
+  /** what the counter believed; the server recomputes and wins */
+  followupApplied: boolean;
+}
+
+/**
+ * A patient carried inline with the bill, so a bill can land before the
+ * patient registration it depends on (Architecture §2.1 Path B, Phase 5).
+ */
+export interface InlinePatient {
+  id: string;
+  name: string;
+  sex: string;
+  ageValue: number | null;
+  ageUnit: "y" | "m" | "d" | null;
+  ageAsOfAd: string | null;
+  phone: string;
+  address: string;
 }
 
 /** A bill queued in the outbox, ready to POST to /api/bills. */
@@ -42,6 +74,11 @@ export interface OutboxBill {
   dateBs: string;
   dateAd: string;
   patientName: string;
+  /** the registered patient this bill is for, when there is one */
+  patientId?: string;
+  /** the patient's details, when the registration may not have landed yet */
+  patient?: InlinePatient;
+  visitId?: string;
   paymentMethod: "cash" | "qr" | "credit";
   tenderedPaisa: number;
   billDiscountPaisa: number;
@@ -55,6 +92,7 @@ export interface OutboxBill {
     discountPaisa: number;
     overrideBatchId?: string;
   }[];
+  serviceLines?: OutboxServiceLine[];
   clientCreatedAt: string;
   attempts: number;
   lastError?: string;
@@ -69,6 +107,22 @@ export interface HeldBill {
   heldAt: string;
   patientName: string;
   lines: HeldLine[];
+  /** a parked clinic bill keeps its services and its patient */
+  serviceLines?: HeldServiceLine[];
+  patientId?: string;
+  visitId?: string;
+}
+
+export interface HeldServiceLine {
+  serviceId: string;
+  qty: number;
+  ratePaisa: number;
+  rateOverridden: boolean;
+  discountPaisa: number;
+  doctorId: string | null;
+  labPartnerId: string | null;
+  followupApplied: boolean;
+  followupNote: string;
 }
 
 export interface HeldLine {
@@ -79,4 +133,48 @@ export interface HeldLine {
   rateOverridden: boolean;
   discountPaisa: number;
   overrideBatchId?: string;
+}
+
+/**
+ * A service as the counter needs it: everything required to price a line and
+ * to decide what the line demands (a doctor, a lab partner, a file later).
+ * Client-safe, exactly like PosItem — the same object is cached in the browser
+ * and read by the server.
+ */
+export interface PosService {
+  id: string;
+  name: string;
+  code: string;
+  groupId: string;
+  groupName: string;
+  /** the group is a consultation group: the follow-up rule and the
+   *  consultation-based doctor shares apply to it */
+  isConsultation: boolean;
+  ratePaisa: number;
+  doctorRequired: boolean;
+  defaultDoctorId: string | null;
+  outsourced: boolean;
+  defaultLabPartnerId: string | null;
+  partnerCostPaisa: number;
+  keepsFile: boolean;
+  followupDays: number;
+  followupRatePaisa: number;
+  vatApplicable: boolean;
+  /** the rate came from the sample seed, so the counter can say so out loud */
+  sampleRate: boolean;
+}
+
+/** A doctor, reduced to what the counter needs to show and to snapshot. */
+export interface PosDoctor {
+  id: string;
+  name: string;
+  qualification: string;
+  shareBasis: "none" | "pct_consult" | "fixed_consult" | "pct_services";
+  shareValue: number;
+}
+
+/** A lab partner, reduced to what the counter and the dispatch slip need. */
+export interface PosLabPartner {
+  id: string;
+  name: string;
 }

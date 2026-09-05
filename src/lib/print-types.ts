@@ -18,6 +18,27 @@ export interface PrintLine {
   controlled: boolean;
 }
 
+/** A service line as printed. No batch, no expiry — a service has neither. */
+export interface PrintServiceLine {
+  name: string;
+  doctorName: string;
+  qty: number;
+  ratePaisa: number;
+  discountPaisa: number;
+  amountPaisa: number;
+  rateOverridden: boolean;
+  /** "Follow-up within 7 days — no charge." Printed under the line when set. */
+  followupNote: string;
+}
+
+/** Who the bill is for, when it is for somebody. */
+export interface PrintPatient {
+  patientNo: number | null;
+  name: string;
+  /** already formatted, e.g. "34y · F" */
+  ageSex: string;
+}
+
 export interface PrintCompany {
   name: string;
   address: string;
@@ -35,6 +56,10 @@ export interface PrintBill {
   dateBsLong: string;
   timeStr: string;
   patientName: string;
+  /** the registered patient, on a clinic or mixed bill */
+  patient?: PrintPatient | null;
+  /** printed above the medicine block (Design.md §6) */
+  serviceLines?: PrintServiceLine[];
   lines: PrintLine[];
   subtotalPaisa: number;
   billDiscountPaisa: number;

@@ -27,10 +27,55 @@ export function InvoiceThermal({ bill }: { bill: PrintBill }) {
           {bill.provisional ? " (pending)" : ""}
         </div>
         <div>{bill.dateBsLong} {bill.timeStr}</div>
-        {bill.patientName && <div>Patient: {bill.patientName}</div>}
+        {bill.patient ? (
+          <div>
+            Patient:{" "}
+            {bill.patient.patientNo != null
+              ? `P-${String(bill.patient.patientNo).padStart(6, "0")} `
+              : ""}
+            {bill.patient.name} · {bill.patient.ageSex}
+          </div>
+        ) : (
+          bill.patientName && <div>Patient: {bill.patientName}</div>
+        )}
         <div>By: {bill.userName}</div>
       </div>
       <div className="dashed" />
+
+      {/* Services first, then medicines — the order the clinic reads them in
+          (Design.md §6). Each block is labelled only when both are present. */}
+      {(bill.serviceLines?.length ?? 0) > 0 && (
+        <>
+          {bill.lines.length > 0 && (
+            <div style={{ fontWeight: 600 }}>Services</div>
+          )}
+          {bill.serviceLines!.map((l, i) => (
+            <div key={`s${i}`} style={{ marginBottom: 3 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>{l.name}</span>
+                <span>{formatPaisa(l.amountPaisa, false)}</span>
+              </div>
+              <div>
+                {l.qty} × {formatPaisa(l.ratePaisa, false)}
+                {l.rateOverridden ? "*" : ""}
+                {l.discountPaisa > 0
+                  ? ` − ${formatPaisa(l.discountPaisa, false)}`
+                  : ""}
+              </div>
+              {l.doctorName && <div style={{ fontSize: 9 }}>{l.doctorName}</div>}
+              {l.followupNote && (
+                <div style={{ fontSize: 9 }}>{l.followupNote}</div>
+              )}
+            </div>
+          ))}
+          {bill.lines.length > 0 && (
+            <>
+              <div className="dashed" />
+              <div style={{ fontWeight: 600 }}>Medicines</div>
+            </>
+          )}
+        </>
+      )}
 
       {bill.lines.map((l, i) => (
         <div key={i} style={{ marginBottom: 3 }}>

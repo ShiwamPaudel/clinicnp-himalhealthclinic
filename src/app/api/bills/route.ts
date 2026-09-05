@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { canBill } from "@/lib/session";
-import { ingestBill, InsufficientStockError } from "@/lib/repos/bills";
+import {
+  ingestBill,
+  InsufficientStockError,
+  ServiceLineError,
+} from "@/lib/repos/bills";
+import { getModules } from "@/lib/modules";
 import { ingestBillSchema } from "@/lib/validators";
 import {
   checkRateLimit,
@@ -56,6 +61,30 @@ export async function POST(req: Request) {
     );
   }
 
+  // A module that is off cannot be billed through, even by a payload that was
+  // queued while it was on.
+  const modules = await getModules();
+  if (!modules.pharmacy && parsed.data.lines.length > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "module_off",
+        userMessage: "Medicines aren't being sold here any more.",
+      },
+      { status: 409 },
+    );
+  }
+  if (!modules.clinic && (parsed.data.serviceLines?.length ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "module_off",
+        userMessage: "Services aren't being billed here any more.",
+      },
+      { status: 409 },
+    );
+  }
+
   try {
     const result = await ingestBill({
       ...parsed.data,
@@ -72,6 +101,14 @@ export async function POST(req: Request) {
           userMessage:
             "Not enough stock for one or more items — stock may have changed. Please review the bill.",
         },
+        { status: 409 },
+      );
+    }
+    // A service line the server cannot honour: a definite rejection with a
+    // reason the counter can act on, never a silent re-price.
+    if (err instanceof ServiceLineError) {
+      return NextResponse.json(
+        { ok: false, code: "service_line", userMessage: err.userMessage },
         { status: 409 },
       );
     }

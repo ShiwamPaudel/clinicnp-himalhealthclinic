@@ -28,13 +28,21 @@ export async function GET() {
     });
   }
 
-  // Medicines only exist when the pharmacy is on. The route itself stays open —
-  // it is the shared counter's snapshot and Phase 3 adds services to it.
+  // The route itself stays open whichever module is on: it is the shared
+  // counter's snapshot. What comes back depends on the modules — no medicines
+  // without the pharmacy, no services without the clinic.
   const modules = await getModules();
-  if (!modules.pharmacy) {
-    return NextResponse.json({ version: null, items: [] });
+  if (!modules.pharmacy && !modules.clinic) {
+    return NextResponse.json({
+      version: null,
+      items: [],
+      services: [],
+      doctors: [],
+      labPartners: [],
+    });
   }
 
-  const snapshot = await catalogSnapshot();
+  const snapshot = await catalogSnapshot(modules.clinic);
+  if (!modules.pharmacy) snapshot.items = [];
   return NextResponse.json(snapshot);
 }

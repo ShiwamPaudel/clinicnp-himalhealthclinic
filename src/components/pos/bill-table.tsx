@@ -38,12 +38,16 @@ export function BillTable({
   onOpenBatch: (lineId: string) => void;
 }) {
   const lines = useBillStore((s) => s.lines);
+  const serviceLines = useBillStore((s) => s.serviceLines);
 
+  // The prompt belongs to an empty bill, not an empty medicine block: a bill
+  // that already has a consultation on it is not empty.
   if (lines.length === 0) {
+    if (serviceLines.length > 0) return null;
     return (
       <div className="flex flex-1 items-center justify-center text-center">
         <p className="max-w-xs text-[15px] text-sage-400">
-          Search a medicine above and press Enter to start the bill.
+          Search above and press Enter to start the bill.
         </p>
       </div>
     );

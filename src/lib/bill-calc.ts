@@ -62,6 +62,33 @@ export function linePreview(line: BillLine, todayIso: string): LinePreview {
   return { allocations, shortfallBaseQty, availableBaseQty: available };
 }
 
+/**
+ * A service line on the active bill. No batch, no expiry, no unit hierarchy —
+ * a service is a priced act, not a stock allocation (Architecture §3.4).
+ */
+export interface ServiceLine {
+  lineId: string;
+  serviceId: string;
+  /** Name as shown and as printed; snapshotted onto the bill at save time. */
+  name: string;
+  groupId: string;
+  qty: number;
+  ratePaisa: number;
+  rateOverridden: boolean;
+  discountPaisa: number;
+  /** Only meaningful when the company is VAT registered. */
+  vatApplicable: boolean;
+  doctorId: string | null;
+  labPartnerId: string | null;
+  followupApplied: boolean;
+  followupNote: string;
+}
+
+/** Line money amount (qty × rate − discount), never negative. */
+export function serviceLineAmountPaisa(line: ServiceLine): number {
+  return Math.max(0, line.qty * line.ratePaisa - line.discountPaisa);
+}
+
 export interface BillTotals {
   subtotalPaisa: number;
   billDiscountPaisa: number;
@@ -74,14 +101,77 @@ export interface BillConfig {
   roundingOn: boolean;
 }
 
+/**
+ * Split `total` across `weights` so the parts sum to exactly `total`.
+ *
+ * Largest-remainder method: floor every share, then hand the leftover paisa
+ * out one each to the lines that lost the most in the rounding. Used to record
+ * per-line VAT that adds up to the VAT actually charged, rather than to a
+ * number a paisa out.
+ */
+export function apportion(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((s, w) => s + w, 0);
+  if (sum <= 0 || total === 0) return weights.map(() => 0);
+
+  const exact = weights.map((w) => (total * w) / sum);
+  const parts = exact.map((e) => Math.floor(e));
+  let remainder = total - parts.reduce((s, p) => s + p, 0);
+
+  const byLoss = exact
+    .map((e, i) => ({ i, loss: e - Math.floor(e) }))
+    .sort((a, b) => b.loss - a.loss || a.i - b.i);
+
+  for (let k = 0; remainder > 0 && k < byLoss.length; k++, remainder--) {
+    parts[byLoss[k]!.i] = parts[byLoss[k]!.i]! + 1;
+  }
+  return parts;
+}
+
+/**
+ * One set of totals for a bill that may hold medicine lines, service lines, or
+ * both.
+ *
+ * With no service lines this is arithmetically identical to the v1 behaviour,
+ * and the v1 tests are left unchanged to prove it: when every line is VAT-able
+ * the discount share below is the whole discount, so the VAT base collapses to
+ * `subtotal − billDiscount` exactly as before.
+ *
+ * With service lines, VAT only applies to medicines plus the services flagged
+ * VAT-able, and the bill-level discount is shared across everything in
+ * proportion to line amount — so a discount on a mixed bill reduces the VAT
+ * base by only its VAT-able share.
+ */
 export function billTotals(
   lines: BillLine[],
   billDiscountPaisa: number,
   config: BillConfig,
+  serviceLines: ServiceLine[] = [],
 ): BillTotals {
-  const subtotal = lines.reduce((s, l) => s + lineAmountPaisa(l), 0);
+  const medicineSubtotal = lines.reduce((s, l) => s + lineAmountPaisa(l), 0);
+  const serviceSubtotal = serviceLines.reduce(
+    (s, l) => s + serviceLineAmountPaisa(l),
+    0,
+  );
+  const subtotal = medicineSubtotal + serviceSubtotal;
   const afterDiscount = Math.max(0, subtotal - billDiscountPaisa);
-  const vat = config.vatRegistered ? vatOf(afterDiscount) : 0;
+
+  let vat = 0;
+  if (config.vatRegistered) {
+    // Medicines are always VAT-able; a service only when its flag is on.
+    const vatableSubtotal =
+      medicineSubtotal +
+      serviceLines.reduce(
+        (s, l) => s + (l.vatApplicable ? serviceLineAmountPaisa(l) : 0),
+        0,
+      );
+    const discountApplied = Math.min(billDiscountPaisa, subtotal);
+    const vatableDiscount =
+      subtotal > 0
+        ? Math.floor((discountApplied * vatableSubtotal) / subtotal)
+        : 0;
+    vat = vatOf(Math.max(0, vatableSubtotal - vatableDiscount));
+  }
+
   let total = afterDiscount + vat;
   if (config.roundingOn) total = roundToRupee(total);
   return {

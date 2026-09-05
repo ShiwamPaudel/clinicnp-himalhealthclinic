@@ -34,6 +34,13 @@ export const CATALOG_SYNC: RateLimitPolicy = {
 };
 
 /** Backups are heavy and rare. */
+/** Registering from the counter: brisk, but not a script hammering the door. */
+export const PATIENT_CREATE: RateLimitPolicy = {
+  name: "patient_create",
+  limit: 60,
+  windowSeconds: 60,
+};
+
 export const BACKUP: RateLimitPolicy = {
   name: "backup",
   limit: 6,
