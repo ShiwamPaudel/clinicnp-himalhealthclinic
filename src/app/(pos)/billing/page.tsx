@@ -19,6 +19,7 @@ export default async function BillingPage() {
     printFormat: company.printFormat,
     minRateIsCost: company.minRateIsCost,
     canEditRate: user.role === "admin" || user.canEditRate,
+    isAdmin: user.role === "admin",
     userName: user.name,
     todayIso: adToIso(new Date()),
     todayBsLong: formatBS(bsToday, { form: "long", monthScript: "en" }),

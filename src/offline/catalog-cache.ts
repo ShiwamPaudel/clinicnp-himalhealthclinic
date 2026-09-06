@@ -12,6 +12,7 @@ import type {
   PosDoctor,
   PosLabPartner,
   PosCatalog,
+  CachedPatient,
 } from "@/lib/pos-types";
 
 const VERSION_KEY = "catalog_version";
@@ -98,4 +99,63 @@ export async function applyLocalAllocation(
     if (batch) batch.remainingBaseQty = Math.max(0, batch.remainingBaseQty - a.baseQty);
   }
   await db.put("catalog", item);
+}
+
+// ---------------------------------------------------------------------------
+// The recent-patients slice
+// ---------------------------------------------------------------------------
+
+/**
+ * The counter keeps the most recent patients locally so the patient bar can
+ * find somebody with the connection down. Identity fields only — no notes, no
+ * address, no history. It is a convenience, not a copy of the record.
+ */
+export async function getCachedPatients(): Promise<CachedPatient[]> {
+  const db = await posDB();
+  return db.getAll("patients");
+}
+
+export async function replacePatientCache(rows: CachedPatient[]): Promise<void> {
+  const db = await posDB();
+  const tx = db.transaction("patients", "readwrite");
+  await tx.objectStore("patients").clear();
+  for (const r of rows) await tx.objectStore("patients").put(r);
+  await tx.done;
+}
+
+/** Add or update one patient locally, so a fresh registration is findable at once. */
+export async function cachePatient(row: CachedPatient): Promise<void> {
+  const db = await posDB();
+  await db.put("patients", row);
+}
+
+/** Pull the recent-patients slice. Fails quietly when offline. */
+export async function syncPatients(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/patients/recent", { cache: "no-store" });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { patients: CachedPatient[] };
+    await replacePatientCache(body.patients ?? []);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Empty every local store on logout.
+ *
+ * The queues are deliberately NOT cleared: a bill or a registration that has
+ * not reached the server yet is work nobody else has a copy of, and signing
+ * out is not a reason to throw it away. Everything else here is a cache that
+ * re-syncs on the next sign-in.
+ */
+export async function clearCachesOnLogout(): Promise<void> {
+  const db = await posDB();
+  const tx = db.transaction(["catalog", "services", "patients", "meta"], "readwrite");
+  await tx.objectStore("catalog").clear();
+  await tx.objectStore("services").clear();
+  await tx.objectStore("patients").clear();
+  await tx.objectStore("meta").clear();
+  await tx.done;
 }

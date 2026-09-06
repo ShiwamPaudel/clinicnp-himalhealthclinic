@@ -12,13 +12,16 @@
  * inside it without leaving the bill.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { UserPlus, X, Search, Loader2 } from "lucide-react";
+import { ulid } from "ulid";
+import { UserPlus, X, Search, Loader2, CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { formatPatientNo } from "@/lib/patient-no";
+import { formatPatientNo, provisionalPatientLabel } from "@/lib/patient-no";
+import { enqueuePatient } from "@/offline/patient-outbox";
+import { getCachedPatients, cachePatient } from "@/offline/catalog-cache";
 import { AGE_UNIT_OPTIONS, type AgeUnit } from "@/lib/age";
 import type { AttachedPatient } from "@/stores/bill-store";
 import { cn } from "@/lib/cn";
@@ -52,6 +55,7 @@ export function PatientBar({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Found[]>([]);
   const [searching, setSearching] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
@@ -62,6 +66,8 @@ export function PatientBar({
     phone: "",
   });
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Set only for someone registered here while the connection was down. */
+  const pendingSnapshot = useRef<AttachedPatient["snapshot"] | null>(null);
 
   useEffect(() => {
     if (openSignal > 0) {
@@ -74,30 +80,58 @@ export function PatientBar({
     if (open) setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
-  const search = useCallback(async (q: string) => {
-    if (q.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    setSearching(true);
-    try {
-      const res = await fetch(
-        `/api/patients/search?q=${encodeURIComponent(q.trim())}`,
-        { cache: "no-store" },
-      );
-      if (res.ok) {
-        const body = (await res.json()) as { patients: Found[] };
-        setResults(body.patients ?? []);
-      } else {
-        setResults([]);
-      }
-    } catch {
-      // Offline. Registering someone new still works in Phase 5; for now the
-      // person is told plainly rather than left staring at an empty list.
-      setResults([]);
-    }
-    setSearching(false);
+  /** The local slice, searched the same way the server searches. */
+  const searchLocally = useCallback(async (q: string): Promise<Found[]> => {
+    const query = q.trim().toLowerCase();
+    const digits = query.replace(/[^0-9]/g, "");
+    const rows = await getCachedPatients();
+    return rows
+      .filter(
+        (r) =>
+          r.name.toLowerCase().includes(query) ||
+          (digits.length >= 3 && r.phone.replace(/\s/g, "").includes(digits)) ||
+          (digits.length > 0 && String(r.patientNo ?? "") === digits),
+      )
+      .slice(0, 12)
+      .map((r) => ({
+        id: r.id,
+        patientNo: r.patientNo,
+        name: r.name,
+        sex: r.sex,
+        phone: r.phone,
+        ageShort: r.ageShort,
+      }));
   }, []);
+
+  const search = useCallback(
+    async (q: string) => {
+      if (q.trim().length < 2) {
+        setResults([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `/api/patients/search?q=${encodeURIComponent(q.trim())}`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const body = (await res.json()) as { patients: Found[] };
+          setResults(body.patients ?? []);
+          setOffline(false);
+        } else {
+          setResults(await searchLocally(q));
+        }
+      } catch {
+        // The connection is down. The counter searches what it has locally
+        // rather than showing an empty list and implying nobody is registered.
+        setResults(await searchLocally(q));
+        setOffline(true);
+      }
+      setSearching(false);
+    },
+    [searchLocally],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => void search(query), 180);
@@ -111,42 +145,118 @@ export function PatientBar({
       name: f.name,
       sex: f.sex,
       ageShort: f.ageShort,
+      snapshot: pendingSnapshot.current ?? undefined,
     });
+    pendingSnapshot.current = null;
     setOpen(false);
     setQuery("");
     setResults([]);
   }
 
+  /**
+   * Register somebody from the counter.
+   *
+   * The id is minted here, before anything is sent, and it is this person's
+   * identity from now on. If the send fails the registration waits in the
+   * queue under that same id and the bill made for them carries it, so the
+   * two can arrive in either order and still be one person.
+   */
   async function registerAndAttach() {
     setBusy(true);
+    const id = ulid();
+    const draft = {
+      id,
+      name: form.name.trim(),
+      sex: form.sex,
+      ageValue: form.ageValue.trim() === "" ? null : Number(form.ageValue),
+      ageUnit: (form.ageValue.trim() === "" ? null : form.ageUnit) as
+        | "y"
+        | "m"
+        | "d"
+        | null,
+      phone: form.phone.trim(),
+      address: "",
+    };
+
+    async function keepLocally(reason: string) {
+      await enqueuePatient({
+        ...draft,
+        queuedAt: new Date().toISOString(),
+        attempts: 0,
+        lastError: reason,
+      });
+      const local: Found = {
+        id,
+        patientNo: null,
+        name: draft.name,
+        sex: draft.sex,
+        phone: draft.phone,
+        ageShort: draft.ageValue ? `${draft.ageValue} ${draft.ageUnit}` : "",
+      };
+      // The bill made for them carries these details, so it can create the
+      // person itself if it reaches the server first.
+      pendingSnapshot.current = {
+        ageValue: draft.ageValue,
+        ageUnit: draft.ageUnit,
+        phone: draft.phone,
+        address: draft.address,
+      };
+      await cachePatient({
+        id,
+        patientNo: null,
+        name: draft.name,
+        sex: draft.sex,
+        phone: draft.phone,
+        ageShort: local.ageShort,
+      });
+      attach(local);
+      setRegistering(false);
+      setForm({ name: "", sex: "f", ageValue: "", ageUnit: "y", phone: "" });
+      toast.success(
+        `${draft.name} registered as ${provisionalPatientLabel(id)} — the number comes when the connection is back.`,
+      );
+    }
+
     try {
       const res = await fetch("/api/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          sex: form.sex,
-          ageValue: form.ageValue.trim() === "" ? null : Number(form.ageValue),
-          ageUnit: form.ageValue.trim() === "" ? null : form.ageUnit,
-          phone: form.phone.trim(),
-        }),
+        body: JSON.stringify(draft),
       });
-      const body = (await res.json()) as {
+      const body = (await res.json().catch(() => null)) as {
         ok: boolean;
         patient?: Found;
         userMessage?: string;
-      };
-      if (!res.ok || !body.ok || !body.patient) {
-        toast.error(body.userMessage ?? "Couldn't register them just now.");
+      } | null;
+
+      if (res.ok && body?.ok && body.patient) {
+        attach(body.patient);
+        await cachePatient({
+          id: body.patient.id,
+          patientNo: body.patient.patientNo,
+          name: body.patient.name,
+          sex: body.patient.sex,
+          phone: body.patient.phone,
+          ageShort: body.patient.ageShort,
+        });
+        toast.success(`${body.patient.name} registered`);
+        setRegistering(false);
+        setForm({ name: "", sex: "f", ageValue: "", ageUnit: "y", phone: "" });
         setBusy(false);
         return;
       }
-      attach(body.patient);
-      toast.success(`${body.patient.name} registered`);
-      setRegistering(false);
-      setForm({ name: "", sex: "f", ageValue: "", ageUnit: "y", phone: "" });
+
+      // A refusal the person can act on — a missing name, say — is theirs to
+      // fix. Anything else is the server's problem, not the counter's, and the
+      // registration waits rather than being lost.
+      if (res.status === 400 || res.status === 403) {
+        toast.error(body?.userMessage ?? "Please check the details.");
+        setBusy(false);
+        return;
+      }
+      await keepLocally(body?.userMessage ?? `Couldn't send (${res.status})`);
     } catch {
-      toast.error("Couldn't register them just now. Check the connection.");
+      await keepLocally("no connection");
     }
     setBusy(false);
   }
@@ -321,6 +431,14 @@ export function PatientBar({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {offline && (
+              <p className="flex items-center gap-2 px-1 text-[13px] text-warn-600">
+                <CloudOff className="h-4 w-4" />
+                The connection is down, so this is searching only the people
+                seen here recently. Someone new can still be registered.
+              </p>
             )}
 
             {query.trim().length >= 2 && !searching && results.length === 0 && (

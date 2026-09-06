@@ -19,6 +19,8 @@ import type {
   PosLabPartner,
   OutboxBill,
   HeldBill,
+  QueuedPatient,
+  CachedPatient,
 } from "@/lib/pos-types";
 
 interface PosDB extends DBSchema {
@@ -29,14 +31,20 @@ interface PosDB extends DBSchema {
   meta: { key: string; value: string | PosDoctor[] | PosLabPartner[] };
   outbox: { key: string; value: OutboxBill };
   held: { key: string; value: HeldBill };
+  patient_outbox: { key: string; value: QueuedPatient };
+  patients: { key: string; value: CachedPatient };
 }
 
 const DB_NAME = "clinicnp";
 const LEGACY_DB_NAME = "faarma";
 const CARRIED_OVER_KEY = "carried-over-from-previous-name";
 
-/** Stores whose contents must survive the rename. `catalog` is a cache and re-syncs. */
-const CARRIED_STORES = ["outbox", "held"] as const;
+/**
+ * Stores whose contents must survive the rename. `catalog`, `services` and
+ * `patients` are caches and re-sync; the two queues hold work nobody else has
+ * a copy of.
+ */
+const CARRIED_STORES = ["outbox", "held", "patient_outbox"] as const;
 
 let dbPromise: Promise<IDBPDatabase<PosDB>> | null = null;
 
@@ -50,6 +58,10 @@ function createStores(db: IDBPDatabase<PosDB>): void {
     db.createObjectStore("outbox", { keyPath: "id" });
   if (!db.objectStoreNames.contains("held"))
     db.createObjectStore("held", { keyPath: "id" });
+  if (!db.objectStoreNames.contains("patient_outbox"))
+    db.createObjectStore("patient_outbox", { keyPath: "id" });
+  if (!db.objectStoreNames.contains("patients"))
+    db.createObjectStore("patients", { keyPath: "id" });
 }
 
 /** True when a database with the old name is still on this device. */
@@ -116,9 +128,10 @@ async function carryOverFromLegacy(db: IDBPDatabase<PosDB>): Promise<void> {
 export function posDB(): Promise<IDBPDatabase<PosDB>> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      // Version 2 adds the services store. `createStores` is guarded so the
-      // upgrade adds only what is missing and never touches a queued bill.
-      const db = await openDB<PosDB>(DB_NAME, 2, { upgrade: createStores });
+      // Version 3 adds the services, patient queue and patient cache stores.
+      // `createStores` is guarded so an upgrade adds only what is missing and
+      // never touches a queued bill or registration.
+      const db = await openDB<PosDB>(DB_NAME, 3, { upgrade: createStores });
       await carryOverFromLegacy(db);
       return db;
     })();

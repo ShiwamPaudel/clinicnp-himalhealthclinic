@@ -158,6 +158,21 @@ export const ingestServiceLineSchema = z.object({
   followupApplied: z.boolean(),
 });
 
+/**
+ * A patient carried inline with a bill, for when the bill reaches the server
+ * before the registration does (Architecture §2.1 Path B).
+ */
+export const inlinePatientSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  sex: z.enum(["f", "m", "o"]),
+  ageValue: z.number().int().nullable(),
+  ageUnit: z.enum(["y", "m", "d"]).nullable(),
+  ageAsOfAd: z.string().nullable(),
+  phone: z.string().default(""),
+  address: z.string().default(""),
+});
+
 export const ingestBillSchema = z.object({
   id: z.string().min(1),
   dateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -169,6 +184,7 @@ export const ingestBillSchema = z.object({
   lines: z.array(ingestLineSchema),
   serviceLines: z.array(ingestServiceLineSchema).optional(),
   patientId: z.string().optional(),
+  patient: inlinePatientSchema.optional(),
   visitId: z.string().optional(),
   clientCreatedAt: z.string(),
 })
@@ -178,10 +194,22 @@ export const ingestBillSchema = z.object({
     message: "Add at least one item or service",
     path: ["lines"],
   })
-  // A service belongs to somebody (PRD §4B.4).
-  .refine((b) => (b.serviceLines?.length ?? 0) === 0 || Boolean(b.patientId), {
-    message: "A bill with a service on it needs a patient",
-    path: ["patientId"],
+  // A service belongs to somebody (PRD §4B.4). The patient may be named by id
+  // or carried inline; either way the bill knows who it is for.
+  .refine(
+    (b) =>
+      (b.serviceLines?.length ?? 0) === 0 ||
+      Boolean(b.patientId) ||
+      Boolean(b.patient),
+    {
+      message: "A bill with a service on it needs a patient",
+      path: ["patientId"],
+    },
+  )
+  // If both are given they must agree, or the bill is describing two people.
+  .refine((b) => !b.patient || !b.patientId || b.patient.id === b.patientId, {
+    message: "That bill names two different patients",
+    path: ["patient"],
   });
 export type IngestBillPayload = z.infer<typeof ingestBillSchema>;
 

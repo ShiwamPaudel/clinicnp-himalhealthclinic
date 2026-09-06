@@ -23,6 +23,8 @@ export interface PosConfig {
   printFormat: "thermal" | "a5";
   minRateIsCost: boolean;
   canEditRate: boolean;
+  /** only an Admin may take something out of the queue unsent */
+  isAdmin: boolean;
   userName: string;
   todayIso: string;
   todayBsLong: string;

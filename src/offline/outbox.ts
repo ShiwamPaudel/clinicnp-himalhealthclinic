@@ -6,6 +6,10 @@
  * leave the outbox; on failure they retry with exponential backoff (Architecture §2.1).
  */
 import { posDB } from "@/offline/idb";
+import {
+  flushPatientOutbox,
+  pendingPatientCount,
+} from "@/offline/patient-outbox";
 import type { OutboxBill } from "@/lib/pos-types";
 
 type Listener = (count: number) => void;
@@ -39,6 +43,18 @@ export async function enqueueBill(bill: OutboxBill): Promise<void> {
 export async function listOutbox(): Promise<OutboxBill[]> {
   const db = await posDB();
   return db.getAll("outbox");
+}
+
+/**
+ * Take a bill out of the queue without sending it.
+ *
+ * Only ever called because an Admin looked at why it would not go and decided
+ * to deal with it another way. Nothing removes a bill on its own.
+ */
+export async function discardBill(id: string): Promise<void> {
+  const db = await posDB();
+  await db.delete("outbox", id);
+  await notify();
 }
 
 async function removeBill(id: string): Promise<void> {
@@ -156,18 +172,25 @@ export function startOutboxLoop(): () => void {
 
   async function tick() {
     if (stopped) return;
-    const before = await pendingCount();
+    const before = (await pendingCount()) + (await pendingPatientCount());
     if (before > 0 && navigator.onLine) {
+      // Registrations first: a bill that names a queued patient then usually
+      // finds them already there. Nothing depends on the order — the bill
+      // carries its own snapshot — it simply makes the common case tidier.
+      await flushPatientOutbox();
       await flushOutbox();
     }
-    const after = await pendingCount();
+    const after = (await pendingCount()) + (await pendingPatientCount());
     // back off when items remain; reset when the queue drains
     attempt = after > 0 ? Math.min(attempt + 1, BACKOFF_MS.length - 1) : 0;
     const delay = after > 0 ? BACKOFF_MS[attempt]! : 30_000;
     if (!stopped) loopTimer = setTimeout(tick, delay);
   }
 
-  const onOnline = () => void flushOutbox();
+  const onOnline = () => void (async () => {
+    await flushPatientOutbox();
+    await flushOutbox();
+  })();
   window.addEventListener("online", onOnline);
   void tick();
 

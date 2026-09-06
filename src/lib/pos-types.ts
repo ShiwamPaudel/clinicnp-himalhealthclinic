@@ -110,6 +110,8 @@ export interface HeldBill {
   /** a parked clinic bill keeps its services and its patient */
   serviceLines?: HeldServiceLine[];
   patientId?: string;
+  /** carried for a patient who may not have reached the server yet */
+  patient?: InlinePatient;
   visitId?: string;
 }
 
@@ -177,4 +179,36 @@ export interface PosDoctor {
 export interface PosLabPartner {
   id: string;
   name: string;
+}
+
+/**
+ * A patient registered at the counter and waiting to be sent.
+ *
+ * The id is minted on the device and is the person's identity from that
+ * moment: the same id goes on any bill made for them, so the two queues can
+ * land in either order and still describe one person.
+ */
+export interface QueuedPatient {
+  id: string;
+  name: string;
+  sex: string;
+  ageValue: number | null;
+  ageUnit: "y" | "m" | "d" | null;
+  phone: string;
+  address: string;
+  queuedAt: string;
+  attempts: number;
+  lastError?: string;
+  /** filled in once the server has assigned the lifetime number */
+  patientNo?: number | null;
+}
+
+/** A patient in the counter's local cache, identity fields only. */
+export interface CachedPatient {
+  id: string;
+  patientNo: number | null;
+  name: string;
+  sex: string;
+  phone: string;
+  ageShort: string;
 }

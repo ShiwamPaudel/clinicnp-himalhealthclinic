@@ -20,6 +20,7 @@ import {
   assertBillYearOpen,
 } from "@/lib/repos/fiscal";
 import { getCompany } from "@/lib/repos/company";
+import { createPatient } from "@/lib/repos/patients";
 import { getServiceForBilling, lastConsultationAd } from "@/lib/repos/services";
 import { getDoctor } from "@/lib/repos/doctors";
 import { resolveFollowup, doctorSharePaisa } from "@/lib/clinic-calc";
@@ -61,6 +62,21 @@ export interface IngestBillInput {
   serviceLines?: IngestServiceLine[];
   /** the registered patient, when the bill names one */
   patientId?: string | null;
+  /**
+   * The patient's own details, carried when the bill may have overtaken their
+   * registration. `createPatient` is idempotent on the id, so whichever
+   * arrives first creates the person and the other finds them already there.
+   */
+  patient?: {
+    id: string;
+    name: string;
+    sex: "f" | "m" | "o";
+    ageValue: number | null;
+    ageUnit: "y" | "m" | "d" | null;
+    ageAsOfAd: string | null;
+    phone: string;
+    address: string;
+  } | null;
   /** an existing visit to hang the services on; one is opened if absent */
   visitId?: string | null;
   userId: string;
@@ -178,10 +194,30 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     vatApplicable: boolean;
   }[] = [];
 
+  // A bill that brought its patient with it creates them first, under the id
+  // the counter minted. Idempotent: if the registration already landed, this
+  // finds that person and changes nothing.
+  let patientId = input.patientId ?? null;
+  if (input.patient) {
+    const created = await createPatient({
+      id: input.patient.id,
+      name: input.patient.name,
+      sex: input.patient.sex,
+      ageValue: input.patient.ageValue,
+      ageUnit: input.patient.ageUnit,
+      ageAsOfAd: input.patient.ageAsOfAd,
+      dobAd: null,
+      phone: input.patient.phone,
+      address: input.patient.address,
+      userId: input.userId,
+    });
+    patientId = created.id;
+  }
+
   // A service is something done to a person: it cannot be billed to nobody
   // (PRD §4B.4). Checked here as well as at the route, because this is the
   // last place before the money is written down.
-  if ((input.serviceLines?.length ?? 0) > 0 && !input.patientId) {
+  if ((input.serviceLines?.length ?? 0) > 0 && !patientId) {
     throw new ServiceLineError(
       "This bill has a service on it, so it needs a patient.",
     );
@@ -207,9 +243,9 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     let ratePaisa = line.ratePaisa;
     let followupApplied = line.followupApplied;
     let followupNote = "";
-    if (service.isConsultation && service.followupDays > 0 && input.patientId) {
+    if (service.isConsultation && service.followupDays > 0 && patientId) {
       const lastAd = await lastConsultationAd(
-        input.patientId,
+        patientId,
         line.doctorId,
         input.dateAd,
       );
@@ -411,12 +447,12 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     // Services belong to a visit. If the patient has one open today it is used;
     // otherwise one is opened, because a consultation IS a visit.
     let visitId = input.visitId ?? null;
-    if (resolvedServices.length > 0 && input.patientId && !visitId) {
+    if (resolvedServices.length > 0 && patientId && !visitId) {
       const openToday = await tx.execute({
         sql: `SELECT id FROM visits
                WHERE patient_id = ? AND date_ad = ? AND status != 'cancelled'
                ORDER BY rowid DESC LIMIT 1`,
-        args: [input.patientId, input.dateAd],
+        args: [patientId, input.dateAd],
       });
       if (openToday.rows[0]) {
         visitId = openToday.rows[0].id as string;
@@ -442,7 +478,7 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
             visitId,
             visitNo,
             fy.id,
-            input.patientId,
+            patientId,
             input.dateAd,
             input.dateBs,
             firstDoctor,
@@ -478,7 +514,7 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
         input.userId,
         input.clientCreatedAt,
         now,
-        input.patientId ?? null,
+        patientId,
         visitId,
         kind,
       ],

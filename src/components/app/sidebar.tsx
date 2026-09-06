@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
+import { clearCachesOnLogout } from "@/offline/catalog-cache";
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Nav } from "@/components/app/nav";
 import { Wordmark, AppMark } from "@/components/ui/wordmark";
@@ -106,7 +107,13 @@ export function Sidebar({
         )}
         {switchable.length > 0 && !collapsed && <PinSwitch users={switchable} />}
         <button
-          onClick={() => signOut({ redirectTo: "/login" })}
+          onClick={() => {
+            // Caches go; the queues stay. A bill or a registration that has
+            // not reached the server yet is work nobody else has a copy of.
+            void clearCachesOnLogout()
+              .catch(() => {})
+              .finally(() => signOut({ redirectTo: "/login" }));
+          }}
           title={collapsed ? strings.logout : undefined}
           className={cn(
             "flex items-center gap-2 rounded-[8px] py-1.5 text-[13px] text-cream-50/70 hover:bg-sage-700/40 hover:text-cream-50",

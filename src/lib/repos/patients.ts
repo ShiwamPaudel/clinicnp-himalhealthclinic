@@ -438,3 +438,73 @@ export async function resolveMerged(id: string): Promise<Patient | null> {
   }
   return current;
 }
+
+export interface DuplicatePair {
+  aId: string;
+  aNo: number | null;
+  aName: string;
+  aPhone: string;
+  aCreatedAt: string;
+  aVisits: number;
+  bId: string;
+  bNo: number | null;
+  bName: string;
+  bPhone: string;
+  bCreatedAt: string;
+  bVisits: number;
+  reason: string;
+}
+
+/**
+ * Pairs of records that look like the same person, for an Admin to review.
+ *
+ * Two devices registering the same person while both were offline is the case
+ * this exists for: each device minted its own id, so both records land and
+ * both are real. Nothing is merged automatically — a shared household phone is
+ * common, and two people can genuinely have one name. The Admin decides.
+ */
+export async function possibleDuplicatePairs(
+  limit = 100,
+): Promise<DuplicatePair[]> {
+  const res = await db().execute({
+    sql: `SELECT a.id a_id, a.patient_no a_no, a.name a_name, a.phone a_phone,
+                 a.created_at a_created,
+                 (SELECT COUNT(*) FROM visits v WHERE v.patient_id = a.id) a_visits,
+                 b.id b_id, b.patient_no b_no, b.name b_name, b.phone b_phone,
+                 b.created_at b_created,
+                 (SELECT COUNT(*) FROM visits v WHERE v.patient_id = b.id) b_visits,
+                 CASE
+                   WHEN LOWER(a.name) = LOWER(b.name)
+                    AND REPLACE(a.phone,' ','') = REPLACE(b.phone,' ','')
+                    AND a.phone != ''
+                     THEN 'Same name and same phone'
+                   WHEN LOWER(a.name) = LOWER(b.name) THEN 'Same name'
+                   ELSE 'Same phone'
+                 END AS reason
+            FROM patients a
+            JOIN patients b
+              ON b.rowid > a.rowid
+             AND ( LOWER(a.name) = LOWER(b.name)
+                OR (a.phone != '' AND REPLACE(a.phone,' ','') = REPLACE(b.phone,' ','')) )
+           WHERE a.merged_into_id IS NULL AND b.merged_into_id IS NULL
+           ORDER BY b.created_at DESC
+           LIMIT ?`,
+    args: [limit],
+  });
+
+  return res.rows.map((r) => ({
+    aId: r.a_id as string,
+    aNo: r.a_no == null ? null : Number(r.a_no),
+    aName: r.a_name as string,
+    aPhone: (r.a_phone as string) ?? "",
+    aCreatedAt: r.a_created as string,
+    aVisits: Number(r.a_visits),
+    bId: r.b_id as string,
+    bNo: r.b_no == null ? null : Number(r.b_no),
+    bName: r.b_name as string,
+    bPhone: (r.b_phone as string) ?? "",
+    bCreatedAt: r.b_created as string,
+    bVisits: Number(r.b_visits),
+    reason: r.reason as string,
+  }));
+}

@@ -10,7 +10,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { billRequestBody, OUTBOX_ONLY_FIELDS } from "@/offline/outbox";
-import type { OutboxBill } from "@/lib/pos-types";
+import {
+  patientRequestBody,
+  PATIENT_OUTBOX_ONLY_FIELDS,
+} from "@/offline/patient-outbox";
+import type { OutboxBill, QueuedPatient } from "@/lib/pos-types";
 
 /** A bill with every field a bill can carry populated. */
 const fullBill: Required<
@@ -84,5 +88,41 @@ describe("the outbox payload", () => {
     const { serviceLines: _drop, ...medicineOnly } = fullBill;
     const body = billRequestBody(medicineOnly as OutboxBill);
     expect(body.serviceLines).toEqual([]);
+  });
+});
+
+const fullPatient: QueuedPatient = {
+  id: "01PATIENT",
+  name: "Anita Shrestha",
+  sex: "f",
+  ageValue: 34,
+  ageUnit: "y",
+  phone: "9841234567",
+  address: "Bhaktapur",
+  queuedAt: "2026-08-29T10:00:00.000Z",
+  attempts: 2,
+  lastError: "no connection",
+  patientNo: null,
+};
+
+describe("the patient queue payload", () => {
+  it("carries every field of a registration that the server needs", () => {
+    const body = patientRequestBody(fullPatient);
+    const skipped = new Set<string>(PATIENT_OUTBOX_ONLY_FIELDS);
+    const missing = Object.keys(fullPatient).filter(
+      (k) => !skipped.has(k) && !(k in body),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("sends the id the counter minted, because that is the person's identity", () => {
+    expect(patientRequestBody(fullPatient).id).toBe("01PATIENT");
+  });
+
+  it("never posts the queue's own bookkeeping", () => {
+    const body = patientRequestBody(fullPatient);
+    for (const field of PATIENT_OUTBOX_ONLY_FIELDS) {
+      expect(body).not.toHaveProperty(field);
+    }
   });
 });

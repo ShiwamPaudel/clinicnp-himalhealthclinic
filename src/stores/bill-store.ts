@@ -27,6 +27,17 @@ export interface AttachedPatient {
   name: string;
   sex: string;
   ageShort: string;
+  /**
+   * Enough to create this person server-side if the bill lands before their
+   * registration does (Architecture §2.1 Path B). Absent for someone who was
+   * already registered — the server has them.
+   */
+  snapshot?: {
+    ageValue: number | null;
+    ageUnit: "y" | "m" | "d" | null;
+    phone: string;
+    address: string;
+  };
 }
 
 interface BillState {

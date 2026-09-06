@@ -29,6 +29,7 @@ import {
   getCachedDoctors,
   getCachedLabPartners,
   syncCatalog,
+  syncPatients,
   applyLocalAllocation,
 } from "@/offline/catalog-cache";
 import { enqueueBill, flushOutbox, startOutboxLoop } from "@/offline/outbox";
@@ -43,6 +44,7 @@ import { UnitPanel } from "@/components/pos/unit-panel";
 import { ShortcutSheet } from "@/components/pos/shortcut-sheet";
 import { Wordmark } from "@/components/ui/wordmark";
 import { StatusChip } from "@/components/pos/status-chip";
+import { StuckQueue } from "@/components/pos/stuck-queue";
 import { InvoiceThermal } from "@/components/print/invoice-thermal";
 import {
   LabDispatchSlip,
@@ -91,6 +93,9 @@ export function PosScreen({ config }: { config: PosConfig }) {
   useEffect(() => {
     (async () => {
       await syncCatalog();
+      // The recent-patients slice, so the patient bar can find somebody with
+      // the connection down. Failing is fine — the counter keeps what it has.
+      await syncPatients();
       await refreshItems();
       await refreshHeld();
     })();
@@ -104,6 +109,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
   useEffect(() => {
     const onFocus = () => void (async () => {
       if (await syncCatalog()) await refreshItems();
+      await syncPatients();
     })();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
@@ -283,6 +289,20 @@ export function PosScreen({ config }: { config: PosConfig }) {
         followupApplied: l.followupApplied,
       })),
       patientId: s.patient?.id,
+      // Carried only when this person may not have reached the server yet, so
+      // the bill can bring them with it (Architecture §2.1 Path B).
+      patient: s.patient?.snapshot
+        ? {
+            id: s.patient.id,
+            name: s.patient.name,
+            sex: s.patient.sex,
+            ageValue: s.patient.snapshot.ageValue,
+            ageUnit: s.patient.snapshot.ageUnit,
+            ageAsOfAd: config.todayIso,
+            phone: s.patient.snapshot.phone,
+            address: s.patient.snapshot.address,
+          }
+        : undefined,
       visitId: s.visitId ?? undefined,
       clientCreatedAt: nowIso,
       attempts: 0,
@@ -387,6 +407,20 @@ export function PosScreen({ config }: { config: PosConfig }) {
       heldAt: new Date().toISOString(),
       patientName: s.patientName,
       patientId: s.patient?.id,
+      // Carried only when this person may not have reached the server yet, so
+      // the bill can bring them with it (Architecture §2.1 Path B).
+      patient: s.patient?.snapshot
+        ? {
+            id: s.patient.id,
+            name: s.patient.name,
+            sex: s.patient.sex,
+            ageValue: s.patient.snapshot.ageValue,
+            ageUnit: s.patient.snapshot.ageUnit,
+            ageAsOfAd: config.todayIso,
+            phone: s.patient.snapshot.phone,
+            address: s.patient.snapshot.address,
+          }
+        : undefined,
       visitId: s.visitId ?? undefined,
       serviceLines: s.serviceLines.map((l) => ({
         serviceId: l.serviceId,
@@ -491,6 +525,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
         </div>
         <div className="flex items-center gap-3">
           <StatusChip />
+          <StuckQueue isAdmin={config.isAdmin} />
           <button
             onClick={toggleLang}
             className="rounded-[8px] border border-line px-2 py-1 text-[12px] font-medium text-sage-700 hover:bg-cream-200"
