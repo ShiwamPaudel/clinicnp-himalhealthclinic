@@ -174,6 +174,66 @@ for (const file of routeFiles.filter((f) => f.endsWith("page.tsx"))) {
 notes.push(`checked ${listScreens} list screens for empty states`);
 
 // ---------------------------------------------------------------------------
+// 4. INSERT statements whose column list and value list are different lengths.
+//
+// saveCompany shipped with fourteen columns against fifteen values. It threw
+// in the driver every single time, so the clinic's own name could not be
+// saved, and nothing caught it: no test called it and the screen reported the
+// failure as a polite "something went wrong". Counting is exactly the kind of
+// thing a person does badly and a machine does perfectly.
+// ---------------------------------------------------------------------------
+
+/** Split on commas that are not inside a quoted string or nested parentheses. */
+function splitTopLevel(s) {
+  const out = [];
+  let cur = "", quote = null, depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quote) {
+      cur += ch;
+      if (ch === quote) {
+        if (s[i + 1] === quote) cur += s[++i];
+        else quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') { quote = ch; cur += ch; continue; }
+    if (ch === "(") depth++;
+    if (ch === ")") depth--;
+    if (ch === "," && depth === 0) { out.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out.filter(Boolean);
+}
+
+let insertsChecked = 0;
+const SQL_DIRS = [join(ROOT, "src", "lib"), join(ROOT, "db")];
+for (const dir of SQL_DIRS) {
+  for (const file of walk(dir)) {
+    if (!file.endsWith(".ts")) continue;
+    const text = readFileSync(file, "utf8");
+    const re =
+      /INSERT\s+(?:OR\s+\w+\s+)?INTO\s+([A-Za-z_]\w*)\s*\(([^)]*?)\)\s*VALUES\s*\(((?:[^()']|'(?:[^']|'')*')*)\)/gis;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const [, table, colsRaw, valsRaw] = m;
+      const cols = splitTopLevel(colsRaw);
+      const vals = splitTopLevel(valsRaw);
+      insertsChecked += 1;
+      if (cols.length !== vals.length) {
+        const line = text.slice(0, m.index).split("\n").length;
+        failures.push(
+          `INSERT arity: ${relative(ROOT, file)}:${line} — ${table} has ` +
+            `${cols.length} columns but ${vals.length} values`,
+        );
+      }
+    }
+  }
+}
+notes.push(`checked ${insertsChecked} INSERT statements for column/value arity`);
+
+// ---------------------------------------------------------------------------
 
 for (const n of notes) console.log(`  ${n}`);
 
@@ -182,4 +242,6 @@ if (failures.length > 0) {
   for (const f of failures) console.error("  " + f);
   process.exit(1);
 }
-console.log("\nAudit clean: module guards, contrast and empty states all hold.");
+console.log(
+  "\nAudit clean: module guards, contrast, empty states and SQL arity all hold.",
+);

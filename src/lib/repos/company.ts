@@ -66,7 +66,7 @@ export async function saveCompany(c: Company): Promise<void> {
             (id, name, address, phone, pan_no, dda_no, vat_registered, invoice_footer,
              logo_url, print_format, rounding_on, expiry_alert_days, min_rate_is_cost,
              updated_at)
-          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             address = excluded.address,
