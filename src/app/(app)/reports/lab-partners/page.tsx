@@ -11,6 +11,7 @@ import { ReportFrame } from "@/components/app/report-frame";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PartnerPaymentForm } from "@/components/clinic/partner-payment-form";
+import { resolveFiscalYear } from "@/components/app/fiscal-year-bar";
 import { cn } from "@/lib/cn";
 
 export default async function LabPartnersReportPage({
@@ -29,6 +30,7 @@ export default async function LabPartnersReportPage({
 
   const sp = await searchParams;
   const range = resolveRange(sp);
+  const year = await resolveFiscalYear(sp.fy);
   const summary = await partnerSummary(range);
   const statement = sp.partner
     ? await partnerStatement(sp.partner, range)
@@ -115,11 +117,20 @@ export default async function LabPartnersReportPage({
             <h2 className="text-[17px] font-semibold text-sage-900">
               {statement.partnerName}
             </h2>
-            <PartnerPaymentForm
-              partnerId={statement.partnerId}
-              partnerName={statement.partnerName}
-              owedPaisa={statement.closingPaisa}
-            />
+            {/* A closed year is read and print only. Recording a payment
+                against it would change figures the owner has signed off. */}
+            {year.isClosed ? (
+              <span className="text-[13px] text-sage-500">
+                {year.label} is closed — this statement can be read and printed,
+                not added to.
+              </span>
+            ) : (
+              <PartnerPaymentForm
+                partnerId={statement.partnerId}
+                partnerName={statement.partnerName}
+                owedPaisa={statement.closingPaisa}
+              />
+            )}
           </div>
 
           <div className="mb-4 grid gap-3 sm:grid-cols-4">

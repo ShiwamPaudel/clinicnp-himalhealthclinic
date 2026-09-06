@@ -23,7 +23,7 @@
 
 **Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic Pvt. Ltd.** (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
-**Phase:** **Phase 3 complete.** Phases 1, 2 and 3 done. Next is Phase 4 (clinic back office, ledgers, reports, dashboard).
+**Phase:** **Phase 4 complete.** Phases 1–4 done. Next is Phase 5 (resilience, offline registration, and the Himal Health Clinic install).
 **Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic` — git initialised 2083-05-12. Imported from `D:\IBN\Products Codebase\AushadhiPOS` (the v1 tree, which had no git history). The old tree is untouched and is the fallback.
 **Inherited v1 state:** all 5 v1 phases complete; `pnpm build` clean; **68 tests green** (one known flaky test-isolation failure in the phase-4 file — different test each run, always green on re-run, caused by the shared `db()` singleton across test files). Not yet deployed to Vercel.
 **Deployed URL:** — (none yet). **New hosted Turso** (`healthclinic-…`) provisioned 2083-05-13, migrated to `0007` and seeded. The old `fa…` database is abandoned — do not point at it again.
@@ -50,7 +50,7 @@
 
 **In progress:** —
 
-**Next up:** Phase 4 — the bill register widened for kind/patient/doctor/year, refunds extended to service lines, the lab partner ledger, doctor payouts, the module-adaptive dashboard, and every report made fiscal-year aware. **Still outstanding:** real ClinicNP icon art (owner will supply at the end), and a **private** Vercel Blob store — see D-055.
+**Next up:** Phase 5 — offline patient registration (`patient-outbox.ts`, provisional numbers, inline patient snapshot on the bill), the counter's recent-patients cache slice, backups extended to the new tables plus a file manifest, PWA finish, concurrency and performance passes, the final sweep, and the Himal Health Clinic install. **Still outstanding:** real ClinicNP icon art (owner will supply at the end), and a **private** Vercel Blob store — see D-055.
 
 **Known issues / risks (inherited):**
 - `nepali-date-converter.toJsDate()` returns non-midnight times → `lib/bs.ts toAD()` normalises to local midnight; keep all date maths on `toAD()` output (D-006).
@@ -134,6 +134,11 @@
 | D-056 | The server **refuses** a line claiming a follow-up discount the rule does not allow, but **accepts** a person deliberately charging the full rate inside the window | The first is a price nobody chose — stale catalog or worse. The second is a call somebody made at the counter, marked on the line with the magenta dot and audit-logged. Architecture §5.3 says the server wins; it does not say the server overrules a human being |
 | D-057 | `bill_service_lines.partner_cost_paisa` stores the cost **per test**, not per line | The ledger multiplies by quantity. Storing the line total as well would double-count the moment anyone billed two of anything — which is exactly what the first draft did |
 | D-058 | The outbox payload is built by an **exported, tested function** rather than inline | It is listed field by field so the queue's bookkeeping never reaches the server, and that shape silently dropped service lines and the patient when bills grew. `tests/outbox.test.ts` fails when a bill gains a field the payload does not carry |
+| D-059 | Clinic reports filter on **AD dates**, like every other report | The range picker and the fiscal-year selector both produce AD bounds. One date basis is what makes a clinic report and a pharmacy report over the same period agree with each other; BS is still what people read |
+| D-060 | A bill in a **closed year is refundable**, into the year that is open, carrying a reference to the original invoice | The closed year's figures must never move (D-029), but a patient standing at the counter is owed their money. The closed year keeps the sale; the open year carries the refund |
+| D-061 | The dashboard trend computes **each series on its own, net of refunds** | It used to sum `bills.total_paisa`, which is gross, so subtracting a net service figure drew a medicine line reading Rs 509 beneath a tile reading Rs 9. Both halves are now netted the same way and the chart adds up to the tiles |
+| D-062 | A doctor's share on a refunded line is scaled by **how much of the line was refunded** | A fully refunded consultation takes its whole share back; a partial refund takes back its share of it. The frozen `doctor_share_paisa` stays on the row either way, so nothing is rewritten |
+| D-063 | On a screen narrower than 768px the menu **starts as icons only** | A 232px menu on a 390px phone leaves 158px for the day's takings. A phone's choice is not written to the width preference, so a desktop does not inherit it |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -199,3 +204,12 @@ Broke/fixed: **the outbox dropped service lines and the patient in transit** —
 Verified: **211 tests green.** Counter bundle 144 kB against the v1 ceiling of 140 kB — +2.9%, well inside the 15% allowance. Browser-verified against the live database: one search box returning both kinds with tags, F3 narrowing, a service bill refused without a patient, a mixed bill saving as `kind = mixed` with the visit opened and doctor shares of Rs 200 and Rs 240 from snapshotted terms, the follow-up notice in plain words with an override offered, the dispatch slip naming the laboratory, and — offline — an instant search, a provisional slip, nothing in the database, then exactly one bill and one stock movement on reconnect. With the clinic module off every clinic route 404s and a queued service bill is refused 409. Verification data was then removed.
 Not built (requested, out of scope): none. Lab **results** remain out of scope (Rules §2.2) — ClinicNP records that a test was sent and what it cost, and stores the file that comes back without reading it.
 Next: Phase 4 — clinic back office, ledgers, reports, dashboard.
+
+### C-005  ·  2083-05-21  ·  Phase 4 — PHASE COMPLETE
+Built: refunds widened to service lines (nothing returns to stock) and to closed-year bills (recorded in the open year, referencing the original invoice). `lib/repos/clinic-reports.ts`: service revenue, doctor payouts, laboratory ledger with running balance and per-partner statement, patient visit register, new-versus-returning, diagnostics utilisation, and the real "files pending" that retires the Phase 2 stand-in (D-052). Six report screens plus laboratory payment entry, all fiscal-year aware and all exporting to .xlsx. Bill register gained a kind filter and the patient number; bill detail shows both line blocks. Dashboard split four ways with patients seen, registrations, files pending, top services and a two-series trend. Day close gained the four-way split. Audit log gained the whole new vocabulary in plain words. Every clinic screen, report card and export is module-gated.
+Decisions/assumptions: D-059 … D-063.
+Schema changes: none — Phase 4 is all reads on what Phase 3 laid down, plus `sale_return_service_lines` which 0009 already created.
+Broke/fixed: the dashboard trend was drawing a medicine series gross of refunds directly beneath a tile that was net of them — Rs 509 against Rs 9 (D-061). Found by looking at the rendered chart, not by a test. Also found at 390px that the menu still took 232px, leaving 158px of usable screen: a real failure of the owner-on-phone acceptance box, and one my first overflow check passed because the layout scrolls inside a container.
+Verified: **227 tests green**, including 16 Phase 4 integration tests where every figure is checked against a hand calculation written into the test — a mixed bill refunded across both kinds, ten consultations at 40%, twelve tests and two payments, and the day-close split reconciling to net sales. Browser-verified against the live database: the register, both bill blocks, a service refund with zero stock movements, all six reports, a laboratory payment moving the balance, five real .xlsx files, and — with the clinic off — no clinic panels, no clinic report cards, and 404 on every clinic report and export. Verified at 390px on dashboard, day close, patient search, laboratory statements, doctor payouts and bill detail. Verification data was then removed.
+Not built (requested, out of scope): none. Lab **results** remain out of scope (Rules §2.2).
+Next: Phase 5 — resilience, offline registration, and the install.
