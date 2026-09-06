@@ -72,6 +72,31 @@ export const strings = {
   // empty states
   emptyStock: "No items yet. Add your first medicine to start tracking stock.",
   emptyUsers: "No users yet. Add your first user to get started.",
+
+  // clinic counter (Phase 3)
+  service: "Service",
+  services: "Services",
+  medicine: "Medicine",
+  doctor: "Doctor",
+  chooseDoctor: "Choose a doctor",
+  noDoctor: "No doctor",
+  laboratory: "Laboratory",
+  whichLaboratory: "Which laboratory?",
+  attachPatient: "Attach patient",
+  changePatient: "Change",
+  noPatientOnBill: "No patient on this bill",
+  patientNeeded: "This bill has a service on it — say who it is for",
+  registerSomeoneNew: "Register someone new",
+  whoIsThisFor: "Who is this bill for?",
+  searchPatientHint: "Name, phone or patient number",
+  nobodyByThatName: "Nobody by that name yet.",
+  chargeFullRate: "Charge the full rate",
+  putItBack: "Put it back",
+  followupOverridden: "Follow-up rule overridden — charged in full.",
+  sampleForTesting: "SAMPLE FOR TESTING",
+  testsRequested: "Tests requested",
+  sampleCollectedBy: "Sample collected by",
+  notABill: "This slip is not a bill.",
 } as const;
 
 /** Nepali labels for the core POS actions (toggleable later). */
@@ -79,4 +104,13 @@ export const npLabels = {
   newBill: "नयाँ बिल",
   save: "सुरक्षित",
   billSaved: "बिल बन्यो",
+  // the clinic counter's core words
+  service: "सेवा",
+  medicine: "औषधि",
+  doctor: "डाक्टर",
+  patient: "बिरामी",
+  laboratory: "प्रयोगशाला",
+  followUp: "फलोअप",
+  consultation: "परामर्श",
+  attachPatient: "बिरामी थप्नुहोस्",
 } as const;

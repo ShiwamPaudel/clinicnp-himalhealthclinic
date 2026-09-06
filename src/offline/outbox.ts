@@ -58,23 +58,49 @@ export interface SyncOneResult {
   fiscalLabel?: string;
 }
 
+/**
+ * What actually goes to the server for one queued bill.
+ *
+ * Listed field by field on purpose: the queue's own bookkeeping — attempts,
+ * lastError, the invoice number assigned on the way back — must never be
+ * posted as though it were part of the bill. The cost of that choice is that a
+ * field added to a bill and forgotten here is silently dropped in transit,
+ * which is exactly what happened to service lines once. `tests/outbox.test.ts`
+ * now fails if a bill grows a field this function does not carry.
+ */
+export function billRequestBody(bill: OutboxBill): Record<string, unknown> {
+  return {
+    id: bill.id,
+    dateBs: bill.dateBs,
+    dateAd: bill.dateAd,
+    patientName: bill.patientName,
+    paymentMethod: bill.paymentMethod,
+    tenderedPaisa: bill.tenderedPaisa,
+    billDiscountPaisa: bill.billDiscountPaisa,
+    lines: bill.lines,
+    serviceLines: bill.serviceLines ?? [],
+    patientId: bill.patientId,
+    visitId: bill.visitId,
+    clientCreatedAt: bill.clientCreatedAt,
+  };
+}
+
+/** Fields the queue keeps for itself and never sends. */
+export const OUTBOX_ONLY_FIELDS = [
+  "attempts",
+  "lastError",
+  "invoiceNo",
+  "fiscalLabel",
+  "patient",
+] as const;
+
 /** Try to send one queued bill. Returns whether it was accepted (and removed). */
 async function syncOne(bill: OutboxBill): Promise<SyncOneResult> {
   try {
     const res = await fetch("/api/bills", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: bill.id,
-        dateBs: bill.dateBs,
-        dateAd: bill.dateAd,
-        patientName: bill.patientName,
-        paymentMethod: bill.paymentMethod,
-        tenderedPaisa: bill.tenderedPaisa,
-        billDiscountPaisa: bill.billDiscountPaisa,
-        lines: bill.lines,
-        clientCreatedAt: bill.clientCreatedAt,
-      }),
+      body: JSON.stringify(billRequestBody(bill)),
     });
     if (res.ok) {
       const data = await res.json();

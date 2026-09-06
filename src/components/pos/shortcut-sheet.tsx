@@ -4,7 +4,9 @@ import { Dialog } from "@/components/ui/dialog";
 
 const SHORTCUTS: [string, string][] = [
   ["F2", "Start a new bill"],
-  ["Type + Enter", "Search and add a medicine"],
+  ["Type + Enter", "Search and add a medicine or service"],
+  ["F3", "Narrow the search to medicines or services"],
+  ["P", "Attach a patient to this bill"],
   ["↑ / ↓", "Move through search results"],
   ["U", "Switch unit (Box / Strip / Tablet)"],
   ["Tab", "Move quantity → rate"],

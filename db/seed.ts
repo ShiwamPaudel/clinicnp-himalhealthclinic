@@ -198,6 +198,156 @@ async function main() {
     "tablet",
   );
 
+  // --- sample clinic catalog (clearly-fake, Rules §1.10) ---
+  //
+  // Every rate here is a placeholder. They are marked `sample_rate` so the
+  // counter can say "sample price" out loud and nobody bills a real patient at
+  // a number that came from a seed script. Editing a service clears the mark.
+  const nowIso = new Date().toISOString();
+
+  async function ensureDoctor(
+    id: string,
+    name: string,
+    qualification: string,
+    specialty: string,
+    shareBasis: string,
+    shareValue: number,
+  ) {
+    const ex = await c.execute({
+      sql: "SELECT id FROM doctors WHERE id = ?",
+      args: [id],
+    });
+    if (ex.rows[0]) return;
+    await c.execute({
+      sql: `INSERT INTO doctors (id, name, qualification, specialty, nmc_no, phone,
+                                 share_basis, share_value, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, '', '', ?, ?, 1, ?, ?)`,
+      args: [id, name, qualification, specialty, shareBasis, shareValue, nowIso, nowIso],
+    });
+    console.log(`seeded sample doctor: ${name}`);
+  }
+
+  await ensureDoctor(
+    "sample_doc_1",
+    "Dr. Sample Physician",
+    "MBBS, MD",
+    "General Medicine",
+    "pct_consult",
+    4000,
+  );
+  await ensureDoctor(
+    "sample_doc_2",
+    "Dr. Sample Radiologist",
+    "MBBS, MD (Radiology)",
+    "Radiology",
+    "pct_services",
+    2000,
+  );
+
+  const labId = "sample_lab_1";
+  {
+    const ex = await c.execute({
+      sql: "SELECT id FROM lab_partners WHERE id = ?",
+      args: [labId],
+    });
+    if (!ex.rows[0]) {
+      await c.execute({
+        sql: `INSERT INTO lab_partners (id, name, pan_no, phone, address,
+                                        contact_person, terms, active, created_at, updated_at)
+              VALUES (?, 'Sample Diagnostic Laboratory', '300111222', '01-4000000',
+                      'Kathmandu', 'Sample contact', 'Monthly', 1, ?, ?)`,
+        args: [labId, nowIso, nowIso],
+      });
+      console.log("seeded sample lab partner");
+    }
+  }
+
+  async function ensureService(
+    id: string,
+    name: string,
+    code: string,
+    groupId: string,
+    ratePaisa: number,
+    opts: {
+      doctorRequired?: boolean;
+      defaultDoctorId?: string | null;
+      outsourced?: boolean;
+      partnerCostPaisa?: number;
+      keepsFile?: boolean;
+      followupDays?: number;
+      followupRatePaisa?: number;
+    } = {},
+  ) {
+    const ex = await c.execute({
+      sql: "SELECT id FROM services WHERE id = ?",
+      args: [id],
+    });
+    if (ex.rows[0]) return;
+    await c.execute({
+      sql: `INSERT INTO services
+              (id, name, code, group_id, rate_paisa, doctor_required, default_doctor_id,
+               outsourced, default_lab_partner_id, partner_cost_paisa, keeps_file,
+               followup_days, followup_rate_paisa, vat_applicable, sample_rate,
+               active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, ?, ?)`,
+      args: [
+        id,
+        name,
+        code,
+        groupId,
+        ratePaisa,
+        opts.doctorRequired ? 1 : 0,
+        opts.defaultDoctorId ?? null,
+        opts.outsourced ? 1 : 0,
+        opts.outsourced ? labId : null,
+        opts.partnerCostPaisa ?? 0,
+        opts.keepsFile ? 1 : 0,
+        opts.followupDays ?? 0,
+        opts.followupRatePaisa ?? 0,
+        nowIso,
+        nowIso,
+      ],
+    });
+    console.log(`seeded sample service: ${name}`);
+  }
+
+  await ensureService(
+    "sample_svc_opd",
+    "Sample OPD Consultation",
+    "opd",
+    "grp_opd",
+    50000,
+    {
+      doctorRequired: true,
+      defaultDoctorId: "sample_doc_1",
+      followupDays: 7,
+      followupRatePaisa: 0,
+    },
+  );
+  await ensureService(
+    "sample_svc_usg",
+    "Sample USG - Abdomen and Pelvis",
+    "usgap",
+    "grp_usg",
+    120000,
+    { defaultDoctorId: "sample_doc_2", keepsFile: true },
+  );
+  await ensureService("sample_svc_cbc", "Sample CBC", "cbc", "grp_lab", 60000, {
+    outsourced: true,
+    partnerCostPaisa: 40000,
+    keepsFile: true,
+  });
+  await ensureService("sample_svc_ecg", "Sample ECG", "ecg", "grp_ecg", 45000, {
+    keepsFile: true,
+  });
+  await ensureService(
+    "sample_svc_dressing",
+    "Sample Dressing",
+    "dress",
+    "grp_proc",
+    25000,
+  );
+
   c.close();
   console.log("\nseed complete. Log in with:");
   console.log("  admin  / admin123   (Owner)  PIN 1234");

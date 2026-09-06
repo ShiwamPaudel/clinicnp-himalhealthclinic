@@ -28,10 +28,64 @@ export function InvoiceA5({ bill }: { bill: PrintBill }) {
         </div>
       </div>
 
-      {bill.patientName && (
-        <div style={{ marginTop: 8 }}>Patient: {bill.patientName}</div>
+      {bill.patient ? (
+        <div style={{ marginTop: 8 }}>
+          Patient:{" "}
+          {bill.patient.patientNo != null
+            ? `P-${String(bill.patient.patientNo).padStart(6, "0")} `
+            : ""}
+          {bill.patient.name} · {bill.patient.ageSex}
+        </div>
+      ) : (
+        bill.patientName && (
+          <div style={{ marginTop: 8 }}>Patient: {bill.patientName}</div>
+        )
       )}
 
+      {/* The service block sits above the medicine block (Design.md §6). */}
+      {(bill.serviceLines?.length ?? 0) > 0 && (
+        <table
+          style={{ width: "100%", marginTop: 12, borderCollapse: "collapse" }}
+        >
+          <thead>
+            <tr style={{ borderBottom: "1px solid #000", textAlign: "left" }}>
+              <th style={{ padding: "4px 0" }}>Service</th>
+              <th>Doctor</th>
+              <th style={{ textAlign: "right" }}>Qty</th>
+              <th style={{ textAlign: "right" }}>Rate</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bill.serviceLines!.map((l, i) => (
+              <tr
+                key={i}
+                style={{ borderBottom: "1px solid #ddd", verticalAlign: "top" }}
+              >
+                <td style={{ padding: "4px 0" }}>
+                  {l.name}
+                  {l.followupNote && (
+                    <div style={{ fontSize: 10, color: "#555" }}>
+                      {l.followupNote}
+                    </div>
+                  )}
+                </td>
+                <td style={{ fontSize: 10 }}>{l.doctorName || "—"}</td>
+                <td style={{ textAlign: "right" }}>{l.qty}</td>
+                <td style={{ textAlign: "right" }}>
+                  {formatPaisa(l.ratePaisa, false)}
+                  {l.rateOverridden ? "*" : ""}
+                </td>
+                <td style={{ textAlign: "right" }}>
+                  {formatPaisa(l.amountPaisa, false)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {bill.lines.length > 0 && (
       <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid #000", textAlign: "left" }}>
@@ -71,6 +125,7 @@ export function InvoiceA5({ bill }: { bill: PrintBill }) {
           ))}
         </tbody>
       </table>
+      )}
 
       <div className="perforation" />
 

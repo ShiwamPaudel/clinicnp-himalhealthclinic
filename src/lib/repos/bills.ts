@@ -533,8 +533,8 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
                  rate_overridden, discount_paisa, amount_paisa, vat_paisa,
                  doctor_id, lab_partner_id, partner_cost_paisa,
                  doctor_share_basis, doctor_share_value, doctor_share_paisa,
-                 followup_applied, followup_note, visit_id)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 followup_applied, followup_note, visit_id, dispatched_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           r.line.id,
           input.id,
@@ -556,6 +556,10 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
           r.followupApplied ? 1 : 0,
           r.followupNote,
           visitId,
+          // The dispatch slip prints with the bill, so a line sent to an
+          // outside laboratory is on its way the moment the bill is saved.
+          // Reprinting the slip later does not move this date.
+          r.line.labPartnerId ? now : null,
         ],
       });
     }
