@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import { requireAdmin } from "@/lib/session";
 import { requireModulePage } from "@/lib/modules";
 import { getItem } from "@/lib/repos/items";
+import { getRack, cellLabel } from "@/lib/repos/racks";
 import { batchesForItem, itemHistory } from "@/lib/repos/batches";
 import { adFromIso, adToIso, formatBS, toBS } from "@/lib/bs";
 import { toMixedDisplay } from "@/lib/units";
@@ -41,6 +42,14 @@ export default async function ItemDetailPage({
   const batches = await batchesForItem(id);
   const history = await itemHistory(id);
 
+  // The drawn shelf if there is one, the typed note if there is not, and a dash
+  // rather than a blank when there is neither.
+  const rack = item.rackId ? await getRack(item.rackId) : null;
+  const keptAt =
+    rack && item.rackRow !== null && item.rackCol !== null
+      ? cellLabel(rack.name, item.rackRow, item.rackCol)
+      : item.rack || "—";
+
   return (
     <PageShell
       title={item.brandName}
@@ -58,7 +67,7 @@ export default async function ItemDetailPage({
           <div className="grid gap-3 sm:grid-cols-2">
             <Detail label="Generic" value={item.genericName || "—"} />
             <Detail label="Category" value={item.category} />
-            <Detail label="Rack" value={item.rack || "—"} />
+            <Detail label="Kept at" value={keptAt} />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {item.controlledFlag && <Badge tone="info">Controlled (Rx)</Badge>}

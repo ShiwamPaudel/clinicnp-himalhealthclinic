@@ -17,6 +17,7 @@ import type {
   PosService,
   PosDoctor,
   PosLabPartner,
+  PosRack,
   OutboxBill,
   HeldBill,
   QueuedPatient,
@@ -26,9 +27,12 @@ import type {
 interface PosDB extends DBSchema {
   catalog: { key: string; value: PosItem };
   services: { key: string; value: PosService };
-  // the version string, plus the doctor and laboratory lists, which are short
-  // enough that a store of their own would be ceremony
-  meta: { key: string; value: string | PosDoctor[] | PosLabPartner[] };
+  // the version string, plus the doctor, laboratory and rack lists, which are
+  // short enough that a store of their own would be ceremony
+  meta: {
+    key: string;
+    value: string | PosDoctor[] | PosLabPartner[] | PosRack[];
+  };
   outbox: { key: string; value: OutboxBill };
   held: { key: string; value: HeldBill };
   patient_outbox: { key: string; value: QueuedPatient };

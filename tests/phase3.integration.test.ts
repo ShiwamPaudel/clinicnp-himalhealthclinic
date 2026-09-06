@@ -70,6 +70,7 @@ beforeAll(async () => {
     category: "Medicine",
     manufacturer: "Citizen Pharma",
     rack: "A1",
+    rackId: null, rackRow: null, rackCol: null,
     minStockBaseQty: 0,
     controlledFlag: false,
     shape: "tablet",

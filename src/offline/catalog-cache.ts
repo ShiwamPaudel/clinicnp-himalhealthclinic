@@ -11,6 +11,7 @@ import type {
   PosService,
   PosDoctor,
   PosLabPartner,
+  PosRack,
   PosCatalog,
   CachedPatient,
 } from "@/lib/pos-types";
@@ -18,6 +19,7 @@ import type {
 const VERSION_KEY = "catalog_version";
 const DOCTORS_KEY = "doctors";
 const PARTNERS_KEY = "lab_partners";
+const RACKS_KEY = "racks";
 
 /** All cached items. */
 export async function getCachedItems(): Promise<PosItem[]> {
@@ -43,6 +45,16 @@ export async function getCachedLabPartners(): Promise<PosLabPartner[]> {
   return Array.isArray(rows) ? (rows as PosLabPartner[]) : [];
 }
 
+/**
+ * The shop floor as last synced. Empty is the ordinary case — most shops never
+ * draw their racks — and every caller has to read it that way.
+ */
+export async function getCachedRacks(): Promise<PosRack[]> {
+  const db = await posDB();
+  const rows = await db.get("meta", RACKS_KEY);
+  return Array.isArray(rows) ? (rows as PosRack[]) : [];
+}
+
 export async function getCachedVersion(): Promise<string | undefined> {
   const db = await posDB();
   const v = await db.get("meta", VERSION_KEY);
@@ -64,6 +76,7 @@ export async function replaceCatalog(catalog: PosCatalog): Promise<void> {
   await tx.objectStore("meta").put(catalog.version, VERSION_KEY);
   await tx.objectStore("meta").put(catalog.doctors ?? [], DOCTORS_KEY);
   await tx.objectStore("meta").put(catalog.labPartners ?? [], PARTNERS_KEY);
+  await tx.objectStore("meta").put(catalog.racks ?? [], RACKS_KEY);
   await tx.done;
 }
 

@@ -31,6 +31,8 @@ const SCREENS = [
   ["/visits/today", "today's visits"],
   ["/reports/day-close", "the day close"],
   ["/settings/services", "the service catalog"],
+  ["/settings/racks", "the rack map"],
+  ["/reports/shelf", "the shelf list"],
 ];
 
 const findings = [];

@@ -12,7 +12,14 @@ import { allBatchesWithStock, catalogVersion } from "@/lib/repos/batches";
 import { listPosServices } from "@/lib/repos/services";
 import { listDoctors } from "@/lib/repos/doctors";
 import { listLabPartners } from "@/lib/repos/lab-partners";
-import type { PosService, PosDoctor, PosLabPartner } from "@/lib/pos-types";
+import { listRacks } from "@/lib/repos/racks";
+import type {
+  PosService,
+  PosDoctor,
+  PosLabPartner,
+  PosRack,
+  PosCell,
+} from "@/lib/pos-types";
 
 export interface CatalogBatch {
   id: string;
@@ -37,6 +44,8 @@ export interface CatalogItem {
     isDefaultSelling: boolean;
   }[];
   batches: CatalogBatch[];
+  cell: PosCell | null;
+  shelfNote: string;
 }
 
 export interface CatalogSnapshot {
@@ -45,6 +54,8 @@ export interface CatalogSnapshot {
   services: PosService[];
   doctors: PosDoctor[];
   labPartners: PosLabPartner[];
+  /** The shop floor, so the counter can light up a shelf while offline. */
+  racks: PosRack[];
 }
 
 /**
@@ -54,7 +65,7 @@ export interface CatalogSnapshot {
 export async function catalogSnapshot(
   includeClinic = false,
 ): Promise<CatalogSnapshot> {
-  const [items, batches, version, services, doctors, labPartners] =
+  const [items, batches, version, services, doctors, labPartners, racks] =
     await Promise.all([
       listItems(),
       allBatchesWithStock(),
@@ -62,6 +73,7 @@ export async function catalogSnapshot(
       includeClinic ? listPosServices() : Promise.resolve([]),
       includeClinic ? listDoctors() : Promise.resolve([]),
       includeClinic ? listLabPartners() : Promise.resolve([]),
+      listRacks(),
     ]);
 
   const batchesByItem = new Map<string, CatalogBatch[]>();
@@ -87,6 +99,14 @@ export async function catalogSnapshot(
       shareValue: d.shareValue,
     })),
     labPartners: labPartners.map((p) => ({ id: p.id, name: p.name })),
+    racks: racks.map((r) => ({
+      id: r.id,
+      name: r.name,
+      rows: r.rows,
+      cols: r.cols,
+      posX: r.posX,
+      posY: r.posY,
+    })),
     items: items.map((i) => ({
       id: i.id,
       brandName: i.brandName,
@@ -96,6 +116,12 @@ export async function catalogSnapshot(
       shape: i.shape,
       units: i.units,
       batches: batchesByItem.get(i.id) ?? [],
+      // All three or none: a half-written cell would draw a light on nothing.
+      cell:
+        i.rackId !== null && i.rackRow !== null && i.rackCol !== null
+          ? { rackId: i.rackId, row: i.rackRow, col: i.rackCol }
+          : null,
+      shelfNote: i.rack,
     })),
   };
 }

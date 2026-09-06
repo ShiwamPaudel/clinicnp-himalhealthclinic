@@ -17,6 +17,7 @@ export default async function BillingPage() {
     vatRegistered: company.vatRegistered,
     roundingOn: company.roundingOn,
     printFormat: company.printFormat,
+    rackDisplay: company.rackDisplay,
     minRateIsCost: company.minRateIsCost,
     canEditRate: user.role === "admin" || user.canEditRate,
     isAdmin: user.role === "admin",

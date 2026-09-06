@@ -21,9 +21,16 @@ import {
   patientVisitRegister,
   diagnosticsUtilisation,
 } from "@/lib/repos/clinic-reports";
+import { shelfRows } from "@/lib/repos/racks";
+import { itemStockMap } from "@/lib/repos/batches";
+import { toMixedDisplay } from "@/lib/units";
+import { listItems } from "@/lib/repos/items";
 import { getModules } from "@/lib/modules";
 import { formatDocNo } from "@/lib/invoice-number";
 import { adToIso } from "@/lib/bs";
+
+/** Reports that only exist when the Pharmacy module is on. */
+const PHARMACY_REPORTS = new Set(["shelf-list"]);
 
 /** Reports that only exist when the Clinic module is on. */
 const CLINIC_REPORTS = new Set([
@@ -65,6 +72,12 @@ export async function GET(
   if (CLINIC_REPORTS.has(report)) {
     const modules = await getModules();
     if (!modules.clinic) {
+      return NextResponse.json({ ok: false }, { status: 404 });
+    }
+  }
+  if (PHARMACY_REPORTS.has(report)) {
+    const modules = await getModules();
+    if (!modules.pharmacy) {
       return NextResponse.json({ ok: false }, { status: 404 });
     }
   }
@@ -343,6 +356,39 @@ export async function GET(
     ];
     for (const r of rows) {
       ws.addRow({ group: r.groupName, count: r.count, net: rupees(r.netPaisa) });
+    }
+  } else if (report === "shelf-list") {
+    // A stock-take sheet: the shop in the order it is walked, with the
+    // unshelved at the end where they read as the work remaining.
+    const [rows, items, stock] = await Promise.all([
+      shelfRows(),
+      listItems(true),
+      itemStockMap(adToIso(new Date())),
+    ]);
+    const unitsByItem = new Map(items.map((i) => [i.id, i.units]));
+    ws.columns = [
+      { header: "Rack", key: "rack", width: 18 },
+      { header: "Shelf", key: "cell", width: 10 },
+      { header: "Item", key: "item", width: 30 },
+      { header: "Generic", key: "generic", width: 28 },
+      { header: "Written note", key: "note", width: 20 },
+      { header: "In stock", key: "qty", width: 18 },
+      { header: "Value at cost", key: "cost", width: 16 },
+    ];
+    for (const r of rows) {
+      const s = stock.get(r.itemId);
+      ws.addRow({
+        rack: r.rackName ?? "Not on a shelf",
+        cell: r.row !== null && r.col !== null ? `R${r.row}C${r.col}` : "",
+        item: r.brandName,
+        generic: r.genericName,
+        note: r.shelfNote,
+        qty: toMixedDisplay(
+          s?.sellableBaseQty ?? 0,
+          unitsByItem.get(r.itemId) ?? [],
+        ),
+        cost: rupees(s?.costValuePaisa ?? 0),
+      });
     }
   } else {
     return NextResponse.json(

@@ -198,6 +198,58 @@ async function main() {
     "tablet",
   );
 
+  // --- two sample racks, with the demo medicines standing on them ---
+  //
+  // The rack map is worth nothing until something is on it, and a training
+  // database that shows an empty floor plan teaches the wrong lesson: whoever
+  // is learning the software concludes the feature does not work. Two racks
+  // laid out side by side, and the two demo medicines placed on different
+  // shelves of the same one, so the highlight visibly moves as you search.
+  async function ensureDemoRack(
+    name: string,
+    rows: number,
+    cols: number,
+    posX: number,
+    posY: number,
+    note: string,
+  ): Promise<string> {
+    const ex = await c.execute({
+      sql: "SELECT id FROM racks WHERE name = ?",
+      args: [name],
+    });
+    if (ex.rows[0]) return ex.rows[0].id as string;
+    const id = ulid();
+    const at = new Date().toISOString();
+    await c.execute({
+      sql: `INSERT INTO racks (id, name, rows_count, cols_count, pos_x, pos_y,
+                               note, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      args: [id, name, rows, cols, posX, posY, note, at, at],
+    });
+    console.log(`seeded sample rack: ${name}`);
+    return id;
+  }
+
+  async function shelve(brand: string, rackId: string, row: number, col: number) {
+    await c.execute({
+      sql: `UPDATE items SET rack_id = ?, rack_row = ?, rack_col = ?
+            WHERE brand_name = ?`,
+      args: [rackId, row, col, brand],
+    });
+  }
+
+  const frontRack = await ensureDemoRack(
+    "Sample Rack 1",
+    4,
+    5,
+    0,
+    0,
+    "By the counter",
+  );
+  await ensureDemoRack("Sample Rack 2", 3, 4, 1, 0, "Back wall");
+  await shelve("Sample Amoxicillin 500", frontRack, 2, 3);
+  await shelve("Sample Paracetamol 500", frontRack, 4, 1);
+
   // --- sample clinic catalog (clearly-fake, Rules §1.10) ---
   //
   // Every rate here is a placeholder. They are marked `sample_rate` so the

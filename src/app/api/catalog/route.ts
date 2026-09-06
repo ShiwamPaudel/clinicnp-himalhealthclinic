@@ -39,6 +39,7 @@ export async function GET() {
       services: [],
       doctors: [],
       labPartners: [],
+      racks: [],
     });
   }
 

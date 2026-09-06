@@ -67,6 +67,11 @@ export const itemSchema = z.object({
   category: categorySchema,
   manufacturer: z.string(),
   rack: z.string(),
+  // The drawn shelf. All three travel together or not at all; the repo checks
+  // the cell is actually on the rack before anything is written.
+  rackId: z.string().nullable(),
+  rackRow: z.number().int().min(1).max(26).nullable(),
+  rackCol: z.number().int().min(1).max(26).nullable(),
   minStockBaseQty: z.number().int().min(0),
   controlledFlag: z.boolean(),
   preferredSupplierId: z.string().nullable(),

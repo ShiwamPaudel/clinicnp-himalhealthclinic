@@ -313,15 +313,30 @@ export async function allBatchesWithStock(): Promise<Batch[]> {
   return res.rows.map(mapBatch);
 }
 
-/** A monotonic-ish catalog version (latest stock move / item edit). */
+/**
+ * A monotonic-ish catalog version (latest stock move / item edit / rack edit).
+ *
+ * Racks are in here because the counter draws them. Moving an item to another
+ * shelf touches items.updated_at and would be caught anyway, but renaming or
+ * resizing a rack touches nothing else — and a counter still lighting up
+ * "Rack 1" after it was renamed to "Fridge" is worse than no map at all. The
+ * count catches a deletion, which lowers nothing.
+ */
 export async function catalogVersion(): Promise<string> {
   const res = await db().execute(
     `SELECT
        (SELECT IFNULL(MAX(at), '') FROM stock_moves) AS m,
-       (SELECT IFNULL(MAX(updated_at), '') FROM items) AS i`,
+       (SELECT IFNULL(MAX(updated_at), '') FROM items) AS i,
+       (SELECT IFNULL(MAX(updated_at), '') FROM racks) AS k,
+       (SELECT COUNT(*) FROM racks) AS n`,
   );
   const r = res.rows[0];
-  return `${(r?.i as string) ?? ""}|${(r?.m as string) ?? ""}`;
+  return [
+    (r?.i as string) ?? "",
+    (r?.m as string) ?? "",
+    (r?.k as string) ?? "",
+    String(r?.n ?? 0),
+  ].join("|");
 }
 
 export interface StockMoveRow {

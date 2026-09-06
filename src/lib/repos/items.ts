@@ -23,7 +23,16 @@ export interface Item {
   genericName: string;
   category: Category;
   manufacturer: string;
+  /**
+   * The free-text shelf note from before racks were drawable. Kept, shown and
+   * still editable when no racks exist: a shop that wrote "behind the counter"
+   * should not lose it because a newer, better field arrived.
+   */
   rack: string;
+  /** The drawn shelf. Null when the item is not on the map. */
+  rackId: string | null;
+  rackRow: number | null;
+  rackCol: number | null;
   minStockBaseQty: number;
   controlledFlag: boolean;
   preferredSupplierId: string | null;
@@ -38,6 +47,9 @@ export interface ItemInput {
   category: Category;
   manufacturer: string;
   rack: string;
+  rackId: string | null;
+  rackRow: number | null;
+  rackCol: number | null;
   minStockBaseQty: number;
   controlledFlag: boolean;
   preferredSupplierId: string | null;
@@ -54,6 +66,9 @@ function mapItem(r: Row): Omit<Item, "units"> {
     category: r.category as Category,
     manufacturer: r.manufacturer as string,
     rack: r.rack as string,
+    rackId: (r.rack_id as string | null) ?? null,
+    rackRow: r.rack_row === null ? null : Number(r.rack_row),
+    rackCol: r.rack_col === null ? null : Number(r.rack_col),
     minStockBaseQty: Number(r.min_stock_base_qty),
     controlledFlag: Number(r.controlled_flag) === 1,
     preferredSupplierId: (r.preferred_supplier_id as string | null) ?? null,
@@ -137,8 +152,9 @@ export async function createItem(input: ItemInput): Promise<string> {
   await db().execute({
     sql: `INSERT INTO items
             (id, brand_name, generic_name, category, manufacturer, rack,
+             rack_id, rack_row, rack_col,
              min_stock_base_qty, controlled_flag, preferred_supplier_id, active, shape, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.brandName,
@@ -146,6 +162,9 @@ export async function createItem(input: ItemInput): Promise<string> {
       input.category,
       input.manufacturer,
       input.rack,
+      input.rackId,
+      input.rackRow,
+      input.rackCol,
       input.minStockBaseQty,
       input.controlledFlag ? 1 : 0,
       input.preferredSupplierId,
@@ -166,7 +185,8 @@ export async function updateItem(
   await db().execute({
     sql: `UPDATE items SET
             brand_name = ?, generic_name = ?, category = ?, manufacturer = ?,
-            rack = ?, min_stock_base_qty = ?, controlled_flag = ?,
+            rack = ?, rack_id = ?, rack_row = ?, rack_col = ?,
+            min_stock_base_qty = ?, controlled_flag = ?,
             preferred_supplier_id = ?, active = ?, shape = ?, updated_at = ?
           WHERE id = ?`,
     args: [
@@ -175,6 +195,9 @@ export async function updateItem(
       input.category,
       input.manufacturer,
       input.rack,
+      input.rackId,
+      input.rackRow,
+      input.rackCol,
       input.minStockBaseQty,
       input.controlledFlag ? 1 : 0,
       input.preferredSupplierId,

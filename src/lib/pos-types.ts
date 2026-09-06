@@ -29,6 +29,31 @@ export interface PosItem {
   shape: string;
   units: PosUnit[];
   batches: PosBatch[];
+  /** Where it is kept, when the shop has drawn its racks. */
+  cell: PosCell | null;
+  /** The free-text shelf note, for a shop that has not drawn racks. */
+  shelfNote: string;
+}
+
+/** A shelf on the drawn map. */
+export interface PosCell {
+  rackId: string;
+  row: number;
+  col: number;
+}
+
+/**
+ * A rack as the counter draws it. Carried in the catalog rather than fetched,
+ * because the map has to work with the connection down like everything else at
+ * the counter does.
+ */
+export interface PosRack {
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  posX: number;
+  posY: number;
 }
 
 export interface PosCatalog {
@@ -37,6 +62,7 @@ export interface PosCatalog {
   services: PosService[];
   doctors: PosDoctor[];
   labPartners: PosLabPartner[];
+  racks: PosRack[];
 }
 
 /** A service line as it travels to the server. */

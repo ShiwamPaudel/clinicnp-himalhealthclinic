@@ -199,19 +199,18 @@ export async function deleteRack(id: string): Promise<void> {
   ]);
 }
 
-/** Put an item on a shelf, or take it off one by passing a null rack. */
-export async function setItemCell(
-  itemId: string,
-  cell: ItemCell,
-): Promise<void> {
-  if (cell.rackId === null) {
-    await db().execute({
-      sql: "UPDATE items SET rack_id = NULL, rack_row = NULL, rack_col = NULL, updated_at = ? WHERE id = ?",
-      args: [new Date().toISOString(), itemId],
-    });
-    return;
+/**
+ * Check a cell before anything is written to an item.
+ *
+ * Two screens put medicines on shelves — the item form and the shelf inspector
+ * on the racks page — and a third will exist the moment somebody imports a
+ * price list. They all come through here, so a rule added once is a rule
+ * everywhere. Returns the normalised cell, with a null rack meaning no shelf.
+ */
+export async function assertCellFits(cell: ItemCell): Promise<ItemCell> {
+  if (cell.rackId === null || cell.rackId === "") {
+    return { rackId: null, row: null, col: null };
   }
-
   const rack = await getRack(cell.rackId);
   if (!rack) throw new BadCellError("That rack no longer exists.");
   const { row, col } = cell;
@@ -223,17 +222,30 @@ export async function setItemCell(
       `${rack.name} has ${rack.rows} rows and ${rack.cols} columns, so R${row}C${col} is not on it.`,
     );
   }
+  return { rackId: rack.id, row, col };
+}
 
+/** Put an item on a shelf, or take it off one by passing a null rack. */
+export async function setItemCell(
+  itemId: string,
+  cell: ItemCell,
+): Promise<void> {
+  const fitted = await assertCellFits(cell);
   await db().execute({
     sql: "UPDATE items SET rack_id = ?, rack_row = ?, rack_col = ?, updated_at = ? WHERE id = ?",
-    args: [cell.rackId, row, col, new Date().toISOString(), itemId],
+    args: [
+      fitted.rackId,
+      fitted.row,
+      fitted.col,
+      new Date().toISOString(),
+      itemId,
+    ],
   });
 }
 
-/** How a cell is written down when there is no room to draw it. */
-export function cellLabel(rackName: string, row: number, col: number): string {
-  return `${rackName} · R${row}C${col}`;
-}
+// Re-exported so server callers can keep importing it from the repo, while the
+// counter — which cannot import a server-only module — reads the same function.
+export { cellLabel } from "@/lib/rack-label";
 
 export interface ShelfItem {
   itemId: string;
@@ -277,4 +289,46 @@ export async function cellCounts(): Promise<
     out[rackId][`${Number(r.rack_row)}:${Number(r.rack_col)}`] = Number(r.n);
   }
   return out;
+}
+
+/**
+ * One row per active item, in the order a person walks the shop: rack by rack
+ * across the floor, then down each rack, then across each shelf. Items with no
+ * shelf sort last, because during setup they are the list of work remaining
+ * rather than a place to visit.
+ */
+export interface ShelfRow {
+  itemId: string;
+  brandName: string;
+  genericName: string;
+  category: string;
+  /** the free-text note from before racks existed, kept and shown, never lost */
+  shelfNote: string;
+  rackId: string | null;
+  rackName: string | null;
+  row: number | null;
+  col: number | null;
+}
+
+export async function shelfRows(): Promise<ShelfRow[]> {
+  const res = await db().execute(
+    `SELECT i.id, i.brand_name, i.generic_name, i.category, i.rack AS shelf_note,
+            i.rack_id, i.rack_row, i.rack_col, r.name AS rack_name
+       FROM items i
+       LEFT JOIN racks r ON r.id = i.rack_id
+      WHERE i.active = 1
+      ORDER BY (i.rack_id IS NULL), r.pos_y, r.pos_x, r.name,
+               i.rack_row, i.rack_col, i.brand_name`,
+  );
+  return res.rows.map((r) => ({
+    itemId: r.id as string,
+    brandName: r.brand_name as string,
+    genericName: (r.generic_name as string) ?? "",
+    category: (r.category as string) ?? "",
+    shelfNote: (r.shelf_note as string) ?? "",
+    rackId: (r.rack_id as string | null) ?? null,
+    rackName: (r.rack_name as string | null) ?? null,
+    row: r.rack_row === null ? null : Number(r.rack_row),
+    col: r.rack_col === null ? null : Number(r.rack_col),
+  }));
 }

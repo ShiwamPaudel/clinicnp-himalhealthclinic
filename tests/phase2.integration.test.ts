@@ -89,6 +89,7 @@ describe("Phase 2 — catalog, stock in, unit math", () => {
       category: "Medicine",
       manufacturer: "Citizen Pharma",
       rack: "A1",
+      rackId: null, rackRow: null, rackCol: null,
       minStockBaseQty: 30,
       controlledFlag: false,
       shape: "capsule",

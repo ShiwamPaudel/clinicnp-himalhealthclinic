@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,12 @@ import { Input, Field } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { RackMap } from "@/components/app/rack-map";
+import {
+  ShelfInspector,
+  type SelectedCell,
+} from "@/components/app/shelf-inspector";
 import { saveRackAction, deleteRackAction } from "@/app/(app)/settings/rack-actions";
-import type { Rack } from "@/lib/repos/racks";
+import type { Rack, ShelfRow } from "@/lib/repos/racks";
 
 interface FormState {
   name: string;
@@ -31,10 +35,11 @@ function side(entry: string): number {
 
 export function RacksManager({
   initial,
-  counts,
+  items,
 }: {
   initial: Rack[];
-  counts: Record<string, Record<string, number>>;
+  /** Every active item with the shelf it stands on, if any. */
+  items: ShelfRow[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -42,6 +47,29 @@ export function RacksManager({
   const [editing, setEditing] = useState<Rack | null>(null);
   const [form, setForm] = useState<FormState>(BLANK);
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<SelectedCell | null>(null);
+
+  // Counts are derived from the same list the inspector shows, so the number
+  // drawn on a cell and the list inside it can never disagree.
+  const counts = useMemo(() => {
+    const out: Record<string, Record<string, number>> = {};
+    for (const i of items) {
+      if (!i.rackId || i.row === null || i.col === null) continue;
+      const cells = (out[i.rackId] ??= {});
+      const key = `${i.row}:${i.col}`;
+      cells[key] = (cells[key] ?? 0) + 1;
+    }
+    return out;
+  }, [items]);
+
+  const unshelved = useMemo(
+    () => items.filter((i) => i.rackId === null).length,
+    [items],
+  );
+
+  const selectedRack = selected
+    ? (initial.find((r) => r.id === selected.rackId) ?? null)
+    : null;
 
   function openNew(at?: { posX: number; posY: number }) {
     setEditing(null);
@@ -141,8 +169,36 @@ export function RacksManager({
       </div>
 
       <div className="overflow-x-auto rounded-[10px] border border-line bg-cream-50 p-4">
-        <RackMap racks={drawn} counts={counts} ghost={ghost} />
+        <RackMap
+          racks={drawn}
+          counts={counts}
+          ghost={ghost}
+          highlight={selected}
+          onCellClick={(rackId, row, col) =>
+            setSelected((cur) =>
+              cur && cur.rackId === rackId && cur.row === row && cur.col === col
+                ? null
+                : { rackId, row, col },
+            )
+          }
+        />
+        {initial.length > 0 && !selected && (
+          <p className="mt-3 text-[12px] text-sage-500">
+            Click a shelf to see what is on it, or to put something there.
+            {unshelved > 0 &&
+              ` ${unshelved} item${unshelved === 1 ? " is" : "s are"} not on a shelf yet.`}
+          </p>
+        )}
       </div>
+
+      {selectedRack && selected && (
+        <ShelfInspector
+          rack={selectedRack}
+          cell={selected}
+          items={items}
+          onClose={() => setSelected(null)}
+        />
+      )}
 
       {initial.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -189,10 +245,18 @@ export function RacksManager({
                   >
                     below
                   </Button>
-                  <Button variant="ghost" onClick={() => openEdit(rack)}>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Edit ${rack.name}`}
+                    onClick={() => openEdit(rack)}
+                  >
                     <Pencil size={15} />
                   </Button>
-                  <Button variant="ghost" onClick={() => remove(rack)}>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Remove ${rack.name}`}
+                    onClick={() => remove(rack)}
+                  >
                     <Trash2 size={15} />
                   </Button>
                 </div>

@@ -77,6 +77,7 @@ beforeAll(async () => {
     category: "Medicine",
     manufacturer: "",
     rack: "",
+    rackId: null, rackRow: null, rackCol: null,
     minStockBaseQty: 0,
     controlledFlag: false,
     preferredSupplierId: null,

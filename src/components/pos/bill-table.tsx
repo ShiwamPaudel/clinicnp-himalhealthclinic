@@ -1,6 +1,6 @@
 "use client";
 
-import type { PrintFormat } from "@/lib/repos/company";
+import type { PrintFormat, RackDisplay } from "@/lib/repos/company";
 import { useEffect, useRef, useState } from "react";
 import { Trash2, Layers, AlertTriangle } from "lucide-react";
 import { useBillStore } from "@/stores/bill-store";
@@ -22,6 +22,8 @@ export interface PosConfig {
   vatRegistered: boolean;
   roundingOn: boolean;
   printFormat: PrintFormat;
+  /** whether the counter says where a medicine is kept, and how loudly */
+  rackDisplay: RackDisplay;
   minRateIsCost: boolean;
   canEditRate: boolean;
   /** only an Admin may take something out of the queue unsent */

@@ -22,6 +22,8 @@ const item: PosItem = {
   category: "Medicine",
   controlledFlag: false,
   shape: "tablet",
+  cell: null,
+  shelfNote: "",
   units: [
     { level: 0, name: "Tablet", factorToBase: 1, sellingRatePaisa: 200, isDefaultSelling: true },
   ],

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
 import { requireModule, ModuleDisabledError } from "@/lib/modules";
 import { createItem, updateItem } from "@/lib/repos/items";
+import { assertCellFits, BadCellError } from "@/lib/repos/racks";
 import { itemSchema } from "@/lib/validators";
 import { validateHierarchy } from "@/lib/units";
 
@@ -18,6 +19,7 @@ function fail(userMessage: string): ActionResult {
 }
 
 function handle(err: unknown): ActionResult {
+  if (err instanceof BadCellError) return fail(err.userMessage);
   if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
   console.error("[items action]", err);
@@ -42,14 +44,32 @@ export async function saveItemAction(input: unknown): Promise<ActionResult> {
     const hierarchyError = validateHierarchy(data.units);
     if (hierarchyError) return fail(hierarchyError);
 
+    // A shelf that is not on the rack is refused here rather than written and
+    // discovered later by somebody standing in front of the wrong shelf. A rack
+    // chosen without a cell is refused too, not quietly dropped: half a shelf
+    // is somebody who meant to finish and was interrupted.
+    const cell = await assertCellFits({
+      rackId: data.rackId,
+      row: data.rackRow,
+      col: data.rackCol,
+    });
+    const withCell = {
+      ...data,
+      rackId: cell.rackId,
+      rackRow: cell.row,
+      rackCol: cell.col,
+    };
+
     if (data.id) {
-      await updateItem(data.id, data);
+      await updateItem(data.id, withCell);
       revalidatePath(`/items/${data.id}`);
       revalidatePath("/items");
+      revalidatePath("/settings/racks");
       return { ok: true, id: data.id };
     }
-    const id = await createItem(data);
+    const id = await createItem(withCell);
     revalidatePath("/items");
+    revalidatePath("/settings/racks");
     return { ok: true, id };
   } catch (err) {
     return handle(err);

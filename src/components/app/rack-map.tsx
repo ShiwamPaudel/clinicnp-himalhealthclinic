@@ -1,6 +1,19 @@
 "use client";
 
-import type { Rack } from "@/lib/repos/racks";
+/**
+ * The map needs a rack's shape and where it stands, and nothing else. Declaring
+ * that here rather than taking the repo's `Rack` lets the counter pass the
+ * lighter rack it carries in its offline catalog, without inventing an `active`
+ * flag and a `note` it does not have.
+ */
+export interface MapRack {
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  posX: number;
+  posY: number;
+}
 
 export interface HighlightCell {
   rackId: string;
@@ -9,7 +22,7 @@ export interface HighlightCell {
 }
 
 interface Props {
-  racks: Rack[];
+  racks: MapRack[];
   /** The cell to light up. Everything else dims around it. */
   highlight?: HighlightCell | null;
   /** rackId → "row:col" → how many items stand there. */
@@ -40,7 +53,7 @@ export function RackMap({
   compact = false,
   ghost = null,
 }: Props) {
-  const all = ghost
+  const all: MapRack[] = ghost
     ? [
         ...racks,
         {
@@ -50,9 +63,7 @@ export function RackMap({
           cols: ghost.cols,
           posX: ghost.posX,
           posY: ghost.posY,
-          note: "",
-          active: true,
-        } as Rack,
+        },
       ]
     : racks;
 
@@ -69,7 +80,9 @@ export function RackMap({
   const minY = Math.min(...all.map((r) => r.posY));
   const cols = Math.max(...all.map((r) => r.posX)) - minX + 1;
 
-  const cell = compact ? "h-5 w-5 text-[9px]" : "h-8 w-8 text-[11px]";
+  // 11px is the floor: this is read across a room, on a counter tablet, often
+  // by somebody who started last week.
+  const cell = compact ? "h-6 w-6 text-[11px]" : "h-8 w-8 text-[11px]";
 
   return (
     <div
@@ -97,7 +110,7 @@ export function RackMap({
                 {rack.name}
               </span>
               {!compact && (
-                <span className="text-[10px] text-sage-500">
+                <span className="text-[11px] text-sage-500">
                   {rack.rows}×{rack.cols}
                 </span>
               )}

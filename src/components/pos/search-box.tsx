@@ -10,6 +10,12 @@
  *
  * With one module on there is nothing to disambiguate, so the tags and the
  * scope hint disappear entirely rather than labelling the only thing there is.
+ *
+ * When the shop has drawn its racks, this is also where a medicine's shelf is
+ * answered — written out beside the result, or drawn on the map next to it.
+ * Search is the right moment for it: it is the one second between hearing a
+ * name and walking to a shelf, and it is the moment somebody who started last
+ * week needs the help.
  */
 import {
   forwardRef,
@@ -19,8 +25,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { Search, Paperclip, Send, Stethoscope } from "lucide-react";
-import type { PosItem, PosService } from "@/lib/pos-types";
+import { Search, Paperclip, Send, Stethoscope, MapPin } from "lucide-react";
+import { RackMap } from "@/components/app/rack-map";
+import { cellLabel } from "@/lib/rack-label";
+import type { PosItem, PosService, PosRack } from "@/lib/pos-types";
+import type { RackDisplay } from "@/lib/repos/company";
 import { defaultUnit } from "@/lib/bill-calc";
 import { toMixedDisplay } from "@/lib/units";
 import { formatPaisa } from "@/lib/money";
@@ -40,6 +49,10 @@ type Result =
 interface Props {
   items: PosItem[];
   services: PosService[];
+  /** The shop floor, from the offline catalog. Empty for most shops. */
+  racks: PosRack[];
+  /** What the shop asked for: nothing, the shelf written out, or the map. */
+  rackDisplay: RackDisplay;
   todayIso: string;
   onPick: (item: PosItem) => void;
   onPickService: (service: PosService) => void;
@@ -96,6 +109,19 @@ function rank(
     .slice(0, 8);
 }
 
+/**
+ * Where a medicine is kept, in words. The drawn shelf wins; the free-text note
+ * from before racks existed is the fallback, because a shop that typed
+ * "behind the counter" for years should still see it here.
+ */
+function shelfOf(item: PosItem, racks: PosRack[]): string {
+  if (item.cell) {
+    const rack = racks.find((r) => r.id === item.cell!.rackId);
+    if (rack) return cellLabel(rack.name, item.cell.row, item.cell.col);
+  }
+  return item.shelfNote.trim();
+}
+
 function availableBase(item: PosItem, todayIso: string): number {
   return item.batches
     .filter((b) => b.expiryDateAd >= todayIso)
@@ -117,7 +143,19 @@ const SCOPE_LABEL: Record<SearchScope, string> = {
 };
 
 export const SearchBox = forwardRef<SearchBoxHandle, Props>(
-  ({ items, services, todayIso, onPick, onPickService, onEmptyEnter }, ref) => {
+  (
+    {
+      items,
+      services,
+      racks,
+      rackDisplay,
+      todayIso,
+      onPick,
+      onPickService,
+      onEmptyEnter,
+    },
+    ref,
+  ) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState("");
     const [active, setActive] = useState(0);
@@ -150,6 +188,22 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(
       () => rank(items, services, query, effectiveScope),
       [items, services, query, effectiveScope],
     );
+
+    const activeResult = results[active] ?? null;
+    const activeItem =
+      activeResult?.kind === "medicine" ? activeResult.item : null;
+
+    // The map is drawn for as long as the results are, not only when the
+    // highlighted row happens to have a shelf: a panel that appears and
+    // vanishes as you arrow down the list is harder to read than one that
+    // stays put and says "not on a shelf".
+    const showMap =
+      rackDisplay === "visual" && racks.length > 0 && results.length > 0;
+    const highlight =
+      activeItem?.cell &&
+      racks.some((r) => r.id === activeItem.cell!.rackId)
+        ? activeItem.cell
+        : null;
 
     function pick(r: Result) {
       if (r.kind === "medicine") onPick(r.item);
@@ -211,30 +265,58 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(
         </div>
 
         {results.length > 0 && (
-          <ul className="absolute z-30 mt-1 max-h-[420px] w-full overflow-y-auto rounded-[10px] border border-line bg-cream-50 shadow-[0_1px_2px_rgb(22_36_27_/_6%),0_4px_12px_rgb(22_36_27_/_5%)]">
-            {results.map((r, i) =>
-              r.kind === "medicine" ? (
-                <MedicineRow
-                  key={`m-${r.item.id}`}
-                  item={r.item}
-                  todayIso={todayIso}
-                  showTag={bothKinds}
-                  activeRow={i === active}
-                  onHover={() => setActive(i)}
-                  onClick={() => pick(r)}
-                />
-              ) : (
-                <ServiceRow
-                  key={`s-${r.service.id}`}
-                  service={r.service}
-                  showTag={bothKinds}
-                  activeRow={i === active}
-                  onHover={() => setActive(i)}
-                  onClick={() => pick(r)}
-                />
-              ),
+          <div className="absolute z-30 mt-1 flex w-full flex-col overflow-hidden rounded-[10px] border border-line bg-cream-50 shadow-[0_1px_2px_rgb(22_36_27_/_6%),0_4px_12px_rgb(22_36_27_/_5%)] sm:flex-row">
+            <ul className="max-h-[420px] min-w-0 flex-1 overflow-y-auto">
+              {results.map((r, i) =>
+                r.kind === "medicine" ? (
+                  <MedicineRow
+                    key={`m-${r.item.id}`}
+                    item={r.item}
+                    todayIso={todayIso}
+                    showTag={bothKinds}
+                    shelf={rackDisplay === "off" ? "" : shelfOf(r.item, racks)}
+                    activeRow={i === active}
+                    onHover={() => setActive(i)}
+                    onClick={() => pick(r)}
+                  />
+                ) : (
+                  <ServiceRow
+                    key={`s-${r.service.id}`}
+                    service={r.service}
+                    showTag={bothKinds}
+                    activeRow={i === active}
+                    onHover={() => setActive(i)}
+                    onClick={() => pick(r)}
+                  />
+                ),
+              )}
+            </ul>
+
+            {showMap && (
+              <div className="shrink-0 border-t border-line bg-cream-100 p-3 sm:w-[264px] sm:border-l sm:border-t-0">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-sage-500">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Where it is kept
+                </div>
+                {highlight && activeItem ? (
+                  <>
+                    <div className="mb-2 text-[13px] font-semibold text-magenta-700">
+                      {shelfOf(activeItem, racks)}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <RackMap racks={racks} highlight={highlight} compact />
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[13px] text-sage-500">
+                    {activeItem
+                      ? activeItem.shelfNote.trim() || "Not on a shelf yet."
+                      : "Highlight a medicine to see its shelf."}
+                  </p>
+                )}
+              </div>
             )}
-          </ul>
+          </div>
         )}
       </div>
     );
@@ -246,6 +328,7 @@ function MedicineRow({
   item,
   todayIso,
   showTag,
+  shelf,
   activeRow,
   onHover,
   onClick,
@@ -253,6 +336,8 @@ function MedicineRow({
   item: PosItem;
   todayIso: string;
   showTag: boolean;
+  /** Where it is kept, already resolved. Empty means say nothing. */
+  shelf: string;
   activeRow: boolean;
   onHover: () => void;
   onClick: () => void;
@@ -289,6 +374,12 @@ function MedicineRow({
           {item.genericName && (
             <div className="truncate text-[12px] text-sage-500">
               {item.genericName}
+            </div>
+          )}
+          {shelf && (
+            <div className="flex items-center gap-1 truncate text-[12px] font-medium text-magenta-700">
+              <MapPin className="h-3 w-3 shrink-0" />
+              {shelf}
             </div>
           )}
         </div>

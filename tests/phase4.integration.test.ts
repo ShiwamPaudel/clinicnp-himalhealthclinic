@@ -62,7 +62,7 @@ beforeAll(async () => {
   const { createBatchWithStock } = await import("@/lib/repos/batches");
   itemId = await createItem({
     brandName: "ABC Med", genericName: "", category: "Medicine", manufacturer: "",
-    rack: "", minStockBaseQty: 0, controlledFlag: false, preferredSupplierId: null, active: true, shape: "tablet",
+    rack: "", rackId: null, rackRow: null, rackCol: null, minStockBaseQty: 0, controlledFlag: false, preferredSupplierId: null, active: true, shape: "tablet",
     units: [{ level: 0, name: "Tablet", factorToBase: 1, sellingRatePaisa: 200, isDefaultSelling: true }],
   });
   // batch A cheaper + nearer expiry, batch B costlier + later
