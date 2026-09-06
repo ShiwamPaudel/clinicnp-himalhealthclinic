@@ -11,10 +11,27 @@ import { ulid } from "ulid";
 import { db } from "@/lib/db";
 
 // Parent → child order for inserts; deletes run in reverse.
+/**
+ * Every table, in an order where each one's parents come before it.
+ *
+ * That order is what makes a restore work: rows go in parents-first, and the
+ * clear-out runs the list backwards so children go first. Foreign keys are
+ * deferred to COMMIT as well, so the snapshot is validated as a whole rather
+ * than at each intermediate step — but the ordering means a restore is
+ * comprehensible without relying on that.
+ *
+ * A table missing from this list is a table that silently does not survive a
+ * restore, which is why `tests/backup.test.ts` compares it against the
+ * database's own list of tables.
+ */
 const TABLES = [
+  // settings and people
   "company",
   "fiscal_years",
+  "counters",
   "users",
+
+  // pharmacy
   "suppliers",
   "items",
   "item_units",
@@ -24,18 +41,75 @@ const TABLES = [
   "purchase_returns",
   "purchase_return_lines",
   "supplier_payments",
+
+  // clinic catalog
+  "service_groups",
+  "doctors",
+  "lab_partners",
+  "services",
+
+  // clinic records
+  "patients",
+  "visits",
+
+  // money
   "bills",
   "bill_lines",
   "bill_line_batches",
+  "bill_service_lines",
   "sale_returns",
   "sale_return_lines",
+  "sale_return_service_lines",
+  "lab_partner_payments",
+
+  // stock movement and adjustments
+  "stock_moves",
+  "stock_adjustments",
+  "stock_adjustment_lines",
+
+  // files (metadata; the bytes are listed separately in the manifest)
+  "attachments",
+
   "audit_log",
 ] as const;
 
+/** The tables a backup deliberately leaves out, and why. */
+export const NOT_BACKED_UP: Record<string, string> = {
+  _migrations: "rebuilt by running the migrations",
+  backups: "a list of backups does not belong inside one",
+  rate_limits: "short-lived counters, meaningless after a restore",
+  login_throttle: "short-lived counters, meaningless after a restore",
+  cbms_queue:
+    "left over from a feature the owner dropped; the table stays because 0004 " +
+    "is applied and migrations are append-only, but nothing reads or writes it",
+};
+
+/**
+ * One file's whereabouts, so a restored database can be matched back to the
+ * bytes it refers to.
+ *
+ * The bytes themselves are NOT in the archive: a clinic's scans run to
+ * hundreds of megabytes and a backup nobody can download is not a backup. The
+ * manifest lists what should exist and where, so a restore can say plainly
+ * which files it can and cannot find rather than showing a broken link.
+ */
+export interface BackupFile {
+  attachmentId: string;
+  patientId: string;
+  visitId: string | null;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  blobKey: string;
+}
+
 export interface BackupArchive {
-  version: 1;
+  /** 1 predates the clinic tables and the file manifest; both still restore. */
+  version: 1 | 2;
   createdAt: string;
   tables: Record<string, Record<string, unknown>[]>;
+  /** what files the database expects to find, and under which keys */
+  files: BackupFile[];
 }
 
 export async function exportAll(): Promise<BackupArchive> {
@@ -48,11 +122,63 @@ export async function exportAll(): Promise<BackupArchive> {
       return obj;
     });
   }
-  return { version: 1, createdAt: new Date().toISOString(), tables };
+
+  const fileRows = await db().execute(
+    `SELECT id, patient_id, visit_id, file_name, mime, size_bytes, blob_key
+       FROM attachments WHERE deleted_at IS NULL`,
+  );
+  const files: BackupFile[] = fileRows.rows.map((r) => ({
+    attachmentId: r.id as string,
+    patientId: r.patient_id as string,
+    visitId: (r.visit_id as string | null) ?? null,
+    fileName: r.file_name as string,
+    mime: r.mime as string,
+    sizeBytes: Number(r.size_bytes),
+    blobKey: r.blob_key as string,
+  }));
+
+  return {
+    version: 2,
+    createdAt: new Date().toISOString(),
+    tables,
+    files,
+  };
+}
+
+export interface FileCheck {
+  expected: number;
+  found: number;
+  missing: BackupFile[];
+}
+
+/**
+ * Which of a backup's files can actually be found right now.
+ *
+ * Run after a restore, so the owner is told "412 of 415 files are here, these
+ * three are not" instead of discovering a missing scan months later.
+ */
+export async function checkBackupFiles(
+  archive: BackupArchive,
+): Promise<FileCheck> {
+  const { getFile } = await import("@/lib/file-store");
+  const missing: BackupFile[] = [];
+  for (const f of archive.files ?? []) {
+    const found = await getFile(f.blobKey);
+    if (!found) missing.push(f);
+  }
+  return {
+    expected: archive.files?.length ?? 0,
+    found: (archive.files?.length ?? 0) - missing.length,
+    missing,
+  };
 }
 
 export async function restoreAll(archive: BackupArchive): Promise<void> {
-  if (archive.version !== 1) throw new Error("unsupported backup version");
+  // Version 1 archives predate the file manifest and the clinic tables. They
+  // still restore — what they contain simply comes back and nothing else does.
+  if (archive.version !== 1 && archive.version !== 2) {
+    throw new Error("unsupported backup version");
+  }
   const tx = await db().transaction("write");
   try {
     // Defer FK checks to COMMIT so the full replace is validated only against

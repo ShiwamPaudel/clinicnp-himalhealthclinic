@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { restoreAll, type BackupArchive } from "@/lib/repos/backup";
+import {
+  restoreAll,
+  checkBackupFiles,
+  type BackupArchive,
+} from "@/lib/repos/backup";
 import { recordAudit } from "@/lib/repos/audit";
 import {
   checkRateLimit,
@@ -46,7 +50,8 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (!body.archive || body.archive.version !== 1 || !body.archive.tables) {
+  const version = body.archive?.version;
+  if (!body.archive || (version !== 1 && version !== 2) || !body.archive.tables) {
     return NextResponse.json(
       { ok: false, userMessage: "That doesn't look like a valid backup file." },
       { status: 400 },
@@ -58,7 +63,17 @@ export async function POST(req: Request) {
     await recordAudit(session.user.id, "restore", {
       backupCreatedAt: body.archive.createdAt,
     });
-    return NextResponse.json({ ok: true });
+    // Say how many of the files the restored database refers to can actually
+    // be found, rather than leaving broken links to be discovered later.
+    const files = await checkBackupFiles(body.archive);
+    return NextResponse.json({
+      ok: true,
+      files: {
+        expected: files.expected,
+        found: files.found,
+        missing: files.missing.length,
+      },
+    });
   } catch (err) {
     console.error("[backup/restore]", err);
     return NextResponse.json(

@@ -16,6 +16,10 @@ export const authConfig = {
       const { pathname } = request.nextUrl;
       // Public: login page.
       if (pathname.startsWith("/login")) return true;
+      // The offline notice is a static page with no data on it. It has to be
+      // reachable without a session, because the service worker serves it when
+      // there is no connection to check a session against.
+      if (pathname === "/offline") return true;
       // API routes enforce their own auth (session check or cron secret) and
       // must return JSON, not an HTML redirect.
       if (pathname.startsWith("/api")) return true;

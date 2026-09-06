@@ -49,7 +49,21 @@ export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
     setBusy(false);
     const data = await res.json();
     if (data.ok) {
-      toast.success("Data restored");
+      // Say plainly what came back, including anything that did not.
+      const f = data.files as
+        | { expected: number; found: number; missing: number }
+        | undefined;
+      if (f && f.expected > 0 && f.found < f.expected) {
+        toast.error(
+          `Restored. ${f.found} of ${f.expected} patient files were found — ${f.missing} could not be.`,
+        );
+      } else if (f && f.expected > 0) {
+        toast.success(
+          `Restored, with all ${f.expected} patient files accounted for.`,
+        );
+      } else {
+        toast.success("Restored");
+      }
       setConfirm("");
       setArchiveText(null);
       setFileName("");
@@ -84,8 +98,16 @@ export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
           </h2>
         </div>
         <p className="mt-1 max-w-md text-[13px] text-sage-500">
-          This replaces <b>all</b> current data with the backup file. It can't be
-          undone. Type <b>RESTORE</b> to confirm.
+          This returns the <b>whole system</b> to how it was when the backup was
+          taken — every bill, patient, visit, service, price and stock figure,
+          and the fiscal years with whichever one was open at the time. Anything
+          entered since then is gone, and it can&apos;t be undone. Type{" "}
+          <b>RESTORE</b> to confirm.
+        </p>
+        <p className="mt-1 max-w-md text-[13px] text-sage-500">
+          Patient files are not inside the backup file — a clinic&apos;s scans
+          are far too large for that. The backup lists which files should exist,
+          and after restoring you are told how many of them can still be found.
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:max-w-md">
           <input
