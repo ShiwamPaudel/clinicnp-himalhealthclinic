@@ -152,6 +152,11 @@ Then: `pnpm db:migrate`, `pnpm db:bootstrap` (**not** `db:seed`), deploy, and wa
 | D-070 | The service worker **never caches a write, and never caches a patient file** | A cached "OK" would swallow a day's work, and a file must not sit in a browser cache on a shared counter machine after somebody signs out |
 | D-071 | `lib/bs.ts` unwraps the converter's **CommonJS default** either way | Next's bundler hands back the constructor; a plain Node runner hands back the module object. Any script using BS dates died on `NepaliDate is not a constructor` |
 | D-072 | Guide chapters are numbered **by position**, not by a number typed into each title | Inserting the clinic chapters in the middle produced two chapter sixes |
+| D-073 | The **INSERT arity check** lives in `scripts/audit.mjs`, not in a code review | `saveCompany` shipped with fourteen columns against fifteen values and threw on every single call. Counting placeholders is something a person does badly and a machine does perfectly |
+| D-074 | Every repo function a screen calls gets **at least one test that calls it** | The company profile was the one write path no test touched, and it was the one that was broken. Green tests measured what was covered, not what worked |
+| D-075 | **Service groups are the department list.** There will not be a second list of departments | Groups already carry the services, their rates and their reports. A parallel department table would drift from them within a month, and then two screens would disagree about which department a test belongs to |
+| D-076 | The outside-lab workflow stops at **Report received**. ClinicNP records that a report came back; it never records what the report says | Himal sends samples out and the partner laboratory issues the result. Storing values would make ClinicNP look like the authority on a number it did not measure. This is the same line Rules §2.2 draws around lab results, and it holds |
+| D-077 | **Opening stock is not a purchase**, and will not be recorded as one | Entering the shelf as a fake purchase invents a supplier, an invoice number and a payable that nobody owes. `createBatchWithStock` already takes a null `purchaseId`; the gap is a screen, not a schema |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -236,3 +241,29 @@ Verified: **247 tests green**, typecheck clean, sweep clean, audit clean, access
 Not built (requested, out of scope): **CBMS** — the owner dropped it; the dead `cbms_queue` table remains only because 0004 is applied and migrations are append-only, and it is written down in `NOT_BACKED_UP` so nobody wonders. Lab results, reference ranges, sample workflow, EMR, appointments and SMS remain out of scope (Rules §2.2) and nothing was built near them.
 Could not be done here: installing as a PWA on a physical Android tablet, and the Vercel deployment itself, both of which need the owner's hardware and account. The behaviour underneath each was verified in a real browser against a production build.
 Next: the install. See "Next up" at the top.
+
+### C-007  ·  2083-05-22  ·  Deployment unblocked, and the bug that green tests missed
+Vercel refused the deployment. Not a build error — the build completed, then was rejected at `Deploying outputs...` with "Vulnerable version of Next.js detected". `next` 15.1.6 → **15.5.25** (stayed on 15.x; 16 is a major and this was not the week), and `next-auth` beta.25 → **beta.32**, which brings `@auth/core` to 0.41.3 and patches "configuration errors can cause auth checks to fail open". There is no stable Auth.js v5; `latest` is still 4.24.15.
+
+**The company profile could never be saved.** `saveCompany` built an INSERT with fourteen columns, fifteen values and thirteen arguments. It threw `SQLITE_ERROR: 15 values for 14 columns` in the driver every time, the action caught it, and the owner saw "Something went wrong. Please try again." while trying to put the clinic's own name into the software. 247 tests were green because **no test ever called it** (D-074). Fixed, covered by `tests/company.integration.test.ts` (proven to fail without the fix), and the whole class is now mechanical (D-073): 66 INSERTs checked for column/value arity, with a comma splitter that respects quoted strings so `'Kalimati, Kathmandu'` counts as one value.
+
+The `sw.js` "no-response" line reported alongside it was an **aborted RSC link prefetch** — cosmetic, and not why the save failed. Verified after the fix in a browser on a production build with the service worker active: saves, says Saved, survives a reload, zero console errors.
+
+Also corrected: `Deploy.md` told the next person to run `pnpm audit`, which pnpm's own built-in shadows — that line never ran `scripts/audit.mjs` once.
+
+Verified: **250 tests green**, typecheck clean, sweep clean, audit clean, counter bundle 146 kB → **143 kB** on the newer shared chunks. Middleware bypass CVE-2025-29927 confirmed never exploitable here — every page sits under a layout calling `requireUser()` and all 14 API routes guard themselves — checked by sending the bypass header and getting the same redirect to /login as an anonymous request.
+
+### Requested at Himal, not yet built  ·  2083-05-22
+The owner walked through how the clinic actually runs. What was asked for, and what is already there:
+
+**Already built, no work needed.** Tests and their rates go in **Settings → Services**, each one carrying its group, rate, whether it is sent to an outside lab (with the partner and what they charge), whether a report is expected back, and whether a doctor is required. **Service groups are fully editable** — create, rename, delete — through `settings/catalog-actions.ts`. Ten are seeded.
+
+**Real work, not yet started.**
+1. **Department on a visit is free text.** `visits.department` is a plain string typed by hand; it must become a choice from the service groups (D-075). Until then two spellings of "Ultrasound" are two departments in every report.
+2. **The outside-lab workflow has one step, not three.** `bill_service_lines.dispatched_at` and the dispatch slip exist. **Sample collected** and **Report received** do not, and neither does report-received closing that test's part of the visit (D-076).
+3. **Opening stock cannot be recorded.** Batches are created only by a purchase. `createBatchWithStock` in `batches.ts:57` takes exactly the right shape — batch number, expiry, cost, quantity, and a **nullable `purchaseId`** — and has **no callers at all**. The count-correction adjustment cannot stand in: `StockOutLineInput` requires an existing `batchId`, so it can only top up a batch that is already there. Today the shelf has to be entered as a fake purchase, which invents a supplier and a payable (D-077).
+4. **Lab bill on A4, top half only**, so one sheet carries two bills. `company.print_format` is `thermal | a5` today, and A5 is exactly half of A4 — this may be a stock-and-margins question rather than a new format.
+5. **Reports out of the Pharmacy module.** Only four are gated on pharmacy — valuation, expiry, moving, profit. The rest already are not, so this is mostly where they sit in the navigation.
+6. **Items and rates** — the owner said items "don't have a rate thing in them, just the units". Rates live on `item_units.selling_rate_paisa`, one per unit. Whether that is the complaint or the requirement is **not yet clear and was not guessed at**.
+
+Still out of scope and not drifted into: lab **results**, reference ranges, EMR, appointments, SMS (Rules §2.2). Recording that a report came back is not recording what it said (D-076).
