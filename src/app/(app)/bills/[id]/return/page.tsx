@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { getBillDetail } from "@/lib/repos/bills";
-import { returnedBaseByLine } from "@/lib/repos/sale-returns";
+import {
+  returnedBaseByLine,
+  refundedQtyByServiceLine,
+} from "@/lib/repos/sale-returns";
 import { getCompany } from "@/lib/repos/company";
 import { bsFromDbText, formatBS } from "@/lib/bs";
 import { formatDocNo } from "@/lib/invoice-number";
@@ -9,6 +12,7 @@ import { PageShell } from "@/components/app/page-shell";
 import {
   SaleReturnForm,
   type ReturnLineData,
+  type RefundServiceLineData,
 } from "@/components/app/sale-return-form";
 
 export default async function SaleReturnPage({
@@ -22,6 +26,7 @@ export default async function SaleReturnPage({
   if (!bill) notFound();
   const company = await getCompany();
   const returnedBase = await returnedBaseByLine(id);
+  const refundedQty = await refundedQtyByServiceLine(id);
 
   const invoiceLabel =
     bill.invoiceNo != null
@@ -42,8 +47,22 @@ export default async function SaleReturnPage({
     lineAmountPaisa: l.amountPaisa,
   }));
 
+  const serviceLines: RefundServiceLineData[] = bill.serviceLines.map((l) => ({
+    billServiceLineId: l.id,
+    name: l.name,
+    doctorName: l.doctorName,
+    soldQty: l.qty,
+    alreadyRefundedQty: refundedQty.get(l.id) ?? 0,
+    lineAmountPaisa: l.amountPaisa,
+  }));
+
+  // Services alone means the word on screen is "refund"; a medicine makes it
+  // a return, because something physically comes back.
+  const heading =
+    serviceLines.length > 0 && bill.lines.length === 0 ? "Refund" : "Return";
+
   return (
-    <PageShell title={`Return — ${invoiceLabel}`}>
+    <PageShell title={`${heading} — ${invoiceLabel}`}>
       <SaleReturnForm
         billId={id}
         invoiceLabel={invoiceLabel}
@@ -61,6 +80,8 @@ export default async function SaleReturnPage({
           monthScript: "en",
         })}
         lines={lines}
+        serviceLines={serviceLines}
+        yearClosedNote={bill.yearClosed ? bill.fiscalLabel : ""}
       />
     </PageShell>
   );

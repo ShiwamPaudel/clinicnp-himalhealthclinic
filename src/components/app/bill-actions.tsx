@@ -65,15 +65,16 @@ export function BillActions({
         <Printer className="h-4 w-4" />
         Reprint
       </Button>
-      {/* A closed year keeps Reprint and nothing else: read and print only. */}
-      {!yearClosed && (
-        <Link href={`/bills/${billId}/return`}>
-          <Button variant="secondary">
-            <RotateCcw className="h-4 w-4" />
-            Sales return
-          </Button>
-        </Link>
-      )}
+      {/* A closed year is otherwise read-and-print only, but a refund is
+          money owed to a person who is standing at the counter now. It goes
+          into the year that is open, referencing this bill, so the closed
+          year's own figures never move. */}
+      <Link href={`/bills/${billId}/return`}>
+        <Button variant="secondary">
+          <RotateCcw className="h-4 w-4" />
+          {yearClosed ? "Refund" : "Sales return"}
+        </Button>
+      </Link>
       {!yearClosed && isCredit && !creditSettled && (
         <Button variant="secondary" onClick={doSettle} disabled={busy}>
           <CheckCircle2 className="h-4 w-4" />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CreditCard } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { listBills } from "@/lib/repos/bills";
+import { getModules } from "@/lib/modules";
 import { PageShell } from "@/components/app/page-shell";
 import { BillRegister } from "@/components/app/bill-register";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,11 @@ export default async function BillsPage({
   const user = await requireUser();
   const { fy } = await searchParams;
   const year = await resolveFiscalYear(fy);
-  const rows = await listBills(200, year.id);
+  const [rows, modules] = await Promise.all([
+    listBills(200, year.id),
+    getModules(),
+  ]);
+  const bothModules = modules.pharmacy && modules.clinic;
 
   return (
     <PageShell
@@ -39,7 +44,7 @@ export default async function BillsPage({
       }
     >
       {year.isClosed && <ClosedYearBanner label={year.label} />}
-      <BillRegister rows={rows} readOnly={year.isClosed} />
+      <BillRegister rows={rows} readOnly={year.isClosed} showKind={bothModules} />
     </PageShell>
   );
 }

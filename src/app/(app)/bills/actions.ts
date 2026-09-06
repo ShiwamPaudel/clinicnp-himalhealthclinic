@@ -15,6 +15,8 @@ export interface ActionResult {
   ok: boolean;
   userMessage?: string;
   returnNo?: number;
+  /** Set when the original bill's year was closed and this went into the open one. */
+  intoOpenYearNote?: string;
 }
 
 function fail(userMessage: string): ActionResult {
@@ -51,19 +53,33 @@ export async function settleCreditAction(id: string): Promise<ActionResult> {
   }
 }
 
-const saleReturnSchema = z.object({
-  billId: z.string().min(1),
-  lines: z
-    .array(
+const saleReturnSchema = z
+  .object({
+    billId: z.string().min(1),
+    lines: z.array(
       z.object({
         billLineId: z.string().min(1),
         itemId: z.string().min(1),
         returnBaseQty: z.number().int().min(1),
         amountPaisa: z.number().int().min(0),
       }),
-    )
-    .min(1, "Choose at least one line to return"),
-});
+    ),
+    serviceLines: z
+      .array(
+        z.object({
+          billServiceLineId: z.string().min(1),
+          qty: z.number().int().min(1),
+          amountPaisa: z.number().int().min(0),
+        }),
+      )
+      .optional(),
+  })
+  // Either kind alone is a real refund: a returned medicine, or a service
+  // that was charged for and should not have been.
+  .refine(
+    (r) => r.lines.length > 0 || (r.serviceLines?.length ?? 0) > 0,
+    { message: "Choose what is being given back", path: ["lines"] },
+  );
 
 export async function createSaleReturnAction(
   input: unknown,
@@ -80,11 +96,17 @@ export async function createSaleReturnAction(
       dateBs: bs,
       dateAd: adToIso(toAD(bsFromDbText(bs))),
       lines: parsed.data.lines,
+      serviceLines: parsed.data.serviceLines,
       userId: user.id,
     });
     revalidatePath(`/bills/${parsed.data.billId}`);
     revalidatePath("/bills");
-    return { ok: true, returnNo: res.returnNo };
+    revalidatePath("/reports/service-revenue");
+    return {
+      ok: true,
+      returnNo: res.returnNo,
+      intoOpenYearNote: res.intoOpenYearNote,
+    };
   } catch (err) {
     return handle(err);
   }

@@ -699,6 +699,27 @@ export interface BillDetailLine {
   batches: { batchNo: string; expiryDateAd: string; baseQty: number; batchId: string }[];
 }
 
+/** A service as it appears on a saved bill. No batch, no expiry. */
+export interface BillDetailServiceLine {
+  id: string;
+  serviceId: string;
+  name: string;
+  qty: number;
+  ratePaisa: number;
+  rateOverridden: boolean;
+  discountPaisa: number;
+  amountPaisa: number;
+  doctorName: string;
+  partnerName: string;
+  partnerCostPaisa: number;
+  doctorSharePaisa: number;
+  followupApplied: boolean;
+  followupNote: string;
+  dispatchedAt: string | null;
+  /** how much of this line has already been refunded */
+  refundedQty: number;
+}
+
 export interface BillDetail extends BillListRow {
   /** True when this bill's fiscal year has been closed: read and print only. */
   yearClosed: boolean;
@@ -709,6 +730,9 @@ export interface BillDetail extends BillListRow {
   creditSettledAt: string | null;
   userName: string;
   lines: BillDetailLine[];
+  serviceLines: BillDetailServiceLine[];
+  patientId: string | null;
+  visitId: string | null;
 }
 
 export async function getBillDetail(id: string): Promise<BillDetail | null> {
@@ -764,11 +788,45 @@ export async function getBillDetail(id: string): Promise<BillDetail | null> {
     });
   }
 
+  const svcRes = await db().execute({
+    sql: `SELECT sl.*, d.name AS doctor_name, lp.name AS partner_name,
+                 COALESCE((SELECT SUM(r.qty) FROM sale_return_service_lines r
+                            WHERE r.bill_service_line_id = sl.id), 0) AS refunded_qty
+            FROM bill_service_lines sl
+            LEFT JOIN doctors d ON d.id = sl.doctor_id
+            LEFT JOIN lab_partners lp ON lp.id = sl.lab_partner_id
+           WHERE sl.bill_id = ?
+           ORDER BY sl.rowid`,
+    args: [id],
+  });
+
+  const serviceLines: BillDetailServiceLine[] = svcRes.rows.map((l) => ({
+    id: l.id as string,
+    serviceId: l.service_id as string,
+    name: l.name_snapshot as string,
+    qty: Number(l.qty),
+    ratePaisa: Number(l.rate_paisa),
+    rateOverridden: Number(l.rate_overridden) === 1,
+    discountPaisa: Number(l.discount_paisa),
+    amountPaisa: Number(l.amount_paisa),
+    doctorName: (l.doctor_name as string | null) ?? "",
+    partnerName: (l.partner_name as string | null) ?? "",
+    partnerCostPaisa: Number(l.partner_cost_paisa),
+    doctorSharePaisa: Number(l.doctor_share_paisa),
+    followupApplied: Number(l.followup_applied) === 1,
+    followupNote: (l.followup_note as string) ?? "",
+    dispatchedAt: (l.dispatched_at as string | null) ?? null,
+    refundedQty: Number(l.refunded_qty),
+  }));
+
   return {
     ...mapBillRow(h),
     // No fiscal year on the row means it predates year tracking — treat as open.
     yearClosed:
       h.fy_status != null && (h.fy_status as string) !== "open",
+    patientId: (h.patient_id as string | null) ?? null,
+    visitId: (h.visit_id as string | null) ?? null,
+    serviceLines,
     subtotalPaisa: Number(h.subtotal_paisa),
     discountPaisa: Number(h.discount_paisa),
     vatPaisa: Number(h.vat_paisa),

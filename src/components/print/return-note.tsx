@@ -8,6 +8,12 @@ export interface ReturnNoteData {
   dateBsLong: string;
   lines: { name: string; qty: number; unitName: string; amountPaisa: number }[];
   totalPaisa: number;
+  /**
+   * Set when the original bill belongs to a fiscal year that has since been
+   * closed, so the note says which bill this refund is against and that it was
+   * recorded in the year that is open now.
+   */
+  intoOpenYearNote?: string;
 }
 
 /** Sales-return note (thermal-style). */
@@ -21,15 +27,19 @@ export function ReturnNote({ data }: { data: ReturnNoteData }) {
         <div style={{ fontWeight: 600 }}>PAN: {c.panNo || "—"}</div>
       </div>
       <div className="dashed" />
-      <div style={{ fontWeight: 700, textAlign: "center" }}>SALES RETURN</div>
+      <div style={{ fontWeight: 700, textAlign: "center" }}>REFUND</div>
       <div>{data.returnLabel}</div>
       <div>Against: {data.againstInvoice}</div>
       <div>{data.dateBsLong}</div>
+      {data.intoOpenYearNote && (
+        <div style={{ fontSize: 9 }}>{data.intoOpenYearNote}</div>
+      )}
       <div className="dashed" />
       {data.lines.map((l, i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
           <span>
-            {l.name} ({l.qty} {l.unitName})
+            {l.name} ({l.qty}
+            {l.unitName ? ` ${l.unitName}` : ""})
           </span>
           <span>{formatPaisa(l.amountPaisa, false)}</span>
         </div>

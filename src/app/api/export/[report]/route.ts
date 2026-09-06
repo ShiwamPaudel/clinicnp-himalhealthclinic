@@ -13,8 +13,26 @@ import {
   stockOutTotalsByReason,
   STOCK_OUT_REASONS,
 } from "@/lib/repos/adjustments";
+import {
+  serviceRevenue,
+  doctorPayouts,
+  partnerSummary,
+  partnerStatement,
+  patientVisitRegister,
+  diagnosticsUtilisation,
+} from "@/lib/repos/clinic-reports";
+import { getModules } from "@/lib/modules";
 import { formatDocNo } from "@/lib/invoice-number";
 import { adToIso } from "@/lib/bs";
+
+/** Reports that only exist when the Clinic module is on. */
+const CLINIC_REPORTS = new Set([
+  "service-revenue",
+  "doctor-payouts",
+  "lab-partners",
+  "visit-register",
+  "utilisation",
+]);
 
 /** Money as a plain 2-decimal number for spreadsheet cells. */
 function rupees(paisa: number): number {
@@ -41,6 +59,15 @@ export async function GET(
     to: url.searchParams.get("to") ?? undefined,
     fy: url.searchParams.get("fy") ?? undefined,
   });
+
+  // A module that is off has no reports to export, and its route says so the
+  // same way its screens do.
+  if (CLINIC_REPORTS.has(report)) {
+    const modules = await getModules();
+    if (!modules.clinic) {
+      return NextResponse.json({ ok: false }, { status: 404 });
+    }
+  }
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "ClinicNP";
@@ -180,6 +207,143 @@ export async function GET(
       });
     }
     summary.getRow(1).font = { bold: true };
+  } else if (report === "service-revenue") {
+    const rows = await serviceRevenue(range);
+    ws.columns = [
+      { header: "Service", key: "name", width: 32 },
+      { header: "Group", key: "group", width: 20 },
+      { header: "Times", key: "count", width: 10 },
+      { header: "Billed", key: "gross", width: 14 },
+      { header: "Refunded", key: "refunded", width: 14 },
+      { header: "Kept", key: "net", width: 14 },
+      { header: "Paid to a laboratory", key: "cost", width: 20 },
+      { header: "Left over", key: "margin", width: 14 },
+    ];
+    for (const r of rows) {
+      ws.addRow({
+        name: r.name,
+        group: r.groupName,
+        count: r.count,
+        gross: rupees(r.grossPaisa),
+        refunded: rupees(r.refundedPaisa),
+        net: rupees(r.netPaisa),
+        cost: rupees(r.partnerCostPaisa),
+        margin: rupees(r.marginPaisa),
+      });
+    }
+  } else if (report === "doctor-payouts") {
+    const rows = await doctorPayouts(range);
+    ws.columns = [
+      { header: "Doctor", key: "name", width: 28 },
+      { header: "Worked out as", key: "basis", width: 34 },
+      { header: "Consultations", key: "consults", width: 14 },
+      { header: "Other services", key: "others", width: 14 },
+      { header: "Billed", key: "billed", width: 14 },
+      { header: "Owed to the doctor", key: "share", width: 18 },
+    ];
+    for (const r of rows) {
+      ws.addRow({
+        name: r.name,
+        basis: r.basisSummary,
+        consults: r.consultations,
+        others: r.otherServices,
+        billed: rupees(r.billedPaisa),
+        share: rupees(r.sharePaisa),
+      });
+    }
+  } else if (report === "lab-partners") {
+    const rows = await partnerSummary(range);
+    ws.columns = [
+      { header: "Laboratory", key: "name", width: 30 },
+      { header: "Tests sent", key: "tests", width: 14 },
+      { header: "Billed to patients", key: "billed", width: 18 },
+      { header: "Left over", key: "margin", width: 14 },
+      { header: "Paid", key: "paid", width: 14 },
+      { header: "Owed now", key: "balance", width: 14 },
+    ];
+    for (const r of rows) {
+      ws.addRow({
+        name: r.name,
+        tests: rupees(r.testsPaisa),
+        billed: rupees(r.billedPaisa),
+        margin: rupees(r.marginPaisa),
+        paid: rupees(r.paymentsPaisa),
+        balance: rupees(r.balancePaisa),
+      });
+    }
+    // One sheet per laboratory, so a statement can be sent to the partner on
+    // its own without the others' figures attached.
+    for (const r of rows) {
+      const st = await partnerStatement(r.partnerId, range);
+      if (!st || st.entries.length === 0) continue;
+      const sheet = wb.addWorksheet(st.partnerName.slice(0, 28));
+      sheet.columns = [
+        { header: "Date (BS)", key: "date", width: 14 },
+        { header: "What happened", key: "desc", width: 40 },
+        { header: "Owed", key: "charge", width: 14 },
+        { header: "Paid", key: "paid", width: 14 },
+        { header: "Balance", key: "balance", width: 14 },
+      ];
+      sheet.addRow({
+        date: "",
+        desc: "Owed at the start",
+        charge: "",
+        paid: "",
+        balance: rupees(st.openingPaisa),
+      });
+      for (const e of st.entries) {
+        sheet.addRow({
+          date: e.dateBs,
+          desc: e.description,
+          charge: e.chargePaisa > 0 ? rupees(e.chargePaisa) : "",
+          paid: e.paymentPaisa > 0 ? rupees(e.paymentPaisa) : "",
+          balance: rupees(e.runningPaisa),
+        });
+      }
+      sheet.getColumn("date").numFmt = "@";
+      sheet.getRow(1).font = { bold: true };
+    }
+  } else if (report === "visit-register") {
+    const rows = await patientVisitRegister(range);
+    ws.columns = [
+      { header: "Date (BS)", key: "date", width: 14 },
+      { header: "Visit", key: "visit", width: 22 },
+      { header: "Patient no.", key: "pno", width: 14 },
+      { header: "Patient", key: "patient", width: 26 },
+      { header: "Sex", key: "sex", width: 8 },
+      { header: "Type", key: "type", width: 14 },
+      { header: "Department", key: "dept", width: 18 },
+      { header: "Doctor", key: "doctor", width: 24 },
+      { header: "Status", key: "status", width: 12 },
+    ];
+    for (const r of rows) {
+      ws.addRow({
+        date: r.dateBs,
+        visit:
+          r.visitNo != null
+            ? `V-${r.fiscalLabel}-${String(r.visitNo).padStart(6, "0")}`
+            : "",
+        pno: r.patientNo != null ? `P-${String(r.patientNo).padStart(6, "0")}` : "",
+        patient: r.patientName,
+        sex: r.sex.toUpperCase(),
+        type: r.type,
+        dept: r.department,
+        doctor: r.doctorName,
+        status: r.status,
+      });
+    }
+    ws.getColumn("date").numFmt = "@";
+    ws.getColumn("pno").numFmt = "@";
+  } else if (report === "utilisation") {
+    const rows = await diagnosticsUtilisation(range);
+    ws.columns = [
+      { header: "Department", key: "group", width: 28 },
+      { header: "Times", key: "count", width: 12 },
+      { header: "Kept", key: "net", width: 16 },
+    ];
+    for (const r of rows) {
+      ws.addRow({ group: r.groupName, count: r.count, net: rupees(r.netPaisa) });
+    }
   } else {
     return NextResponse.json(
       { ok: false, userMessage: "Unknown report." },
@@ -194,7 +358,7 @@ export async function GET(
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${report}-${range.fromIso}_${range.toIso}.xlsx"`,
+      "Content-Disposition": `attachment; filename="${report}-${range.fiscalLabel ? range.fiscalLabel.replace("/", "-") + "-" : ""}${range.fromIso}_${range.toIso}.xlsx"`,
     },
   });
 }

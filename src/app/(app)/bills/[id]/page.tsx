@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { getBillDetail } from "@/lib/repos/bills";
@@ -52,6 +53,23 @@ export default async function BillDetailPage({
     }),
     timeStr: "",
     patientName: bill.patientName,
+    patient: bill.patientNo != null || bill.registeredName
+      ? {
+          patientNo: bill.patientNo,
+          name: bill.registeredName || bill.patientName,
+          ageSex: "",
+        }
+      : null,
+    serviceLines: bill.serviceLines.map((l) => ({
+      name: l.name,
+      doctorName: l.doctorName,
+      qty: l.qty,
+      ratePaisa: l.ratePaisa,
+      discountPaisa: l.discountPaisa,
+      amountPaisa: l.amountPaisa,
+      rateOverridden: l.rateOverridden,
+      followupNote: l.followupNote,
+    })),
     lines: bill.lines.map((l) => ({
       name: l.brandName,
       genericName: l.genericName,
@@ -101,10 +119,85 @@ export default async function BillDetailPage({
           />
         </div>
 
-        {bill.patientName && (
+        {(bill.registeredName || bill.patientName) && (
           <div className="text-[14px] text-sage-700">
-            Patient: <span className="font-medium">{bill.patientName}</span>
+            Patient:{" "}
+            {bill.patientId ? (
+              <Link
+                href={`/patients/${bill.patientId}`}
+                className="font-medium text-clinic-700 hover:underline"
+              >
+                {bill.registeredName || bill.patientName}
+              </Link>
+            ) : (
+              <span className="font-medium">{bill.patientName}</span>
+            )}
+            {bill.patientNo != null && (
+              <span className="ml-2 font-mono text-[12px] text-clinic-700">
+                P-{String(bill.patientNo).padStart(6, "0")}
+              </span>
+            )}
           </div>
+        )}
+
+        {bill.serviceLines.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-[15px] font-semibold text-sage-900">
+              Services
+            </h2>
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Service</TH>
+                  <TH>Doctor</TH>
+                  <TH numeric>Qty</TH>
+                  <TH numeric>Rate</TH>
+                  <TH numeric>Disc.</TH>
+                  <TH numeric>Amount</TH>
+                </TR>
+              </THead>
+              <tbody>
+                {bill.serviceLines.map((l) => (
+                  <TR key={l.id}>
+                    <TD className="font-medium text-sage-900">
+                      {l.name}
+                      {l.followupNote && (
+                        <div className="text-[12px] font-normal text-clinic-700">
+                          {l.followupNote}
+                        </div>
+                      )}
+                      {l.partnerName && (
+                        <div className="text-[12px] font-normal text-sage-500">
+                          Sent to {l.partnerName}
+                        </div>
+                      )}
+                      {l.refundedQty > 0 && (
+                        <div className="text-[12px] font-normal text-danger-600">
+                          {l.refundedQty === l.qty
+                            ? "Refunded"
+                            : `${l.refundedQty} of ${l.qty} refunded`}
+                        </div>
+                      )}
+                    </TD>
+                    <TD className="text-sage-500">{l.doctorName || "—"}</TD>
+                    <TD numeric>{l.qty}</TD>
+                    <TD numeric>
+                      {formatPaisa(l.ratePaisa, false)}
+                      {l.rateOverridden && (
+                        <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-magenta-600 align-middle" />
+                      )}
+                    </TD>
+                    <TD numeric>{formatPaisa(l.discountPaisa, false)}</TD>
+                    <TD numeric>{formatPaisa(l.amountPaisa, false)}</TD>
+                  </TR>
+                ))}
+              </tbody>
+            </Table>
+          </section>
+        )}
+
+        {bill.lines.length > 0 && bill.serviceLines.length > 0 && (
+          <h2 className="text-[15px] font-semibold text-sage-900">Medicines</h2>
         )}
 
         <Table>

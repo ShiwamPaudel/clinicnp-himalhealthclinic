@@ -381,3 +381,64 @@ export async function vatSummary(
     purchaseVatPaisa: Number(purch.rows[0]!.vat),
   };
 }
+
+/**
+ * The 30-day trend, split into medicines and services, both net of refunds.
+ *
+ * Each series is computed on its own rather than one being subtracted from the
+ * whole-bill total: the whole-bill total is gross of refunds, so subtracting a
+ * net service figure from it produced a medicine line that disagreed with the
+ * tile directly above it. Returns are attributed to the day they were given
+ * back, matching how the summary tiles have always counted them.
+ */
+export async function trendByKind(
+  fromIso: string,
+  toIso: string,
+): Promise<{ dateAd: string; medicinePaisa: number; servicePaisa: number }[]> {
+  const rows = await db().execute({
+    sql: `SELECT d AS date_ad,
+                 SUM(med) AS med,
+                 SUM(svc) AS svc
+          FROM (
+            SELECT b.date_ad AS d,
+                   IFNULL(SUM(bl.amount_paisa), 0) AS med,
+                   0 AS svc
+              FROM bills b
+              JOIN bill_lines bl ON bl.bill_id = b.id
+             WHERE ${NOT_CANCELLED} AND b.date_ad BETWEEN ? AND ?
+             GROUP BY b.date_ad
+
+            UNION ALL
+
+            SELECT b.date_ad, 0, IFNULL(SUM(sl.amount_paisa), 0)
+              FROM bills b
+              JOIN bill_service_lines sl ON sl.bill_id = b.id
+             WHERE ${NOT_CANCELLED} AND b.date_ad BETWEEN ? AND ?
+             GROUP BY b.date_ad
+
+            UNION ALL
+
+            SELECT sr.date_ad, -IFNULL(SUM(srl.amount_paisa), 0), 0
+              FROM sale_returns sr
+              JOIN sale_return_lines srl ON srl.sale_return_id = sr.id
+             WHERE sr.date_ad BETWEEN ? AND ?
+             GROUP BY sr.date_ad
+
+            UNION ALL
+
+            SELECT sr.date_ad, 0, -IFNULL(SUM(srsl.amount_paisa), 0)
+              FROM sale_returns sr
+              JOIN sale_return_service_lines srsl ON srsl.sale_return_id = sr.id
+             WHERE sr.date_ad BETWEEN ? AND ?
+             GROUP BY sr.date_ad
+          )
+          GROUP BY d
+          ORDER BY d ASC`,
+    args: [fromIso, toIso, fromIso, toIso, fromIso, toIso, fromIso, toIso],
+  });
+  return rows.rows.map((r) => ({
+    dateAd: r.date_ad as string,
+    medicinePaisa: Number(r.med),
+    servicePaisa: Number(r.svc),
+  }));
+}

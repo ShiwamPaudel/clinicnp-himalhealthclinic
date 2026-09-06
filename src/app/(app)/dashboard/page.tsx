@@ -5,12 +5,8 @@ import {
   getActiveFiscalYear,
   bootstrapCurrentFiscalYear,
 } from "@/lib/repos/fiscal";
-import { dashboardMetrics } from "@/lib/repos/reports";
-import {
-  clinicToday,
-  topServices,
-  serviceTrend,
-} from "@/lib/repos/clinic-reports";
+import { dashboardMetrics, trendByKind } from "@/lib/repos/reports";
+import { clinicToday, topServices } from "@/lib/repos/clinic-reports";
 import { stockCounts } from "@/lib/repos/batches";
 import { getModules } from "@/lib/modules";
 import {
@@ -54,7 +50,7 @@ export default async function DashboardPage() {
 
   // Only ask for what this install actually shows. A pharmacy-only shop never
   // queries the clinic tables at all.
-  const [metrics, counts, clinic, services, svcTrend] = await Promise.all([
+  const [metrics, counts, clinic, services, splitTrend] = await Promise.all([
     dashboardMetrics({
       todayIso,
       monthFromIso: monthRange.fromIso,
@@ -68,23 +64,21 @@ export default async function DashboardPage() {
       : Promise.resolve({ low: 0, nearExpiry: 0, expired: 0 }),
     modules.clinic ? clinicToday(todayIso) : Promise.resolve(null),
     modules.clinic ? topServices(monthRange) : Promise.resolve([]),
-    modules.clinic
-      ? serviceTrend(daysAheadIso(-29), todayIso)
-      : Promise.resolve([]),
+    trendByKind(daysAheadIso(-29), todayIso),
   ]);
 
   const bothModules = modules.pharmacy && modules.clinic;
-  const svcByDate = new Map(svcTrend.map((p) => [p.dateAd, p.netPaisa]));
 
-  const trendData = metrics.trend.map((p) => {
+  // Both series come out of one query, each net of refunds, so the chart adds
+  // up to the tiles above it.
+  const trendData = splitTrend.map((p) => {
     const bs = toBS(adFromIso(p.dateAd));
     return {
       label: `${bs.month}/${bs.day}`,
-      // The total series already includes services, so the sage series is the
-      // medicine half on its own — otherwise the two would overlap and the
-      // chart would say the clinic earned everything twice.
-      value: p.netPaisa - (svcByDate.get(p.dateAd) ?? 0),
-      services: svcByDate.get(p.dateAd) ?? 0,
+      value: bothModules
+        ? p.medicinePaisa
+        : p.medicinePaisa + p.servicePaisa,
+      services: p.servicePaisa,
     };
   });
 

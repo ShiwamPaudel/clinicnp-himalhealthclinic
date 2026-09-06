@@ -483,6 +483,60 @@ describe("Phase 4 — diagnostics utilisation", () => {
   });
 });
 
+describe("Phase 4 — the dashboard trend", () => {
+  it("nets refunds out of both series, so the chart agrees with the tiles", async () => {
+    const { trendByKind } = await import("@/lib/repos/reports");
+
+    // A fresh day of its own, so this test does not read the others' bills.
+    const DAY_AD = "2026-09-15";
+    const DAY_BS = "2083-05-30";
+
+    const sold = await bill({
+      services: [{ serviceId: "svc_usg", ratePaisa: 120_000 }],
+      medicines: [{ qty: 5, ratePaisa: 200 }],
+      dateAd: DAY_AD,
+      dateBs: DAY_BS,
+    });
+
+    const before = (await trendByKind(DAY_AD, DAY_AD))[0]!;
+    expect(before.medicinePaisa).toBe(1_000);
+    expect(before.servicePaisa).toBe(120_000);
+
+    const svcLine = (
+      await q("SELECT id FROM bill_service_lines WHERE bill_id = ?", [sold.id])
+    )[0]!;
+    const medLine = (
+      await q("SELECT id FROM bill_lines WHERE bill_id = ?", [sold.id])
+    )[0]!;
+
+    const { createSaleReturn } = await import("@/lib/repos/sale-returns");
+    await createSaleReturn({
+      billId: sold.id,
+      dateAd: DAY_AD,
+      dateBs: DAY_BS,
+      lines: [
+        {
+          billLineId: medLine.id as string,
+          itemId,
+          returnBaseQty: 2,
+          amountPaisa: 400,
+        },
+      ],
+      serviceLines: [
+        { billServiceLineId: svcLine.id as string, qty: 1, amountPaisa: 120_000 },
+      ],
+      userId: "u1",
+    });
+
+    const after = (await trendByKind(DAY_AD, DAY_AD))[0]!;
+    // by hand: medicines 1000 − 400 = 600; services 120000 − 120000 = 0
+    expect(after.medicinePaisa).toBe(600);
+    expect(after.servicePaisa).toBe(0);
+  });
+});
+
+// Kept last on purpose: it closes the fiscal year, so anything billed after
+// it would land in a different year from everything above.
 describe("Phase 4 — refunding a closed year", () => {
   it("records the refund in the open year, naming the original invoice", async () => {
     // Sell something, then close the year it was sold in.
