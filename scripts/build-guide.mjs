@@ -24,7 +24,9 @@ function dataUri(absPath) {
   return `data:image/png;base64,${b64}`;
 }
 const shot = (slug) => dataUri(join(SCREENS, `${slug}.png`));
-const logo = dataUri(join(PUBLIC, "brand", "logo.png"));
+// The wordmark is typographic, not an image (D-037): the name is derived from
+// which modules are on, and a fixed picture cannot say two different things.
+const WORDMARK = "ClinicNP";
 
 // ---- The walkthrough content -------------------------------------------------
 // Plain language only. Each section pairs a real screenshot with what the user
@@ -32,7 +34,7 @@ const logo = dataUri(join(PUBLIC, "brand", "logo.png"));
 const CHAPTERS = [
   {
     id: "start",
-    title: "1 · Getting started",
+    title: "Getting started",
     sections: [
       {
         img: "01-login",
@@ -50,7 +52,7 @@ const CHAPTERS = [
   },
   {
     id: "dashboard",
-    title: "2 · Dashboard",
+    title: "Dashboard",
     sections: [
       {
         img: "02-dashboard",
@@ -69,7 +71,7 @@ const CHAPTERS = [
   },
   {
     id: "billing",
-    title: "3 · New bill (the counter)",
+    title: "New bill (the counter)",
     sections: [
       {
         img: "03-billing",
@@ -105,7 +107,7 @@ const CHAPTERS = [
   },
   {
     id: "stock",
-    title: "4 · Stock",
+    title: "Stock",
     sections: [
       {
         img: "04-stock",
@@ -152,7 +154,7 @@ const CHAPTERS = [
   },
   {
     id: "items",
-    title: "5 · Items",
+    title: "Items",
     sections: [
       {
         img: "08-items",
@@ -181,7 +183,7 @@ const CHAPTERS = [
   },
   {
     id: "purchases",
-    title: "6 · Purchases",
+    title: "Purchases",
     sections: [
       {
         img: "09-purchases",
@@ -218,7 +220,7 @@ const CHAPTERS = [
   },
   {
     id: "suppliers",
-    title: "7 · Suppliers",
+    title: "Suppliers",
     sections: [
       {
         img: "12-suppliers",
@@ -234,7 +236,7 @@ const CHAPTERS = [
   },
   {
     id: "bills",
-    title: "8 · Bills",
+    title: "Bills",
     sections: [
       {
         img: "13-bills",
@@ -252,8 +254,54 @@ const CHAPTERS = [
   },
   {
     id: "reports",
-    title: "9 · Reports",
+    title: "Reports",
     sections: [
+      {
+        img: "43-reports-service-revenue",
+        title: "Service revenue",
+        blurb:
+          "What each service earned, after refunds, and what was paid out to a laboratory for it.",
+        points: [
+          "Every figure is what was actually charged at the time. Changing a price today does not move any of it.",
+        ],
+      },
+      {
+        img: "44-reports-doctors",
+        title: "Doctor payouts",
+        blurb: "What each doctor has earned over the period.",
+        points: [
+          "Worked out from the terms in force when each bill was made, so it does not change if the terms change afterwards.",
+        ],
+      },
+      {
+        img: "45-reports-lab-partners",
+        title: "Laboratory statements",
+        blurb:
+          "Tests sent, payments made, and the balance with each outside laboratory.",
+        points: [
+          "Open one to see its statement, record a payment, or export the sheet to send to them.",
+        ],
+      },
+      {
+        img: "46-reports-visits",
+        title: "Patient visit register",
+        blurb: "Every visit in a date range, with the doctor and department.",
+        points: [],
+      },
+      {
+        img: "47-reports-new-patients",
+        title: "New and returning patients",
+        blurb: "How many of the people seen had been here before.",
+        points: [
+          "A first-ever visit counts as new — not merely somebody's first visit inside the dates you chose.",
+        ],
+      },
+      {
+        img: "48-reports-utilisation",
+        title: "Diagnostics utilisation",
+        blurb: "Which departments are busy, and what each brought in.",
+        points: [],
+      },
       {
         img: "14-reports",
         title: "The report shelf",
@@ -323,8 +371,124 @@ const CHAPTERS = [
     ],
   },
   {
+    id: "patients",
+    title: "Patients",
+    clinicOnly: true,
+    sections: [
+      {
+        img: "30-patients",
+        title: "Everyone who has been here",
+        blurb:
+          "Every patient gets a number the first time they come, and keeps it for life. It never changes at year end and is never given to anybody else.",
+        points: [
+          "Search by name, phone or number. Part of any of them is enough.",
+          "The number in navy is theirs — read it back to them and they will know you have the right record.",
+        ],
+      },
+      {
+        img: "31-patients-new",
+        title: "Registering somebody",
+        blurb:
+          "Name, sex, age and phone are all that is needed. It is meant to be done while the person is still standing at the counter.",
+        points: [
+          "<b>Age can be entered as they say it</b> — '3 months', '7 years'. ClinicNP remembers the day you were told, so a baby registered last year shows as a year older today rather than staying three months old forever.",
+          "If they know their date of birth, enter that instead and the age is always exact.",
+          "The <b>allergy note</b> shows in red at the top of their record every time it is opened.",
+          "If somebody with the same name or phone already exists, you are shown them before saving — but you can still save, because households share phones and names repeat.",
+        ],
+      },
+      {
+        img: "35-patients-duplicates",
+        title: "Two records for one person",
+        blurb:
+          "If two counters registered the same person while the internet was down, both records are real and both are kept. This screen lists the ones that look alike.",
+        points: [
+          "It tells you what matches — the name, the phone, or both.",
+          "Nothing is joined automatically. Open a pair, check they really are one person, and join them only then.",
+          "Joining moves every visit, bill and file onto the record you keep. The other number is retired and never reused.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "visits",
+    title: "Visits and files",
+    clinicOnly: true,
+    sections: [
+      {
+        img: "32-visits-today",
+        title: "Who is here today",
+        blurb:
+          "The front desk's screen. Everyone seen today, and who is still waiting.",
+        points: [
+          "Starting a visit prints the <b>OPD slip</b> the patient carries to the doctor's room.",
+          "Billing a service for somebody opens their visit automatically if they do not have one yet — you never have to remember to.",
+        ],
+      },
+      {
+        img: "33-visits",
+        title: "The visit record",
+        blurb:
+          "What they came in with, what was found, what was advised, and the optional vitals row.",
+        points: [
+          "Every box is optional. Nothing is required and nothing is interpreted — ClinicNP records what you write and does not judge it.",
+          "A visit is never deleted. Cancelling one keeps it on the record with the reason, and leaves it out of the counts.",
+        ],
+      },
+      {
+        img: "34-files-pending",
+        title: "Reports that have not come back",
+        blurb:
+          "Anything charged for that produces a report — a test, a scan — and whose report has not been attached yet.",
+        points: [
+          "It empties itself as reports come in, so what is left is what to chase.",
+          "Photograph a paper report with the tablet, or attach the PDF the laboratory emailed. Both work the same way.",
+          "Files are only ever visible to somebody signed in. A link on its own opens nothing.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "services",
+    title: "Services, doctors and laboratories",
+    clinicOnly: true,
+    sections: [
+      {
+        img: "36-settings-services",
+        title: "What the clinic charges for",
+        blurb:
+          "Everything that is not a medicine — consultations, tests, scans, procedures — with its price and what it needs.",
+        points: [
+          "A service can require a <b>doctor</b> on the bill, be <b>sent to an outside laboratory</b>, or produce a <b>report</b> that is expected back.",
+          "A <b>follow-up window</b> on a consultation means somebody returning inside that many days is charged the follow-up rate, or nothing at all. The counter says so on the line, and the front desk can still charge in full if that is the right call.",
+          "Changing a price never changes a bill already made.",
+        ],
+      },
+      {
+        img: "37-settings-doctors",
+        title: "Doctors",
+        blurb:
+          "The doctors who see patients here, and what each of them takes.",
+        points: [
+          "A doctor here is a name on a slip and a share of the takings. Giving someone a way to sign in is separate, under Users.",
+          "The share is worked out when the bill is made and frozen there — changing it later never moves money already earned.",
+        ],
+      },
+      {
+        img: "38-settings-lab-partners",
+        title: "Outside laboratories",
+        blurb:
+          "Laboratories that samples are sent to, and what is owed to each of them.",
+        points: [
+          "What is owed builds up from the cost of each test billed, and comes down as payments are recorded.",
+          "A test sent out prints a <b>dispatch slip</b> that travels with the sample.",
+        ],
+      },
+    ],
+  },
+  {
     id: "settings",
-    title: "10 · Settings",
+    title: "Settings",
     sections: [
       {
         img: "23-settings-company",
@@ -382,11 +546,16 @@ const LINE = "#e3dbc6";
 let toc = "";
 let body = "";
 let n = 0;
+// Chapters are numbered by their position, not by a number typed into each
+// title. Inserting a chapter in the middle used to leave two chapter sixes.
+let chapterNo = 0;
 for (const ch of CHAPTERS) {
-  body += `<section class="chapter"><h2 id="${ch.id}">${ch.title}</h2>`;
+  chapterNo++;
+  const heading = `${chapterNo} · ${ch.title}`;
+  body += `<section class="chapter"><h2 id="${ch.id}">${heading}</h2>`;
   for (const s of ch.sections) {
     n++;
-    toc += `<li><span class="toc-n">${String(n).padStart(2, "0")}</span> ${s.title}<span class="toc-ch">${ch.title.split("·")[1].trim()}</span></li>`;
+    toc += `<li><span class="toc-n">${String(n).padStart(2, "0")}</span> ${s.title}<span class="toc-ch">${ch.title}</span></li>`;
     body += `
       <article class="shot">
         <h3>${s.title}</h3>
@@ -494,9 +663,9 @@ const html = `<!doctype html>
 <div class="wrap">
 
   <div class="cover">
-    <img src="${logo}" alt="ClinicNP"/>
+    <div class="wordmark">${WORDMARK}</div>
     <h1>User Guide</h1>
-    <div class="sub">Pharmacy billing &amp; stock, made simple</div>
+    <div class="sub">Clinic and pharmacy, on one counter</div>
     <div class="rule"></div>
     <div class="meta">A walk through every screen · For shop owners and counter staff</div>
   </div>

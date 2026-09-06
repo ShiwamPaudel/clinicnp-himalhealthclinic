@@ -27,6 +27,7 @@ const SHOTS = [
   { slug: "06-stock-near-expiry", path: "/stock/near-expiry" },
   { slug: "07-stock-expired", path: "/stock/expired" },
   { slug: "08-items", path: "/items" },
+  { slug: "08b-items-new", path: "/items/new", wait: 600 },
   { slug: "09-purchases", path: "/purchases" },
   { slug: "10-purchases-new", path: "/purchases/new", wait: 500 },
   { slug: "11-purchases-returns", path: "/purchases/returns" },
@@ -45,6 +46,27 @@ const SHOTS = [
   { slug: "24-settings-users", path: "/settings/users" },
   { slug: "26-settings-backup", path: "/settings/backup" },
   { slug: "27-settings-audit", path: "/settings/audit" },
+
+  // --- the clinic (v2) ---
+  { slug: "30-patients", path: "/patients", wait: 500 },
+  { slug: "31-patients-new", path: "/patients/new", wait: 500 },
+  { slug: "32-visits-today", path: "/visits/today", wait: 500 },
+  { slug: "33-visits", path: "/visits", wait: 500 },
+  { slug: "34-files-pending", path: "/files/pending", wait: 500 },
+  { slug: "35-patients-duplicates", path: "/patients/duplicates", wait: 500 },
+  { slug: "36-settings-services", path: "/settings/services", wait: 600 },
+  { slug: "37-settings-doctors", path: "/settings/doctors", wait: 500 },
+  { slug: "38-settings-lab-partners", path: "/settings/lab-partners", wait: 500 },
+  { slug: "39-settings-modules", path: "/settings/modules", wait: 400 },
+  { slug: "40-settings-fiscal-years", path: "/settings/fiscal-years", wait: 400 },
+  { slug: "41-stock-out", path: "/stock/out", wait: 500 },
+  { slug: "42-stock-out-new", path: "/stock/out/new", wait: 700 },
+  { slug: "43-reports-service-revenue", path: "/reports/service-revenue", wait: 500 },
+  { slug: "44-reports-doctors", path: "/reports/doctors", wait: 500 },
+  { slug: "45-reports-lab-partners", path: "/reports/lab-partners", wait: 500 },
+  { slug: "46-reports-visits", path: "/reports/visits", wait: 500 },
+  { slug: "47-reports-new-patients", path: "/reports/new-patients", wait: 500 },
+  { slug: "48-reports-utilisation", path: "/reports/utilisation", wait: 500 },
 ];
 
 const browser = await chromium.launch();
@@ -82,6 +104,39 @@ for (const shot of SHOTS) {
     console.error("FAILED", shot.slug, err.message);
   }
 }
+
+// --- shots that only exist once something has been done ---
+//
+// The visual unit picker and the patient bar are not routes: they appear when a
+// line is on the bill and when somebody is attached to it. So the counter is
+// driven the way a person would drive it, and then photographed.
+async function captureInteraction(slug, steps) {
+  try {
+    await page.goto(`${BASE}/billing`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(2500); // let the catalog reach the local cache
+    await steps();
+    await page.screenshot({ path: join(OUT, `${slug}.png`), fullPage: false });
+    console.log("captured", slug);
+  } catch (err) {
+    console.error("FAILED", slug, err.message);
+  }
+}
+
+await captureInteraction("03b-visual-picker", async () => {
+  const search = page.locator('input[aria-label*="Search"]');
+  await search.fill("Sample Paracetamol");
+  await page.waitForTimeout(700);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(900);
+});
+
+await captureInteraction("03c-patient-bar", async () => {
+  const search = page.locator('input[aria-label*="Search"]');
+  await search.fill("opd");
+  await page.waitForTimeout(700);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(900);
+});
 
 await browser.close();
 console.log("done →", OUT);
