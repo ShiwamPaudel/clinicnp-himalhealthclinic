@@ -55,24 +55,26 @@ describe("bill-calc", () => {
   });
 
   it("bill totals without VAT", () => {
-    const t = billTotals([line()], 0, { vatRegistered: false, roundingOn: false });
+    const t = billTotals([line()], 0, { vatRegistered: false, roundingOn: false }, []);
     expect(t.subtotalPaisa).toBe(5400);
     expect(t.vatPaisa).toBe(0);
     expect(t.totalPaisa).toBe(5400);
   });
 
   it("bill totals with 13% VAT and bill discount", () => {
-    const t = billTotals([line()], 400, { vatRegistered: true, roundingOn: false });
+    const t = billTotals([line()], 400, { vatRegistered: true, roundingOn: false }, []);
     // (5400 - 400) = 5000, VAT 650, total 5650
     expect(t.vatPaisa).toBe(650);
     expect(t.totalPaisa).toBe(5650);
   });
 
   it("rounding to nearest rupee", () => {
-    const t = billTotals([line({ ratePaisa: 1799 })], 0, {
-      vatRegistered: false,
-      roundingOn: true,
-    });
+    const t = billTotals(
+      [line({ ratePaisa: 1799 })],
+      0,
+      { vatRegistered: false, roundingOn: true },
+      [],
+    );
     // 3 * 1799 = 5397 -> rounds to 5400
     expect(t.totalPaisa).toBe(5400);
   });

@@ -145,7 +145,13 @@ export function billTotals(
   lines: BillLine[],
   billDiscountPaisa: number,
   config: BillConfig,
-  serviceLines: ServiceLine[] = [],
+  // Deliberately NOT defaulted. It was `= []`, and the counter's payment pane
+  // never passed it: a bill with a Rs 600 test on it showed a total of zero,
+  // and Save stayed disabled because there were no medicine lines either. A
+  // default that silently produces a wrong number is worse than a compile
+  // error, so every caller now has to say what it means — pass [] for a
+  // medicine-only bill, which is exactly what the default used to do.
+  serviceLines: ServiceLine[],
 ): BillTotals {
   const medicineSubtotal = lines.reduce((s, l) => s + lineAmountPaisa(l), 0);
   const serviceSubtotal = serviceLines.reduce(

@@ -63,16 +63,20 @@ const noVat = { vatRegistered: false, roundingOn: false };
 const withVat = { vatRegistered: true, roundingOn: false };
 
 describe("billTotals with no service lines is the v1 calculation", () => {
-  it("gives the same answer whether the argument is omitted or an empty array", () => {
+  it("an empty service list leaves the v1 medicine arithmetic untouched", () => {
+    // serviceLines used to default to []. It no longer does, because the
+    // counter's payment pane never passed it and quietly showed a total of
+    // zero on a bill that had a Rs 600 test on it. Omitting it is now a
+    // compile error; this checks that saying [] means what the default meant.
     const lines = [med(10, 200), med(3, 1_500)];
-    const a = billTotals(lines, 500, withVat);
-    const b = billTotals(lines, 500, withVat, []);
-    expect(b).toEqual(a);
+    const t = billTotals(lines, 500, withVat, []);
+    expect(t.subtotalPaisa).toBe(2_000 + 4_500);
+    expect(t.totalPaisa).toBeGreaterThan(0);
   });
 
   it("still puts the whole discount against the VAT base when everything is VAT-able", () => {
     // subtotal 10000, discount 1000 -> base 9000, VAT 13% = 1170
-    const t = billTotals([med(10, 1_000)], 1_000, withVat);
+    const t = billTotals([med(10, 1_000)], 1_000, withVat, []);
     expect(t.subtotalPaisa).toBe(10_000);
     expect(t.vatPaisa).toBe(1_170);
     expect(t.totalPaisa).toBe(10_170);

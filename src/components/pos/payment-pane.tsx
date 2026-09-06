@@ -24,6 +24,7 @@ export const PaymentPane = forwardRef<
 >(({ config, saving, lang, onSave }, ref) => {
   const {
     lines,
+    serviceLines,
     patientName,
     paymentMethod,
     tenderedPaisa,
@@ -39,10 +40,19 @@ export const PaymentPane = forwardRef<
     focusTendered: () => tenderRef.current?.focus(),
   }));
 
-  const totals = billTotals(lines, billDiscountPaisa, {
-    vatRegistered: config.vatRegistered,
-    roundingOn: config.roundingOn,
-  });
+  // Services count towards the total exactly as medicines do. Leaving them out
+  // is not a rounding difference: a consultation-only bill totalled zero, the
+  // Save button stayed disabled, and the counter could not bill a patient who
+  // had bought nothing but a service.
+  const totals = billTotals(
+    lines,
+    billDiscountPaisa,
+    {
+      vatRegistered: config.vatRegistered,
+      roundingOn: config.roundingOn,
+    },
+    serviceLines,
+  );
   const changeDue = change(tenderedPaisa, totals.totalPaisa);
   const hasControlled = lines.some((l) => l.item.controlledFlag);
   const needsPatient = hasControlled && patientName.trim() === "";
@@ -131,7 +141,7 @@ export const PaymentPane = forwardRef<
 
       <button
         onClick={onSave}
-        disabled={saving || lines.length === 0 || needsPatient}
+        disabled={saving || (lines.length === 0 && serviceLines.length === 0) || needsPatient}
         className="mt-1 h-12 rounded-[8px] bg-magenta-600 text-[16px] font-semibold text-cream-50 hover:bg-magenta-700 disabled:opacity-50"
       >
         {saving ? (
