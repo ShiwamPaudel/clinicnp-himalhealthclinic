@@ -47,6 +47,13 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   // Don't run the service worker in dev — avoids caching churn while developing.
   disable: process.env.NODE_ENV === "development",
+  // The offline notice has to be in the precache as a page, not just as the
+  // script that renders it: it is what a navigation falls back to when there
+  // is no connection and nothing cached, and at that moment there is nothing
+  // to fetch it with. The revision changes per build so it never goes stale.
+  additionalPrecacheEntries: [
+    { url: "/offline", revision: process.env.VERCEL_GIT_COMMIT_SHA ?? "dev" },
+  ],
 });
 
 export default withSerwist(nextConfig);

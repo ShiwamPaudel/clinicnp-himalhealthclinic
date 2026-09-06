@@ -329,16 +329,18 @@ export function PatientBar({
       >
         {registering ? (
           <div className="flex flex-col gap-4">
-            <Field label="Name">
+            <Field label="Name" htmlFor="counter-patient-name">
               <Input
+                id="counter-patient-name"
                 value={form.name}
                 autoFocus
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
             </Field>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Sex">
+              <Field label="Sex" htmlFor="counter-patient-sex">
                 <Select
+                  id="counter-patient-sex"
                   value={form.sex}
                   onChange={(e) => setForm((f) => ({ ...f, sex: e.target.value }))}
                 >
@@ -347,8 +349,9 @@ export function PatientBar({
                   <option value="o">Other</option>
                 </Select>
               </Field>
-              <Field label="Age">
+              <Field label="Age" htmlFor="counter-patient-age">
                 <Input
+                  id="counter-patient-age"
                   numeric
                   value={form.ageValue}
                   onChange={(e) =>
@@ -356,8 +359,9 @@ export function PatientBar({
                   }
                 />
               </Field>
-              <Field label="Unit">
+              <Field label="Unit" htmlFor="counter-patient-age-unit">
                 <Select
+                  id="counter-patient-age-unit"
                   value={form.ageUnit}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, ageUnit: e.target.value as AgeUnit }))
@@ -371,10 +375,13 @@ export function PatientBar({
                 </Select>
               </Field>
             </div>
-            <Field label="Phone">
+            <Field label="Phone" htmlFor="counter-patient-phone">
               <Input
+                id="counter-patient-phone"
                 value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
               />
             </Field>
             <div className="flex justify-end gap-2">

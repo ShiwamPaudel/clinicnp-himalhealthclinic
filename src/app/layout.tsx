@@ -13,6 +13,7 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { UpdateRecovery } from "@/components/app/update-recovery";
 
 const display = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -82,6 +83,7 @@ export default function RootLayout({
       className={`${display.variable} ${sans.variable} ${mono.variable} ${deva.variable}`}
     >
       <body>
+        <UpdateRecovery />
         <Providers>{children}</Providers>
       </body>
     </html>
