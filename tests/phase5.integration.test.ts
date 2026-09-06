@@ -72,7 +72,9 @@ describe("Phase 5 — backup / restore", () => {
   it("exports all tables", async () => {
     const { exportAll } = await import("@/lib/repos/backup");
     const archive = await exportAll();
-    expect(archive.version).toBe(1);
+    // Version 2 since the clinic tables and the file manifest were added;
+    // a version 1 archive still restores.
+    expect(archive.version).toBe(2);
     expect(archive.tables.items!.length).toBe(1);
     expect(archive.tables.batches!.length).toBe(1);
     expect(archive.tables.users!.length).toBe(1);
