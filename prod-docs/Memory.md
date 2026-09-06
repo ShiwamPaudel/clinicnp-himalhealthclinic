@@ -23,7 +23,7 @@
 
 **Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic Pvt. Ltd.** (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
-**Phase:** **Phase 2 complete.** Phases 1 and 2 both done. Next is Phase 3 (services and clinic billing at the counter).
+**Phase:** **Phase 3 complete.** Phases 1, 2 and 3 done. Next is Phase 4 (clinic back office, ledgers, reports, dashboard).
 **Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic` — git initialised 2083-05-12. Imported from `D:\IBN\Products Codebase\AushadhiPOS` (the v1 tree, which had no git history). The old tree is untouched and is the fallback.
 **Inherited v1 state:** all 5 v1 phases complete; `pnpm build` clean; **68 tests green** (one known flaky test-isolation failure in the phase-4 file — different test each run, always green on re-run, caused by the shared `db()` singleton across test files). Not yet deployed to Vercel.
 **Deployed URL:** — (none yet). **New hosted Turso** (`healthclinic-…`) provisioned 2083-05-13, migrated to `0007` and seeded. The old `fa…` database is abandoned — do not point at it again.
@@ -37,7 +37,7 @@
 - Hosted DB has **two** fiscal years both `active = 1`; `getActiveFiscalYear()` (`ORDER BY id DESC`) therefore returns **2082/83**, the older year, which holds 4 of the 5 bills. `ensureFiscalYear` never deactivates the prior year. Must be reconciled when `status` lands.
 - All business tables use **TEXT ULID** primary keys; only `fiscal_years` is INTEGER. Architecture's `closed_by INTEGER` / `patient_id INTEGER` are type errors.
 - v1 `/billing` bundle measured **140 kB** First Load (Rules §5 says "~130 kB"); after milestone 1 it is **135 kB**.
-**Schema applied (v2):** `0006_modules_fy.sql` · `0007_stock_out.sql` · `0008_clinic_core.sql` — all three on the hosted Turso. Next: `0009_services.sql` (Phase 3). Append-only; never edit an applied migration.
+**Schema applied (v2):** `0006_modules_fy.sql` · `0007_stock_out.sql` · `0008_clinic_core.sql` · `0009_services.sql` · `0010_consultation_groups.sql` — all on the hosted Turso. Append-only; never edit an applied migration.
 
 **Environment quick-reference:**
 - pnpm 11.13 (installed via npm; corepack blocked by Program Files permissions) · vitest · Vercel
@@ -50,7 +50,7 @@
 
 **In progress:** —
 
-**Next up:** Phase 3 — `0009_services.sql` (service_groups, services, doctors, lab_partners, bill_service_lines, sale_return_service_lines, lab_partner_payments), `lib/clinic-calc.ts` (follow-up rule + doctor share), the unified counter search, and the widened `/api/bills` ingest. **Still outstanding:** real ClinicNP icon art, the D-040 ruling, and `BLOB_READ_WRITE_TOKEN` before files go to production storage.
+**Next up:** Phase 4 — the bill register widened for kind/patient/doctor/year, refunds extended to service lines, the lab partner ledger, doctor payouts, the module-adaptive dashboard, and every report made fiscal-year aware. **Still outstanding:** real ClinicNP icon art (owner will supply at the end), and a **private** Vercel Blob store — see D-055.
 
 **Known issues / risks (inherited):**
 - `nepali-date-converter.toJsDate()` returns non-midnight times → `lib/bs.ts toAD()` normalises to local midnight; keep all date maths on `toAD()` output (D-006).
@@ -128,6 +128,12 @@
 | D-050 | The visit vocabulary lives in **`lib/visit-types.ts`**, not in the repo | `lib/repos/*` is `server-only`, and the browser needs the same labels. Importing a value from a server-only module broke the build; types and labels now sit outside the repo layer |
 | D-051 | `lib/age.ts` shifts a notional birth date back with the **day clamped to the month end** | Without the clamp, 29 Feb minus one year became 1 March, which delayed every later birthday and cost a whole year at the leap-day boundary. Caught by a test, fixed in the module |
 | D-052 | "Files pending" currently lists **visits with no file attached** | The PRD defines it as billed services flagged "keeps a file". Services arrive in Phase 3; until then a visit with nothing attached is the honest stand-in, and the repo query narrows in Phase 3 |
+| D-053 | The follow-up window runs from the last **paid** consultation, not from the last follow-up | `lastConsultationAd` ignores lines where `followup_applied = 1`. Otherwise one paid visit would chain free follow-ups indefinitely, each one restarting the clock |
+| D-054 | Which service groups count as **consultations** is a flag on the group (`0010`), not the group's name | The doctor-share bases `pct_consult`/`fixed_consult` pay on consultations only, and the follow-up window is a consultation idea. Every group is renameable and a clinic may add "Emergency Consultation", so matching on the name would be a rule that quietly breaks the first time somebody edits a label |
+| D-055 | A **public** Vercel Blob store is refused outright; files fall back to local disk and the checklist says why | The supplied token was valid but its store was created with public access, which hands out permanent world-readable URLs — exactly what a patient's lab report must never have (Rules §1.13). A store is created public or private once and for all, so this needs a new store, not a setting |
+| D-056 | The server **refuses** a line claiming a follow-up discount the rule does not allow, but **accepts** a person deliberately charging the full rate inside the window | The first is a price nobody chose — stale catalog or worse. The second is a call somebody made at the counter, marked on the line with the magenta dot and audit-logged. Architecture §5.3 says the server wins; it does not say the server overrules a human being |
+| D-057 | `bill_service_lines.partner_cost_paisa` stores the cost **per test**, not per line | The ledger multiplies by quantity. Storing the line total as well would double-count the moment anyone billed two of anything — which is exactly what the first draft did |
+| D-058 | The outbox payload is built by an **exported, tested function** rather than inline | It is listed field by field so the queue's bookkeeping never reaches the server, and that shape silently dropped service lines and the patient when bills grew. `tests/outbox.test.ts` fails when a bill gains a field the payload does not carry |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -184,3 +190,12 @@ Broke/fixed: fixed a leap-day bug in the age roll-forward before it shipped (D-0
 Verified: **144 tests green over three consecutive runs**; build clean. Browser-verified against the live DB: registration in 856 ms, duplicate warning inline, visit started, PDF + photo uploaded, **file URL 401 logged out / 200 with `nosniff` signed in, zero storage keys in the page source**, and with the clinic module off all eight clinic routes plus the file route return 404 (200 again when switched back on). Verification data was then removed from the database.
 Not built (requested, out of scope): none. Lab results, reference ranges and sample workflow remain out of scope (Rules §2.2) and nothing in this phase approaches them — ClinicNP stores the file it receives and does not read it.
 Next: Phase 3 — services, doctors, lab partners, and clinic billing on the shared counter.
+
+### C-004  ·  2083-05-21  ·  Phase 3 — PHASE COMPLETE
+Built: `0009_services.sql` and `0010_consultation_groups.sql`. `lib/clinic-calc.ts` (follow-up rule, doctor share, +23 tests). `lib/bill-calc.ts` widened to take service lines and return one set of totals, with per-service VAT and a proportionally shared bill discount — the v1 tests are untouched and still pass, which is the proof the medicine path did not move. Repos for services, doctors and lab partners. Settings → Services / Doctors / Lab partners, all module-gated. Counter: unified search with F3 scoping, the navy patient bar on `P` with inline registration, service line rows with doctor and laboratory pickers, the follow-up notice and its magenta override. `/api/bills` ingest widened; `/api/followup`, `/api/patients`, `/api/patients/search` added. Invoice service block on thermal and A5, plus the lab dispatch slip. Clinic vocabulary in `lib/strings.ts` with Nepali variants. Sample clinic catalog in the seed, every rate flagged as a sample.
+Decisions/assumptions: D-053 … D-058.
+Schema changes: `0009_services.sql`, `0010_consultation_groups.sql`, both dry-run on a scratch file DB before the hosted Turso.
+Broke/fixed: **the outbox dropped service lines and the patient in transit** — a mixed bill left the counter complete and arrived as a medicine-only sale, silently. Found only because the browser check read the saved row back instead of trusting the screen. Fixed and guarded by `tests/outbox.test.ts`. Also removed two NUL bytes a heredoc had left inside `patients.ts`, where a "match nothing" sentinel was meant; it is `NULL` now. Also caught and fixed a nonsense per-line VAT expression and a partner cost that would have double-counted against quantity.
+Verified: **211 tests green.** Counter bundle 144 kB against the v1 ceiling of 140 kB — +2.9%, well inside the 15% allowance. Browser-verified against the live database: one search box returning both kinds with tags, F3 narrowing, a service bill refused without a patient, a mixed bill saving as `kind = mixed` with the visit opened and doctor shares of Rs 200 and Rs 240 from snapshotted terms, the follow-up notice in plain words with an override offered, the dispatch slip naming the laboratory, and — offline — an instant search, a provisional slip, nothing in the database, then exactly one bill and one stock movement on reconnect. With the clinic module off every clinic route 404s and a queued service bill is refused 409. Verification data was then removed.
+Not built (requested, out of scope): none. Lab **results** remain out of scope (Rules §2.2) — ClinicNP records that a test was sent and what it cost, and stores the file that comes back without reading it.
+Next: Phase 4 — clinic back office, ledgers, reports, dashboard.
