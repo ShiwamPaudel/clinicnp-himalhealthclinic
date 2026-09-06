@@ -96,6 +96,16 @@ export interface DaySummary {
   netSalesPaisa: number;
   byMethod: { cash: number; qr: number; credit: number };
   expectedCashPaisa: number;
+  /**
+   * Where the day's takings came from, net of refunds. Present on every day
+   * close; the clinic three are simply zero when there is no clinic.
+   */
+  split: {
+    medicinesPaisa: number;
+    consultationPaisa: number;
+    diagnosticsPaisa: number;
+    laboratoryPaisa: number;
+  };
 }
 
 export async function daySummary(dayIso: string): Promise<DaySummary> {
@@ -124,7 +134,67 @@ export async function daySummary(dayIso: string): Promise<DaySummary> {
   const gross = Number(agg.rows[0]!.gross);
   const ret = Number(returns.rows[0]!.s);
 
+  // The four-way split. Medicines net their own returns; each clinic group
+  // nets its own refunds, so the four add up to the net sales figure above.
+  const splitRes = await db().execute({
+    sql: `SELECT
+            (SELECT IFNULL(SUM(bl.amount_paisa), 0)
+               FROM bill_lines bl JOIN bills b ON b.id = bl.bill_id
+              WHERE ${NOT_CANCELLED} AND b.date_ad = ?)
+            - (SELECT IFNULL(SUM(srl.amount_paisa), 0)
+                 FROM sale_return_lines srl
+                 JOIN sale_returns sr ON sr.id = srl.sale_return_id
+                WHERE sr.date_ad = ?) AS medicines,
+            (SELECT IFNULL(SUM(sl.amount_paisa), 0)
+               FROM bill_service_lines sl
+               JOIN bills b ON b.id = sl.bill_id
+               LEFT JOIN services sv ON sv.id = sl.service_id
+               LEFT JOIN service_groups g ON g.id = sv.group_id
+              WHERE ${NOT_CANCELLED} AND b.date_ad = ? AND g.is_consultation = 1) AS consult,
+            (SELECT IFNULL(SUM(sl.amount_paisa), 0)
+               FROM bill_service_lines sl
+               JOIN bills b ON b.id = sl.bill_id
+              WHERE ${NOT_CANCELLED} AND b.date_ad = ? AND sl.lab_partner_id IS NOT NULL) AS lab,
+            (SELECT IFNULL(SUM(sl.amount_paisa), 0)
+               FROM bill_service_lines sl
+               JOIN bills b ON b.id = sl.bill_id
+               LEFT JOIN services sv ON sv.id = sl.service_id
+               LEFT JOIN service_groups g ON g.id = sv.group_id
+              WHERE ${NOT_CANCELLED} AND b.date_ad = ?
+                AND COALESCE(g.is_consultation, 0) = 0
+                AND sl.lab_partner_id IS NULL) AS diag,
+            (SELECT IFNULL(SUM(srsl.amount_paisa), 0)
+               FROM sale_return_service_lines srsl
+               JOIN sale_returns sr ON sr.id = srsl.sale_return_id
+               JOIN bill_service_lines sl ON sl.id = srsl.bill_service_line_id
+               LEFT JOIN services sv ON sv.id = sl.service_id
+               LEFT JOIN service_groups g ON g.id = sv.group_id
+              WHERE sr.date_ad = ? AND g.is_consultation = 1) AS consult_back,
+            (SELECT IFNULL(SUM(srsl.amount_paisa), 0)
+               FROM sale_return_service_lines srsl
+               JOIN sale_returns sr ON sr.id = srsl.sale_return_id
+               JOIN bill_service_lines sl ON sl.id = srsl.bill_service_line_id
+              WHERE sr.date_ad = ? AND sl.lab_partner_id IS NOT NULL) AS lab_back,
+            (SELECT IFNULL(SUM(srsl.amount_paisa), 0)
+               FROM sale_return_service_lines srsl
+               JOIN sale_returns sr ON sr.id = srsl.sale_return_id
+               JOIN bill_service_lines sl ON sl.id = srsl.bill_service_line_id
+               LEFT JOIN services sv ON sv.id = sl.service_id
+               LEFT JOIN service_groups g ON g.id = sv.group_id
+              WHERE sr.date_ad = ?
+                AND COALESCE(g.is_consultation, 0) = 0
+                AND sl.lab_partner_id IS NULL) AS diag_back`,
+    args: [dayIso, dayIso, dayIso, dayIso, dayIso, dayIso, dayIso, dayIso],
+  });
+  const sp = splitRes.rows[0]!;
+
   return {
+    split: {
+      medicinesPaisa: Number(sp.medicines),
+      consultationPaisa: Number(sp.consult) - Number(sp.consult_back),
+      diagnosticsPaisa: Number(sp.diag) - Number(sp.diag_back),
+      laboratoryPaisa: Number(sp.lab) - Number(sp.lab_back),
+    },
     billCount: Number(agg.rows[0]!.n),
     grossSalesPaisa: gross,
     billDiscountPaisa: Number(agg.rows[0]!.disc),

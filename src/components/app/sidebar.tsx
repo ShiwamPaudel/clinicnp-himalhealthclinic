@@ -25,16 +25,38 @@ export function Sidebar({
   modules: ModuleFlags;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [narrow, setNarrow] = useState(false);
 
   // Load the saved preference after mount (avoids an SSR/client mismatch).
   useEffect(() => {
     setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
   }, []);
 
+  /**
+   * On a phone the menu starts as icons only. A 232px menu on a 390px screen
+   * leaves 158px for the day's takings, which is not a screen anybody can read
+   * — and the owner checking the day close on their phone is a real thing this
+   * product is for. The width preference still belongs to the person: opening
+   * it here works, it just is not where a narrow screen starts.
+   */
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => {
+      setNarrow(mq.matches);
+      if (mq.matches) setCollapsed(true);
+      else setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   function toggle() {
     setCollapsed((c) => {
       const next = !c;
-      localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      // A phone's choice is for this screen only; it does not become the
+      // preference that a desktop then inherits.
+      if (!narrow) localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
       return next;
     });
   }

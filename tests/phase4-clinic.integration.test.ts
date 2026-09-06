@@ -535,6 +535,74 @@ describe("Phase 4 — the dashboard trend", () => {
   });
 });
 
+describe("Phase 4 — the day close", () => {
+  it("splits the day four ways, and the four add up to net sales", async () => {
+    const { daySummary } = await import("@/lib/repos/reports");
+
+    const DAY_AD = "2026-09-20";
+    const DAY_BS = "2083-06-04";
+
+    // consultation 500 + lab test 600 + ultrasound 1200 + 10 tablets at 2.00
+    const sold = await bill({
+      services: [
+        { serviceId: "svc_opd", ratePaisa: 50_000, doctorId: "doc1" },
+        { serviceId: "svc_cbc", ratePaisa: 60_000, labPartnerId: "lab1" },
+        { serviceId: "svc_usg", ratePaisa: 120_000 },
+      ],
+      medicines: [{ qty: 10, ratePaisa: 200 }],
+      dateAd: DAY_AD,
+      dateBs: DAY_BS,
+    });
+    expect(sold.totalPaisa).toBe(232_000);
+
+    const before = await daySummary(DAY_AD);
+    expect(before.split.medicinesPaisa).toBe(2_000);
+    expect(before.split.consultationPaisa).toBe(50_000);
+    expect(before.split.laboratoryPaisa).toBe(60_000);
+    expect(before.split.diagnosticsPaisa).toBe(120_000);
+
+    const fourWays =
+      before.split.medicinesPaisa +
+      before.split.consultationPaisa +
+      before.split.diagnosticsPaisa +
+      before.split.laboratoryPaisa;
+    expect(fourWays).toBe(before.netSalesPaisa);
+
+    // Refund the ultrasound; the diagnostics column and net sales both drop.
+    const usgLine = (
+      await q(
+        "SELECT id FROM bill_service_lines WHERE bill_id = ? AND name_snapshot = 'USG'",
+        [sold.id],
+      )
+    )[0]!;
+    const { createSaleReturn } = await import("@/lib/repos/sale-returns");
+    await createSaleReturn({
+      billId: sold.id,
+      dateAd: DAY_AD,
+      dateBs: DAY_BS,
+      lines: [],
+      serviceLines: [
+        { billServiceLineId: usgLine.id as string, qty: 1, amountPaisa: 120_000 },
+      ],
+      userId: "u1",
+    });
+
+    const after = await daySummary(DAY_AD);
+    expect(after.split.diagnosticsPaisa).toBe(0);
+    expect(
+      after.split.medicinesPaisa +
+        after.split.consultationPaisa +
+        after.split.diagnosticsPaisa +
+        after.split.laboratoryPaisa,
+    ).toBe(after.netSalesPaisa);
+
+    // expected cash = cash bills minus cash refunds
+    expect(after.expectedCashPaisa).toBe(
+      after.byMethod.cash - after.returnsPaisa,
+    );
+  });
+});
+
 // Kept last on purpose: it closes the fiscal year, so anything billed after
 // it would land in a different year from everything above.
 describe("Phase 4 — refunding a closed year", () => {
