@@ -35,6 +35,26 @@ one has to be created.
 
 ---
 
+## Vercel refuses to deploy a vulnerable Next.js
+
+This is not a build error and it does not look like one. The build completes,
+prints its route table, traces the server files, and is then rejected at
+`Deploying outputs...` with:
+
+```
+Vulnerable version of Next.js detected, please update immediately.
+```
+
+There is nothing wrong with the code when this happens. The pinned Next.js
+version has a published advisory against it and the platform will not host it.
+The fix is to upgrade Next.js and redeploy; nothing else will clear it.
+
+`pnpm audit --prod` lists what is outstanding. Prefer the newest release on the
+major already in use — a major upgrade is not something to attempt while a
+deployment is blocked.
+
+---
+
 ## Deploying
 
 ```bash
