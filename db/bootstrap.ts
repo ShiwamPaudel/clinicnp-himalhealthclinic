@@ -45,6 +45,16 @@ async function main() {
   const url = process.env.TURSO_DATABASE_URL;
   if (!url) throw new Error("TURSO_DATABASE_URL is not set");
 
+  // Which halves of the product this install is. The schema defaults to
+  // pharmacy-only, which is wrong for anywhere that also runs a clinic — and
+  // getting it wrong means every clinic route returns 404 on the first
+  // morning with no obvious reason why. So it is stated, not inherited.
+  const clinicOn = process.argv.includes("--clinic");
+  const pharmacyOn = !process.argv.includes("--no-pharmacy");
+  if (!clinicOn && !pharmacyOn) {
+    throw new Error("An install needs at least one module. Drop --no-pharmacy, or add --clinic.");
+  }
+
   const name = arg("name");
   const pan = arg("pan");
   const address = arg("address");
@@ -87,11 +97,16 @@ async function main() {
   const company = await c.execute("SELECT id FROM company WHERE id = 1");
   if (company.rows.length === 0) {
     await c.execute({
-      sql: `INSERT INTO company (id, name, address, phone, pan_no, updated_at)
-            VALUES (1, ?, ?, ?, ?, ?)`,
-      args: [name, address, phone, pan, now],
+      sql: `INSERT INTO company
+              (id, name, address, phone, pan_no, module_pharmacy, module_clinic,
+               updated_at)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [name, address, phone, pan, pharmacyOn ? 1 : 0, clinicOn ? 1 : 0, now],
     });
     console.log(`company: ${name}`);
+  console.log(
+    `modules: ${[pharmacyOn ? "pharmacy" : null, clinicOn ? "clinic" : null].filter(Boolean).join(" + ")}`,
+  );
   } else {
     console.log("company: already set up, left alone");
   }

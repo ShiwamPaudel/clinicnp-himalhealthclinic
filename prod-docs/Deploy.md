@@ -35,6 +35,50 @@ one has to be created.
 
 ---
 
+## A new migration means migrating production
+
+The app is deployed from the repository; the database is not. A deploy
+carrying a new migration lands code that queries tables the production
+database does not have yet, and the pages that use them return 500 while
+everything else keeps working — which is exactly what it looks like when only
+one screen is broken.
+
+```bash
+pnpm db:migrate     # with the production env vars, before or right after the deploy
+```
+
+Check what production actually has before assuming:
+
+```sql
+SELECT name FROM _migrations ORDER BY name;
+```
+
+A migration that rebuilds a table deserves a dry run against a copy of the
+real row first. `0012` rebuilds `company`, and its first version silently
+dropped `module_pharmacy` and `module_clinic` — which would have switched the
+Clinic module off at the clinic.
+
+## Starting fresh after testing on sample data
+
+`db:seed` is for training and leaves "Green Cross Sample Pharmacy", sample
+services, sample doctors and demo patients behind. None of that belongs in a
+database a clinic is about to bill from.
+
+```bash
+pnpm db:reset --yes      # empties every row, keeps the schema, restarts patient numbering
+pnpm db:bootstrap --name "…" --pan … --admin … --password "…" --pin … --clinic
+```
+
+`db:reset` prints what it is about to delete and refuses without `--yes`. It
+also refuses if it finds a table holding data that it does not know about,
+rather than leaving it behind quietly.
+
+**`--clinic` is not optional for Himal.** The schema defaults to
+pharmacy-only, and without that flag every clinic route returns 404 on the
+first morning for no visible reason.
+
+---
+
 ## Vercel refuses to deploy a vulnerable Next.js
 
 This is not a build error and it does not look like one. The build completes,

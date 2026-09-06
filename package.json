@@ -14,6 +14,7 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed.ts",
     "db:bootstrap": "tsx db/bootstrap.ts",
+    "db:reset": "tsx db/reset.ts",
     "sweep": "node scripts/sweep.mjs",
     "audit": "node scripts/audit.mjs",
     "a11y": "node scripts/a11y.mjs"
