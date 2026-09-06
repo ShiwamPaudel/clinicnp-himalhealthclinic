@@ -1,9 +1,19 @@
 /**
- * sale-returns.ts — return sold items. Stock goes back to the SAME batch it was
- * sold from (PRD 4.3.6). Day/sales figures adjust because reports net out returns.
+ * sale-returns.ts — return sold items and refund services.
+ *
+ * A medicine goes back to the SAME batch it was sold from (PRD 4.3.6). A
+ * service does not go back anywhere — nothing was taken off a shelf — so a
+ * refunded service line moves money and nothing else. On screen the two are
+ * called "Return" and "Refund" respectively, because that is what they are.
+ *
+ * Day and sales figures adjust because the reports net returns out.
  */
 import "server-only";
-import { assertBillYearOpen } from "@/lib/repos/fiscal";
+import {
+  assertBillYearOpen,
+  getOpenFiscalYear,
+  ClosedFiscalYearError,
+} from "@/lib/repos/fiscal";
 import { ulid } from "ulid";
 import { db } from "@/lib/db";
 
@@ -15,12 +25,40 @@ export interface SaleReturnLineInput {
   amountPaisa: number;
 }
 
+/** A service being refunded. Nothing returns to stock. */
+export interface SaleReturnServiceLineInput {
+  billServiceLineId: string;
+  /** how many of the billed quantity are being refunded */
+  qty: number;
+  amountPaisa: number;
+}
+
 export interface SaleReturnInput {
   billId: string;
   dateAd: string;
   dateBs: string;
   lines: SaleReturnLineInput[];
+  serviceLines?: SaleReturnServiceLineInput[];
+  reason?: string;
   userId: string;
+}
+
+/** Quantity already refunded per service line, keyed by bill_service_line_id. */
+export async function refundedQtyByServiceLine(
+  billId: string,
+): Promise<Map<string, number>> {
+  const res = await db().execute({
+    sql: `SELECT srsl.bill_service_line_id, SUM(srsl.qty) AS qty
+            FROM sale_return_service_lines srsl
+            JOIN sale_returns sr ON sr.id = srsl.sale_return_id
+           WHERE sr.bill_id = ?
+           GROUP BY srsl.bill_service_line_id`,
+    args: [billId],
+  });
+  const map = new Map<string, number>();
+  for (const r of res.rows)
+    map.set(r.bill_service_line_id as string, Number(r.qty));
+  return map;
 }
 
 /** base units already returned per bill line, keyed by bill_line_id. */
@@ -40,23 +78,47 @@ export async function returnedBaseByLine(
   return map;
 }
 
-export async function createSaleReturn(
-  input: SaleReturnInput,
-): Promise<{ id: string; returnNo: number; totalPaisa: number }> {
-  // A closed year's reports must never change after closing (D-029). Phase 4
-  // adds the "record it in the open year, referencing the old number" path.
-  await assertBillYearOpen(input.billId);
-
-  // fiscal year + SR sequence come from the original bill
+export async function createSaleReturn(input: SaleReturnInput): Promise<{
+  id: string;
+  returnNo: number;
+  totalPaisa: number;
+  intoOpenYearNote: string;
+}> {
+  // A closed year's figures must never change after closing (D-029). But a
+  // patient who comes back in Shrawan with something bought in Ashar still
+  // deserves their money, so the refund is recorded in the year that IS open,
+  // carrying a reference to the original invoice. The closed year keeps the
+  // sale; the open year carries the refund.
   const billRes = await db().execute({
-    sql: "SELECT fiscal_year_id FROM bills WHERE id = ?",
+    sql: `SELECT b.fiscal_year_id, b.invoice_no, f.status, f.bs_label
+            FROM bills b
+            LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
+           WHERE b.id = ?`,
     args: [input.billId],
   });
-  const fyId = billRes.rows[0]?.fiscal_year_id as number | undefined;
+  const billRow = billRes.rows[0];
+  if (!billRow) throw new Error("bill not found");
+
+  const originalYearClosed = billRow.status === "closed";
+  let fyId = billRow.fiscal_year_id as number | null;
+  let intoOpenYearNote = "";
+
+  if (originalYearClosed) {
+    const open = await getOpenFiscalYear();
+    if (!open) {
+      // No open year at all: refuse rather than book money into a closed one.
+      await assertBillYearOpen(input.billId);
+      throw new ClosedFiscalYearError();
+    }
+    fyId = open.id;
+    intoOpenYearNote = `Original invoice ${billRow.invoice_no ?? "—"} of ${billRow.bs_label ?? "an earlier year"}`;
+  }
 
   const returnId = ulid();
   const now = new Date().toISOString();
-  const total = input.lines.reduce((s, l) => s + l.amountPaisa, 0);
+  const total =
+    input.lines.reduce((s, l) => s + l.amountPaisa, 0) +
+    (input.serviceLines ?? []).reduce((s, l) => s + l.amountPaisa, 0);
 
   const tx = await db().transaction("write");
   try {
@@ -78,6 +140,17 @@ export async function createSaleReturn(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [returnId, returnNo || null, input.billId, input.dateAd, input.dateBs, total, input.userId, now],
     });
+
+    // Services: money back, nothing back to stock.
+    for (const line of input.serviceLines ?? []) {
+      if (line.qty <= 0) continue;
+      await tx.execute({
+        sql: `INSERT INTO sale_return_service_lines
+                (id, sale_return_id, bill_service_line_id, qty, amount_paisa)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [ulid(), returnId, line.billServiceLineId, line.qty, line.amountPaisa],
+      });
+    }
 
     for (const line of input.lines) {
       if (line.returnBaseQty <= 0) continue;
@@ -115,7 +188,13 @@ export async function createSaleReturn(
     }
 
     await tx.commit();
-    return { id: returnId, returnNo, totalPaisa: total };
+    return {
+      id: returnId,
+      returnNo,
+      totalPaisa: total,
+      /** set when the original bill's year was closed and this went into the open one */
+      intoOpenYearNote,
+    };
   } catch (err) {
     await tx.rollback();
     throw err;

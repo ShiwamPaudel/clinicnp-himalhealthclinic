@@ -589,6 +589,10 @@ export interface BillListRow {
   totalPaisa: number;
   paymentMethod: string;
   status: string;
+  /** pharmacy / clinic / mixed, derived at ingest */
+  kind: string;
+  patientNo: number | null;
+  registeredName: string;
 }
 
 function mapBillRow(r: Row): BillListRow {
@@ -601,20 +605,79 @@ function mapBillRow(r: Row): BillListRow {
     totalPaisa: Number(r.total_paisa),
     paymentMethod: r.payment_method as string,
     status: r.status as string,
+    kind: (r.kind as string) ?? "pharmacy",
+    patientNo: r.patient_no == null ? null : Number(r.patient_no),
+    registeredName: (r.registered_name as string | null) ?? "",
   };
+}
+
+export interface BillFilters {
+  fiscalYearId?: number | null;
+  /** pharmacy / clinic / mixed */
+  kind?: string | null;
+  /** free text over the patient's name, number or the invoice number */
+  search?: string | null;
+  doctorId?: string | null;
+  patientId?: string | null;
 }
 
 export async function listBills(
   limit = 200,
-  fiscalYearId?: number | null,
+  filters: number | null | BillFilters = null,
 ): Promise<BillListRow[]> {
-  const filtered = fiscalYearId != null;
+  // The old signature took a bare fiscal year id. Keeping it working means the
+  // pharmacy screens did not have to change to gain the new filters.
+  const f: BillFilters =
+    typeof filters === "number" || filters === null
+      ? { fiscalYearId: filters }
+      : filters;
+
+  const where: string[] = [];
+  const args: (string | number | null)[] = [];
+
+  if (f.fiscalYearId != null) {
+    where.push("b.fiscal_year_id = ?");
+    args.push(f.fiscalYearId);
+  }
+  if (f.kind) {
+    where.push("b.kind = ?");
+    args.push(f.kind);
+  }
+  if (f.patientId) {
+    where.push("b.patient_id = ?");
+    args.push(f.patientId);
+  }
+  if (f.doctorId) {
+    where.push(
+      "EXISTS (SELECT 1 FROM bill_service_lines sl WHERE sl.bill_id = b.id AND sl.doctor_id = ?)",
+    );
+    args.push(f.doctorId);
+  }
+  if (f.search && f.search.trim()) {
+    const q = f.search.trim();
+    const digits = q.replace(/\D/g, "");
+    where.push(
+      `(LOWER(b.patient_name) LIKE ?
+        OR LOWER(p.name) LIKE ?
+        OR CAST(b.invoice_no AS TEXT) = ?
+        OR CAST(p.patient_no AS TEXT) = ?)`,
+    );
+    // No digits typed means there is nothing to match an invoice or a
+    // patient number against; NULL makes those two comparisons not true.
+    const numeric = digits === "" ? null : digits;
+    args.push(`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`, numeric, numeric);
+  }
+
+  args.push(limit);
+
   const res = await db().execute({
-    sql: `SELECT b.*, f.bs_label FROM bills b
-          LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
-          ${filtered ? "WHERE b.fiscal_year_id = ?" : ""}
+    sql: `SELECT b.*, f.bs_label, p.patient_no, p.name AS registered_name
+            FROM bills b
+            LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
+            LEFT JOIN patients p ON p.id = b.patient_id
+          ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
           ORDER BY b.client_created_at DESC LIMIT ?`,
-    args: filtered ? [fiscalYearId, limit] : [limit],
+    args,
   });
   return res.rows.map(mapBillRow);
 }

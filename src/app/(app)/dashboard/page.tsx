@@ -6,7 +6,13 @@ import {
   bootstrapCurrentFiscalYear,
 } from "@/lib/repos/fiscal";
 import { dashboardMetrics } from "@/lib/repos/reports";
+import {
+  clinicToday,
+  topServices,
+  serviceTrend,
+} from "@/lib/repos/clinic-reports";
 import { stockCounts } from "@/lib/repos/batches";
+import { getModules } from "@/lib/modules";
 import {
   today,
   toAD,
@@ -29,9 +35,10 @@ function daysAheadIso(days: number): string {
 export default async function DashboardPage() {
   const user = await requireUser();
   // Independent reads run in one round-trip's worth of wall-clock time.
-  const [company, activeFy] = await Promise.all([
+  const [company, activeFy, modules] = await Promise.all([
     getCompany(),
     getActiveFiscalYear(),
+    getModules(),
   ]);
   const fy = activeFy ?? (await bootstrapCurrentFiscalYear());
 
@@ -40,21 +47,45 @@ export default async function DashboardPage() {
   const month = bsMonthRange(t.year, t.month);
   const fyRange = fiscalYearAdRange(fiscalYearOf(t));
 
-  const [metrics, counts] = await Promise.all([
+  const monthRange = {
+    fromIso: adToIso(month.startAd),
+    toIso: todayIso,
+  };
+
+  // Only ask for what this install actually shows. A pharmacy-only shop never
+  // queries the clinic tables at all.
+  const [metrics, counts, clinic, services, svcTrend] = await Promise.all([
     dashboardMetrics({
       todayIso,
-      monthFromIso: adToIso(month.startAd),
+      monthFromIso: monthRange.fromIso,
       monthToIso: todayIso,
       fyFromIso: adToIso(fyRange.startAd),
       fyToIso: adToIso(fyRange.endAd),
       trendFromIso: daysAheadIso(-29),
     }),
-    stockCounts(todayIso, daysAheadIso(company.expiryAlertDays)),
+    modules.pharmacy
+      ? stockCounts(todayIso, daysAheadIso(company.expiryAlertDays))
+      : Promise.resolve({ low: 0, nearExpiry: 0, expired: 0 }),
+    modules.clinic ? clinicToday(todayIso) : Promise.resolve(null),
+    modules.clinic ? topServices(monthRange) : Promise.resolve([]),
+    modules.clinic
+      ? serviceTrend(daysAheadIso(-29), todayIso)
+      : Promise.resolve([]),
   ]);
+
+  const bothModules = modules.pharmacy && modules.clinic;
+  const svcByDate = new Map(svcTrend.map((p) => [p.dateAd, p.netPaisa]));
 
   const trendData = metrics.trend.map((p) => {
     const bs = toBS(adFromIso(p.dateAd));
-    return { label: `${bs.month}/${bs.day}`, value: p.netPaisa };
+    return {
+      label: `${bs.month}/${bs.day}`,
+      // The total series already includes services, so the sage series is the
+      // medicine half on its own — otherwise the two would overlap and the
+      // chart would say the clinic earned everything twice.
+      value: p.netPaisa - (svcByDate.get(p.dateAd) ?? 0),
+      services: svcByDate.get(p.dateAd) ?? 0,
+    };
   });
 
   return (
@@ -67,48 +98,144 @@ export default async function DashboardPage() {
           <Stat label="Bills today" value={String(metrics.billCountToday)} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <AlertCard href="/stock/low" label="Low stock" count={counts.low} tone="warn" />
-          <AlertCard href="/stock/near-expiry" label="Near expiry" count={counts.nearExpiry} tone="warn2" />
-          <AlertCard href="/stock/expired" label="Expired" count={counts.expired} tone="danger" />
-        </div>
+        {clinic && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {modules.pharmacy && (
+                <Stat
+                  label="From the shelf"
+                  value={formatPaisa(clinic.medicinesPaisa)}
+                />
+              )}
+              <Stat
+                label="Consultations"
+                value={formatPaisa(clinic.consultationPaisa)}
+              />
+              <Stat
+                label="Diagnostics"
+                value={formatPaisa(clinic.diagnosticsPaisa)}
+              />
+              <Stat
+                label="Laboratory"
+                value={formatPaisa(clinic.laboratoryPaisa)}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Stat label="Patients seen today" value={String(clinic.patientsSeen)} />
+              <Stat
+                label="Registered today"
+                value={String(clinic.newRegistrations)}
+              />
+              <AlertCard
+                href="/files/pending"
+                label="Files pending"
+                count={clinic.filesPending}
+                tone="warn"
+              />
+            </div>
+          </>
+        )}
+
+        {modules.pharmacy && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <AlertCard href="/stock/low" label="Low stock" count={counts.low} tone="warn" />
+            <AlertCard href="/stock/near-expiry" label="Near expiry" count={counts.nearExpiry} tone="warn2" />
+            <AlertCard href="/stock/expired" label="Expired" count={counts.expired} tone="danger" />
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="rounded-[10px] border border-line bg-cream-50 p-5">
-            <h2 className="mb-3 text-[15px] font-semibold text-sage-900">
-              Sales — last 30 days
+            <h2 className="mb-3 flex flex-wrap items-baseline gap-3 text-[15px] font-semibold text-sage-900">
+              <span>Sales — last 30 days</span>
+              {bothModules && (
+                <span className="flex items-center gap-3 text-[12px] font-normal text-sage-500">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 rounded-[2px] bg-sage-700"
+                    />
+                    Medicines
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden="true"
+                      className="h-2 w-2 rounded-[2px] bg-clinic-700"
+                    />
+                    Services
+                  </span>
+                </span>
+              )}
             </h2>
             {trendData.length === 0 ? (
               <p className="py-12 text-center text-[14px] text-sage-400">
                 Sales will appear here once you start billing.
               </p>
             ) : (
-              <SalesTrend data={trendData} />
+              <SalesTrend data={trendData} showServices={bothModules} />
             )}
           </div>
 
-          <div className="rounded-[10px] border border-line bg-cream-50 p-5">
-            <h2 className="mb-3 text-[15px] font-semibold text-sage-900">
-              Top items this month
-            </h2>
-            {metrics.topItems.length === 0 ? (
-              <p className="py-8 text-center text-[14px] text-sage-400">
-                Nothing sold yet this month.
-              </p>
-            ) : (
-              <ol className="flex flex-col gap-2">
-                {metrics.topItems.map((it, i) => (
-                  <li key={i} className="flex items-center justify-between text-[14px]">
-                    <span className="text-sage-900">
-                      <span className="mr-2 text-sage-400">{i + 1}.</span>
-                      {it.brandName}
-                    </span>
-                    <span className="tnum text-sage-600">
-                      {it.qty} · {formatPaisa(it.revenuePaisa)}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+          <div className="flex flex-col gap-6">
+            {modules.pharmacy && (
+              <div className="rounded-[10px] border border-line bg-cream-50 p-5">
+                <h2 className="mb-3 text-[15px] font-semibold text-sage-900">
+                  Top items this month
+                </h2>
+                {metrics.topItems.length === 0 ? (
+                  <p className="py-8 text-center text-[14px] text-sage-400">
+                    Nothing sold yet this month.
+                  </p>
+                ) : (
+                  <ol className="flex flex-col gap-2">
+                    {metrics.topItems.map((it, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between text-[14px]"
+                      >
+                        <span className="text-sage-900">
+                          <span className="mr-2 text-sage-400">{i + 1}.</span>
+                          {it.brandName}
+                        </span>
+                        <span className="tnum text-sage-600">
+                          {it.qty} · {formatPaisa(it.revenuePaisa)}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
+
+            {modules.clinic && (
+              <div className="rounded-[10px] border border-line bg-cream-50 p-5">
+                <h2 className="mb-3 text-[15px] font-semibold text-sage-900">
+                  Top services this month
+                </h2>
+                {services.length === 0 ? (
+                  <p className="py-8 text-center text-[14px] text-sage-400">
+                    Nothing billed yet this month.
+                  </p>
+                ) : (
+                  <ol className="flex flex-col gap-2">
+                    {services.map((sv, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between text-[14px]"
+                      >
+                        <span className="text-sage-900">
+                          <span className="mr-2 text-sage-400">{i + 1}.</span>
+                          {sv.name}
+                        </span>
+                        <span className="tnum text-sage-600">
+                          {sv.count} · {formatPaisa(sv.netPaisa)}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             )}
           </div>
         </div>

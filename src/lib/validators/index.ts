@@ -260,3 +260,11 @@ export const labPartnerSchema = z.object({
   active: z.boolean(),
 });
 export type LabPartnerFormInput = z.infer<typeof labPartnerSchema>;
+
+export const labPartnerPaymentSchema = z.object({
+  partnerId: z.string().min(1),
+  dateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+  amountPaisa: z.number().int().min(1, "Enter an amount"),
+  method: z.enum(["cash", "bank", "cheque", "qr", "adjustment"]),
+  note: z.string(),
+});

@@ -60,6 +60,8 @@ const SKIP_DIRS = new Set([
 const UI_GLOB = /\.tsx?$/;
 /** Build configuration is not a screen: `blob:` in a CSP is a URL scheme. */
 const ROOT_CONFIG = /^[\w.-]+\.config\.[cm]?ts$/;
+/** Anything hand-written that a control character has no business being in. */
+const SOURCE_EXT = /\.(tsx?|mjs|js|sql|json|css|md)$/;
 const NON_UI_DIR = new RegExp(
   `(^|${sep === "\\" ? "\\\\" : sep})(db|scripts|tests?|e2e)(${sep === "\\" ? "\\\\" : sep}|$)`,
 );
@@ -105,6 +107,21 @@ for (const file of walk(ROOT)) {
   } catch {
     continue; // binary or unreadable — nothing to sweep
   }
+  // A stray NUL or other control character in source is always a mistake —
+  // usually a shell heredoc mangling an escape on its way into a file. It is
+  // invisible in an editor and turns the file "binary" to grep, so it hides
+  // whatever else is wrong with that line. It has happened twice.
+  if (SOURCE_EXT.test(rel)) {
+    // Escaped, not literal: this file must not contain the thing it hunts.
+    const control = new RegExp("[\u0000-\u0008\u000B\u000C\u000E-\u001F]").exec(text);
+    if (control) {
+      const lineNo = text.slice(0, control.index).split(/\r?\n/).length;
+      failures.push(
+        `${rel}:${lineNo}  stray control character (code ${control[0].charCodeAt(0)}) in source`,
+      );
+    }
+  }
+
   const lines = text.split(/\r?\n/);
 
   const isSelf = rel === join("scripts", "sweep.mjs");

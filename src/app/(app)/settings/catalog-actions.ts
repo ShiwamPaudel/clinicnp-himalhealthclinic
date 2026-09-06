@@ -37,7 +37,15 @@ import {
   serviceGroupSchema,
   doctorSchema,
   labPartnerSchema,
+  labPartnerPaymentSchema,
 } from "@/lib/validators";
+import { recordPartnerPayment } from "@/lib/repos/clinic-reports";
+import {
+  getFiscalYearByLabel,
+  assertYearOpen,
+  ClosedFiscalYearError,
+} from "@/lib/repos/fiscal";
+import { bsFromDbText, toAD, adToIso, fiscalYearOf } from "@/lib/bs";
 
 export interface ActionResult {
   ok: boolean;
@@ -54,6 +62,7 @@ function fail(userMessage: string): ActionResult {
 function handle(err: unknown): ActionResult {
   if (err instanceof ModuleDisabledError) return fail(err.userMessage);
   if (err instanceof NotAuthorizedError) return fail(err.userMessage);
+  if (err instanceof ClosedFiscalYearError) return fail(err.userMessage);
   console.error("[catalog action]", err);
   return fail("Something went wrong. Please try again.");
 }
@@ -265,6 +274,61 @@ export async function saveLabPartnerAction(
     await recordAudit(user.id, "lab_partner.created", { entity: "lab_partner", entityId: newId, detail: payload.name });
     revalidatePath("/settings/lab-partners");
     return { ok: true, id: newId };
+  } catch (err) {
+    return handle(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Laboratory payments
+// ---------------------------------------------------------------------------
+
+export async function recordPartnerPaymentAction(input: {
+  partnerId: string;
+  dateBs: string;
+  amountPaisa: number;
+  method: string;
+  note: string;
+}): Promise<ActionResult> {
+  try {
+    const user = await guard();
+
+    const parsed = labPartnerPaymentSchema.safeParse(input);
+    if (!parsed.success) {
+      return fail(parsed.error.issues[0]?.message ?? "Please check the details.");
+    }
+    const data = parsed.data;
+
+    const partner = await getLabPartner(data.partnerId);
+    if (!partner) return fail("That laboratory is no longer there.");
+
+    // A payment is dated, and a dated thing belongs to a fiscal year. Booking
+    // money into a year that has been closed would change figures the owner
+    // has already signed off, so it is refused (D-029).
+    const bs = bsFromDbText(data.dateBs);
+    const dateAd = adToIso(toAD(bs));
+    const year = await getFiscalYearByLabel(fiscalYearOf(bs).label);
+    if (year) await assertYearOpen(year.id);
+
+    const id = await recordPartnerPayment({
+      partnerId: data.partnerId,
+      dateAd,
+      dateBs: data.dateBs,
+      amountPaisa: data.amountPaisa,
+      method: data.method,
+      note: data.note,
+      userId: user.id,
+    });
+
+    await recordAudit(user.id, "lab_partner.payment", {
+      entity: "lab_partner",
+      entityId: data.partnerId,
+      detail: `${partner.name}: ${data.amountPaisa} paisa by ${data.method}`,
+      paymentId: id,
+    });
+
+    revalidatePath("/reports/lab-partners");
+    return OK;
   } catch (err) {
     return handle(err);
   }
