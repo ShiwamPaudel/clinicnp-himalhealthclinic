@@ -14,7 +14,9 @@
   --color-sage-900: #20342a;
   --color-sage-700: #35553f;
   --color-sage-600: #41684d;
-  --color-sage-500: #557f60;
+  /* Darkened from #557f60, which measured 4.50:1 on cream-50 and less on
+     the page background — a hair under AA for text this size. */
+  --color-sage-500: #4f7659;
   --color-sage-300: #9dbca4;
   --color-sage-150: #d5e4d7;
   --color-sage-75: #ebf2ec;

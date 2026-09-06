@@ -14,7 +14,8 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed.ts",
     "db:bootstrap": "tsx db/bootstrap.ts",
-    "sweep": "node scripts/sweep.mjs"
+    "sweep": "node scripts/sweep.mjs",
+    "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",
