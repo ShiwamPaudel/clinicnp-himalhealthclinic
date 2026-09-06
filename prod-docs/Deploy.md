@@ -88,10 +88,14 @@ Run all of these before deploying. Each one has caught something real.
 pnpm typecheck   # no TypeScript errors
 pnpm test        # the full suite
 pnpm sweep       # the retired name, backend words on screen, stray control characters
-pnpm audit       # module guards, colour contrast, empty states
+pnpm run audit   # module guards, colour contrast, empty states
 pnpm build       # it compiles, and the counter bundle is visible in the output
 pnpm a11y http://localhost:3000   # against a running instance
 ```
+
+`pnpm run audit`, not `pnpm audit` — pnpm has a built-in command by that
+name and it wins, so `pnpm audit` silently reports dependency advisories
+instead of running any of the checks above.
 
 The counter bundle is worth watching: v1 shipped at 140 kB First Load, and
 Phases.md allows 15% growth. The build output prints it as `/billing`.
