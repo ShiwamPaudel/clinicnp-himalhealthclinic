@@ -9,7 +9,24 @@
  *    zero-padded month, e.g. Shrawan 1, 2083 -> "2083-04-01".
  *  - Fiscal year runs Shrawan 1 -> Ashadh end (PRD 4.5.1).
  */
-import NepaliDate from "nepali-date-converter";
+import NepaliDateImport from "nepali-date-converter";
+
+/**
+ * The converter ships as CommonJS. Next's bundler hands us the constructor
+ * directly; a plain Node runner (tsx, used by the migration, seed and
+ * bootstrap scripts) hands us the module object with the constructor on
+ * `.default`. Unwrapping here means every caller gets a constructor, and the
+ * install scripts can use BS dates like everything else.
+ */
+const NepaliDate = (
+  typeof NepaliDateImport === "function"
+    ? NepaliDateImport
+    : (NepaliDateImport as unknown as { default: typeof NepaliDateImport })
+        .default
+) as typeof NepaliDateImport;
+
+/** The instance type, which the const above shadows out of scope. */
+type NepaliDateInstance = InstanceType<typeof NepaliDateImport>;
 
 export interface BSDate {
   /** BS year, e.g. 2083 */
@@ -67,7 +84,7 @@ function toNepaliNumerals(s: string): string {
   return s.replace(/[0-9]/g, (d) => NEPALI_DIGITS[Number(d)]!);
 }
 
-function fromNepali(nd: NepaliDate): BSDate {
+function fromNepali(nd: NepaliDateInstance): BSDate {
   return {
     year: nd.getYear(),
     month: nd.getMonth() + 1, // library is 0-indexed
@@ -75,7 +92,7 @@ function fromNepali(nd: NepaliDate): BSDate {
   };
 }
 
-function toNepali(bs: BSDate): NepaliDate {
+function toNepali(bs: BSDate): NepaliDateInstance {
   return new NepaliDate(bs.year, bs.month - 1, bs.day);
 }
 
