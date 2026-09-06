@@ -70,6 +70,7 @@ describe("the company profile", () => {
       roundingOn: true,
       expiryAlertDays: 90,
       minRateIsCost: true,
+      rackDisplay: "off",
     });
 
     const saved = await getCompany();
@@ -121,6 +122,7 @@ describe("the company profile", () => {
       roundingOn: false,
       expiryAlertDays: 30,
       minRateIsCost: true,
+      rackDisplay: "off",
     });
 
     const c = await getCompany();

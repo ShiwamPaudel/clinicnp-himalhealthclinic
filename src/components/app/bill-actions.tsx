@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrintFormat } from "@/lib/repos/company";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, Ban, CheckCircle2, RotateCcw } from "lucide-react";
@@ -25,7 +26,7 @@ export function BillActions({
 }: {
   billId: string;
   printBill: PrintBill;
-  printFormat: "thermal" | "a5";
+  printFormat: PrintFormat;
   isAdmin: boolean;
   canCancel: boolean;
   isCredit: boolean;

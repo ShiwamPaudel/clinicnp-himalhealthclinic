@@ -12,7 +12,7 @@ export default async function SettingsLayout({
   const modules = await getModules();
   return (
     <>
-      <SettingsTabs clinicOn={modules.clinic} />
+      <SettingsTabs clinicOn={modules.clinic} pharmacyOn={modules.pharmacy} />
       {children}
     </>
   );

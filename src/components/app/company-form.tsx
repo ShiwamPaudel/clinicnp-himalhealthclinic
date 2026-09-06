@@ -28,6 +28,7 @@ export function CompanyForm({ initial }: { initial: Company }) {
       minRateIsCost: Boolean(data.minRateIsCost),
       expiryAlertDays: Number(data.expiryAlertDays) as 30 | 60 | 90,
       logoUrl: data.logoUrl || null,
+      rackDisplay: data.rackDisplay ?? "off",
     });
     setSaving(false);
     if (res.ok) toast.success(strings.saved);
@@ -72,6 +73,7 @@ export function CompanyForm({ initial }: { initial: Company }) {
             <Select id="printFormat" {...register("printFormat")}>
               <option value="thermal">80 mm thermal</option>
               <option value="a5">A5</option>
+              <option value="a4_half">A4 — top half (two bills to a sheet)</option>
             </Select>
           </Field>
           <Field label={strings.expiryAlertWindow} htmlFor="expiry">
@@ -96,6 +98,20 @@ export function CompanyForm({ initial }: { initial: Company }) {
             <input type="checkbox" {...register("minRateIsCost")} />
             {strings.minRateIsCost}
           </label>
+        </div>
+
+        <div className="border-t border-line pt-3">
+          <Field
+            label="Where a medicine is kept"
+            htmlFor="rackDisplay"
+            hint="Shown at the counter once a medicine is found."
+          >
+            <Select id="rackDisplay" {...register("rackDisplay")}>
+              <option value="off">Do not show</option>
+              <option value="text">Write the shelf out — Rack 1 · R2C3</option>
+              <option value="visual">Show the racks and light up the shelf</option>
+            </Select>
+          </Field>
         </div>
 
         <div className="flex justify-end">

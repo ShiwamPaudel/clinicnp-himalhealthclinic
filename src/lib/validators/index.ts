@@ -222,16 +222,35 @@ export const companySchema = z.object({
   vatRegistered: z.boolean(),
   invoiceFooter: z.string(),
   logoUrl: z.string().nullable(),
-  printFormat: z.enum(["thermal", "a5"]),
+  printFormat: z.enum(["thermal", "a5", "a4_half"]),
   roundingOn: z.boolean(),
   expiryAlertDays: z.union([z.literal(30), z.literal(60), z.literal(90)]),
   minRateIsCost: z.boolean(),
+  rackDisplay: z.enum(["off", "text", "visual"]),
 });
 export type CompanyInput = z.infer<typeof companySchema>;
 
 // ---------------------------------------------------------------------------
 // Clinic catalog (Phase 3)
 // ---------------------------------------------------------------------------
+
+export const rackSchema = z.object({
+  name: z.string().min(1, "Give the rack a name"),
+  rows: z.number().int().min(1, "At least one row").max(26, "That is too many rows for one rack"),
+  cols: z.number().int().min(1, "At least one column").max(26, "That is too many columns for one rack"),
+  posX: z.number().int().min(-99).max(99),
+  posY: z.number().int().min(-99).max(99),
+  note: z.string().max(120, "Keep the note short").optional(),
+  active: z.boolean(),
+});
+export type RackFormInput = z.infer<typeof rackSchema>;
+
+export const itemCellSchema = z.object({
+  itemId: z.string().min(1),
+  rackId: z.string().min(1).nullable(),
+  row: z.number().int().min(1).max(26).nullable(),
+  col: z.number().int().min(1).max(26).nullable(),
+});
 
 export const serviceGroupSchema = z.object({
   name: z.string().min(1, "Enter a group name"),

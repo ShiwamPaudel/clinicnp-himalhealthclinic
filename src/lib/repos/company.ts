@@ -5,7 +5,12 @@ import "server-only";
 import { db } from "@/lib/db";
 import type { Row } from "@/lib/db";
 
-export type PrintFormat = "thermal" | "a5";
+/** a4_half is a full A4 sheet with the bill in its top half, so one sheet
+ *  carries two bills and is cut once. It is not A5, which is a smaller sheet. */
+export type PrintFormat = "thermal" | "a5" | "a4_half";
+
+/** What the counter shows about where a medicine physically is. */
+export type RackDisplay = "off" | "text" | "visual";
 export type ExpiryAlertDays = 30 | 60 | 90;
 
 export interface Company {
@@ -21,6 +26,7 @@ export interface Company {
   roundingOn: boolean;
   expiryAlertDays: ExpiryAlertDays;
   minRateIsCost: boolean;
+  rackDisplay: RackDisplay;
 }
 
 const DEFAULTS: Company = {
@@ -36,6 +42,7 @@ const DEFAULTS: Company = {
   roundingOn: false,
   expiryAlertDays: 60,
   minRateIsCost: false,
+  rackDisplay: "off",
 };
 
 function mapCompany(r: Row): Company {
@@ -52,6 +59,7 @@ function mapCompany(r: Row): Company {
     roundingOn: Number(r.rounding_on) === 1,
     expiryAlertDays: Number(r.expiry_alert_days) as ExpiryAlertDays,
     minRateIsCost: Number(r.min_rate_is_cost) === 1,
+    rackDisplay: (r.rack_display as RackDisplay) ?? "off",
   };
 }
 
@@ -65,8 +73,8 @@ export async function saveCompany(c: Company): Promise<void> {
     sql: `INSERT INTO company
             (id, name, address, phone, pan_no, dda_no, vat_registered, invoice_footer,
              logo_url, print_format, rounding_on, expiry_alert_days, min_rate_is_cost,
-             updated_at)
-          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             rack_display, updated_at)
+          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             address = excluded.address,
@@ -80,6 +88,7 @@ export async function saveCompany(c: Company): Promise<void> {
             rounding_on = excluded.rounding_on,
             expiry_alert_days = excluded.expiry_alert_days,
             min_rate_is_cost = excluded.min_rate_is_cost,
+            rack_display = excluded.rack_display,
             updated_at = excluded.updated_at`,
     args: [
       c.name,
@@ -94,6 +103,7 @@ export async function saveCompany(c: Company): Promise<void> {
       c.roundingOn ? 1 : 0,
       c.expiryAlertDays,
       c.minRateIsCost ? 1 : 0,
+      c.rackDisplay,
       new Date().toISOString(),
     ],
   });
