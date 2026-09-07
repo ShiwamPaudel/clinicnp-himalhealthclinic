@@ -16,7 +16,6 @@ export default async function BillingPage() {
     appName: appNameFor(modules),
     vatRegistered: company.vatRegistered,
     roundingOn: company.roundingOn,
-    printFormat: company.printFormat,
     rackDisplay: company.rackDisplay,
     minRateIsCost: company.minRateIsCost,
     canEditRate: user.role === "admin" || user.canEditRate,
@@ -33,6 +32,7 @@ export default async function BillingPage() {
       ddaNo: company.ddaNo,
       invoiceFooter: company.invoiceFooter,
       vatRegistered: company.vatRegistered,
+      logoUrl: company.logoUrl,
     },
   };
 

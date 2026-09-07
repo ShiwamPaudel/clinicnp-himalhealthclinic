@@ -1,6 +1,5 @@
 "use client";
 
-import type { PrintFormat } from "@/lib/repos/company";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Printer, Ban, CheckCircle2, RotateCcw } from "lucide-react";
@@ -9,15 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { cancelBillAction, settleCreditAction } from "@/app/(app)/bills/actions";
-import { InvoiceThermal } from "@/components/print/invoice-thermal";
-import { InvoiceA5 } from "@/components/print/invoice-a5";
+import { InvoiceA4 } from "@/components/print/invoice-a4";
 import type { PrintBill } from "@/lib/print-types";
 import { strings } from "@/lib/strings";
 
 export function BillActions({
   billId,
   printBill,
-  printFormat,
   isAdmin,
   canCancel,
   isCredit,
@@ -26,7 +23,6 @@ export function BillActions({
 }: {
   billId: string;
   printBill: PrintBill;
-  printFormat: PrintFormat;
   isAdmin: boolean;
   canCancel: boolean;
   isCredit: boolean;
@@ -112,11 +108,7 @@ export function BillActions({
 
       {/* hidden print area for reprint */}
       <div className="print-area">
-        {printFormat === "a5" ? (
-          <InvoiceA5 bill={printBill} />
-        ) : (
-          <InvoiceThermal bill={printBill} />
-        )}
+        <InvoiceA4 bill={printBill} />
       </div>
     </div>
   );

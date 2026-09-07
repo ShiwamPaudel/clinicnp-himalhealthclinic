@@ -47,6 +47,9 @@ export interface PrintCompany {
   ddaNo: string;
   invoiceFooter: string;
   vatRegistered: boolean;
+  /** The shop's letterhead, as a data URL, printed across the top of a bill.
+   *  Null falls back to the name and address set as text. */
+  logoUrl: string | null;
 }
 
 export interface PrintBill {

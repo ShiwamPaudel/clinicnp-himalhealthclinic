@@ -53,7 +53,6 @@ export const strings = {
   ddaNumber: "DDA registration number",
   vatRegistered: "VAT registered",
   invoiceFooter: "Invoice footer message",
-  printFormat: "Print format",
   expiryAlertWindow: "Near-expiry alert window",
   roundGrandTotal: "Round grand total to nearest rupee",
   minRateIsCost: "Warn when a rate is below what you paid",

@@ -138,6 +138,7 @@ export default async function VisitDetailPage({
               ddaNo: company.ddaNo,
               invoiceFooter: company.invoiceFooter,
               vatRegistered: company.vatRegistered,
+              logoUrl: company.logoUrl,
             },
             patientLabel: label,
             patientName: visit.patientName,

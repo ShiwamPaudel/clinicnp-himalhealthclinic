@@ -74,6 +74,7 @@ export default async function SaleReturnPage({
           ddaNo: company.ddaNo,
           invoiceFooter: company.invoiceFooter,
           vatRegistered: company.vatRegistered,
+          logoUrl: company.logoUrl,
         }}
         dateBsLong={formatBS(bsFromDbText(bill.dateBs), {
           form: "long",

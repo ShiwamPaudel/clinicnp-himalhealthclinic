@@ -47,12 +47,11 @@ import { ShortcutSheet } from "@/components/pos/shortcut-sheet";
 import { Wordmark } from "@/components/ui/wordmark";
 import { StatusChip } from "@/components/pos/status-chip";
 import { StuckQueue } from "@/components/pos/stuck-queue";
-import { InvoiceThermal } from "@/components/print/invoice-thermal";
 import {
   LabDispatchSlip,
   type DispatchSlipData,
 } from "@/components/print/lab-dispatch-slip";
-import { InvoiceA5 } from "@/components/print/invoice-a5";
+import { InvoiceA4 } from "@/components/print/invoice-a4";
 import { useToast } from "@/components/ui/toast";
 import { strings, npLabels } from "@/lib/strings";
 
@@ -639,12 +638,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
 
       {/* print area (hidden on screen) */}
       <div className="print-area">
-        {printBill &&
-          (config.printFormat === "a5" ? (
-            <InvoiceA5 bill={printBill} />
-          ) : (
-            <InvoiceThermal bill={printBill} />
-          ))}
+        {printBill && <InvoiceA4 bill={printBill} />}
         {dispatchSlips.map((slip, i) => (
           <div key={i} style={{ pageBreakBefore: "always" }}>
             <LabDispatchSlip slip={slip} />

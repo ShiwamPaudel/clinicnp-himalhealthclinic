@@ -7,13 +7,14 @@ import { Input, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { saveCompanyAction } from "@/app/(app)/settings/actions";
+import { LogoUpload } from "@/components/app/logo-upload";
 import type { Company } from "@/lib/repos/company";
 import { strings } from "@/lib/strings";
 
 export function CompanyForm({ initial }: { initial: Company }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  const { register, handleSubmit, watch } = useForm<Company>({
+  const { register, handleSubmit, watch, setValue } = useForm<Company>({
     defaultValues: initial,
   });
 
@@ -69,13 +70,6 @@ export function CompanyForm({ initial }: { initial: Company }) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={strings.printFormat} htmlFor="printFormat">
-            <Select id="printFormat" {...register("printFormat")}>
-              <option value="thermal">80 mm thermal</option>
-              <option value="a5">A5</option>
-              <option value="a4_half">A4 — top half (two bills to a sheet)</option>
-            </Select>
-          </Field>
           <Field label={strings.expiryAlertWindow} htmlFor="expiry">
             <Select id="expiry" {...register("expiryAlertDays")}>
               <option value={30}>30 days</option>
@@ -84,6 +78,11 @@ export function CompanyForm({ initial }: { initial: Company }) {
             </Select>
           </Field>
         </div>
+
+        <LogoUpload
+          value={values.logoUrl ?? null}
+          onChange={(v) => setValue("logoUrl", v, { shouldDirty: true })}
+        />
 
         <div className="flex flex-col gap-2 border-t border-line pt-3">
           <label className="flex items-center gap-2 text-[14px] text-sage-900">
@@ -124,29 +123,45 @@ export function CompanyForm({ initial }: { initial: Company }) {
       {/* Print-preview stub — proves PAN appears on invoices */}
       <div className="h-fit rounded-[10px] border border-line bg-cream-50 p-4">
         <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-sage-500">
-          Invoice preview
+          Top of the bill
         </div>
-        <div className="rounded-[8px] border border-dashed border-line bg-white p-4 font-mono text-[12px] leading-relaxed text-sage-950">
-          <div className="text-center font-sans text-[15px] font-bold">
-            {values.name || "Your pharmacy name"}
-          </div>
-          <div className="text-center text-[11px]">
-            {values.address || "Address"}
-          </div>
-          <div className="text-center text-[11px]">
-            {values.phone ? `Ph: ${values.phone}` : "Ph: —"}
-          </div>
-          <div className="text-center text-[11px] font-semibold">
-            PAN: {values.panNo || "—"}
-          </div>
-          {values.ddaNo && (
-            <div className="text-center text-[11px]">DDA: {values.ddaNo}</div>
+        {/* Not a thermal receipt any more: one A4 bill, and this is the band
+            that prints across the top of it. */}
+        <div className="rounded-[8px] border border-dashed border-line bg-white p-4 text-[12px] leading-relaxed text-sage-950">
+          {values.logoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={values.logoUrl}
+              alt=""
+              className="mx-auto mb-2 block max-h-[80px] w-full object-contain"
+            />
+          ) : (
+            <>
+              <div className="text-center text-[15px] font-bold">
+                {values.name || "Your pharmacy name"}
+              </div>
+              <div className="text-center text-[11px]">
+                {values.address || "Address"}
+                {values.phone ? ` · Ph: ${values.phone}` : ""}
+              </div>
+            </>
           )}
+          <div className="flex justify-center gap-3 border-y border-sage-950/60 py-1 text-[11px] font-semibold">
+            <span>PAN: {values.panNo || "—"}</span>
+            {values.ddaNo && <span>DDA: {values.ddaNo}</span>}
+          </div>
+          <div className="mt-2 text-center text-[11px] font-bold tracking-[0.14em]">
+            {values.vatRegistered ? "TAX INVOICE" : "INVOICE"}
+          </div>
           <div className="my-2 border-t border-dashed border-line" />
           <div className="text-center text-[11px] text-sage-500">
             {values.invoiceFooter || "Get well soon"}
           </div>
         </div>
+        <p className="mt-2 text-[11px] text-sage-500">
+          Printed on a normal A4 sheet. There is one bill format — the header
+          image is the only thing that changes how it looks.
+        </p>
       </div>
     </div>
   );

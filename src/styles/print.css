@@ -1,5 +1,10 @@
-/* print.css — thermal (80mm) + A5 invoice printing.
-   The .print-area is hidden on screen and revealed only when printing. */
+/* print.css — the A4 invoice, plus the slips that are not invoices.
+   The .print-area is hidden on screen and revealed only when printing.
+
+   There is one bill format. Himal prints on a normal A4 sheet from a normal
+   office printer, and a format setting is a thing that gets set wrong once and
+   then prints wrong for a year. The thermal and A5 rules below are kept only
+   for the slips that still use those sizes. */
 
 .print-area {
   position: fixed;
@@ -22,7 +27,9 @@
     width: 100%;
   }
 
-  /* 80mm thermal roll */
+  /* The narrow slips — lab dispatch, OPD, return and stock-out notes. Not
+     bills: they are internal paperwork, and they keep the narrow column even
+     on an A4 sheet so they can be cut out and clipped to something. */
   .invoice-thermal {
     width: 72mm;
     margin: 0 auto;
@@ -42,26 +49,160 @@
     margin: 4px 0;
   }
 
-  /* A5 sheet */
-  .invoice-a5 {
-    width: 148mm;
-    min-height: 210mm;
-    padding: 12mm;
+  /* ---- A4 invoice: the one bill ---- */
+  .invoice-a4 {
+    width: 186mm; /* 210mm less the 12mm page margins */
     color: #000;
     font-family: "IBM Plex Sans", sans-serif;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.45;
   }
-  .invoice-a5 .shop-name {
+
+  /* The shop's own letterhead, printed as it was uploaded. Capped in height so
+     an over-tall image cannot push the invoice onto a second sheet. */
+  .invoice-a4 .a4-letterhead {
+    margin-bottom: 6px;
+  }
+  .invoice-a4 .a4-letterhead-img {
+    display: block;
+    width: 100%;
+    max-height: 38mm;
+    object-fit: contain;
+  }
+  .invoice-a4 .a4-letterhead-text {
+    text-align: center;
+    padding-bottom: 4px;
+  }
+  .invoice-a4 .shop-name {
     font-family: "Bricolage Grotesque", sans-serif;
-    font-size: 20px;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .invoice-a4 .a4-regline {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    border-top: 1px solid #000;
+    border-bottom: 1px solid #000;
+    padding: 3px 0;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .invoice-a4 .a4-title {
+    margin: 8px 0 6px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+  }
+
+  .invoice-a4 .a4-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    border: 1px solid #999;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+  }
+  .invoice-a4 .a4-k {
+    display: inline-block;
+    min-width: 62px;
+    color: #444;
+  }
+
+  .invoice-a4 .a4-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8px;
+  }
+  .invoice-a4 .a4-table th {
+    border-bottom: 1px solid #000;
+    border-top: 1px solid #000;
+    text-align: left;
+    padding: 4px 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .invoice-a4 .a4-table td {
+    border-bottom: 1px solid #ddd;
+    padding: 4px 4px;
+    vertical-align: top;
+  }
+  .invoice-a4 .a4-num {
+    width: 6mm;
+  }
+  .invoice-a4 .a4-r {
+    text-align: right;
+    white-space: nowrap;
+  }
+  .invoice-a4 .a4-sub {
+    font-size: 9px;
+    color: #555;
+  }
+  .invoice-a4 .a4-rx {
+    font-size: 9px;
     font-weight: 700;
   }
-  .invoice-a5 .perforation {
-    border-top: 1px dashed #555;
-    margin: 8px 0;
+
+  .invoice-a4 .a4-totals {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .invoice-a4 .a4-totals table {
+    min-width: 62mm;
+    border-collapse: collapse;
+  }
+  .invoice-a4 .a4-totals td {
+    padding: 2px 4px;
+  }
+  .invoice-a4 .a4-grand td {
+    border-top: 1px solid #000;
+    border-bottom: 2px solid #000;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .invoice-a4 .a4-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 40px;
+    margin-top: 18mm;
+  }
+  .invoice-a4 .a4-sign {
+    width: 60mm;
+    text-align: center;
+    font-size: 10px;
+  }
+  .invoice-a4 .a4-sign-line {
+    border-top: 1px solid #000;
+    margin-bottom: 3px;
+  }
+  .invoice-a4 .a4-thanks {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 11px;
+  }
+  .invoice-a4 .a4-by {
+    margin-top: 2px;
+    text-align: center;
+    font-size: 9px;
+    color: #555;
+  }
+
+  /* A table row must not be split across two sheets: half a medicine line at
+     the bottom of page one is a bill somebody has to explain. */
+  .invoice-a4 tr,
+  .invoice-a4 .a4-totals,
+  .invoice-a4 .a4-foot {
+    page-break-inside: avoid;
   }
 
   @page {
-    margin: 4mm;
+    size: A4;
+    margin: 12mm;
   }
 }

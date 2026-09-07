@@ -44,6 +44,7 @@ export default async function BillDetailPage({
       ddaNo: company.ddaNo,
       invoiceFooter: company.invoiceFooter,
       vatRegistered: company.vatRegistered,
+      logoUrl: company.logoUrl,
     },
     invoiceLabel,
     provisional: bill.invoiceNo == null,
@@ -110,7 +111,6 @@ export default async function BillDetailPage({
           <BillActions
             billId={bill.id}
             printBill={printBill}
-            printFormat={company.printFormat}
             isAdmin={user.role === "admin"}
             canCancel={bill.status !== "cancelled" && !bill.yearClosed}
             yearClosed={bill.yearClosed}

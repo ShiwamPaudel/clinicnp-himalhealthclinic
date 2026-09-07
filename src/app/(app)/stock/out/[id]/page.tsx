@@ -48,6 +48,7 @@ export default async function StockOutDetailPage({
       ddaNo: company.ddaNo,
       invoiceFooter: company.invoiceFooter,
       vatRegistered: company.vatRegistered,
+      logoUrl: company.logoUrl,
     },
     noteLabel: label,
     reasonLabel: LABEL[entry.reason] ?? entry.reason,
