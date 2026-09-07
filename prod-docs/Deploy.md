@@ -218,3 +218,26 @@ no catalog at all. Devices already carrying a cached catalog would limp on;
 a fresh one would have nothing to sell from.
 
 So: back up, migrate, then deploy.
+
+### The build now refuses to get ahead of the schema
+
+That order used to be a paragraph in this file, and on 2083-05-23 a deploy went
+out without it and production answered "Application error: a server-side
+exception has occurred" with a digest and nothing else, on every screen that
+touched the new table.
+
+`pnpm build` now runs `db/check.ts` first, and Vercel runs `pnpm build`, so a
+deploy cannot ship code the database is not ready for. When it stops a build it
+names the database and the missing files:
+
+    db:check - REFUSING TO BUILD.
+      healthclinic-... has not run:
+        0013_furniture_and_locations.sql
+
+It is deliberately hard to fail by accident. It only stops a build when it can
+positively read `_migrations` AND find a file on disk that is not in it.
+No database configured, no network, no `_migrations` table yet - it prints a
+line and lets the build through, because a check that breaks deploys for
+unrelated reasons gets deleted within a week and then protects nothing.
+
+Run it on its own any time with `pnpm db:check`.
