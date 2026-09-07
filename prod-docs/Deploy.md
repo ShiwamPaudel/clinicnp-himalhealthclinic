@@ -200,4 +200,21 @@ the only path, and the download is the copy that matters.
 
     pnpm db:migrate
 
-A deploy does not run migrations. Production needs both, in that order.
+### Migrate FIRST, then deploy
+
+A deploy does not run migrations, so for a few minutes production runs one
+half of this change without the other. Both orders leave a gap; they are not
+the same size.
+
+**Migrate first (do this).** The old code keeps reading `SELECT * FROM items`
+and simply finds no location, so **the counter keeps working and keeps
+billing**. What breaks until the deploy lands is Settings -> Shop layout, the
+shelf list, the expiry report and the item edit screen, because those name the
+dropped columns directly and SQLite errors on a column that is gone.
+
+**Deploy first (do not).** The new code reads `item_locations`, which does not
+exist yet, so `/api/catalog` fails — and a counter opened on a new device has
+no catalog at all. Devices already carrying a cached catalog would limp on;
+a fresh one would have nothing to sell from.
+
+So: back up, migrate, then deploy.
