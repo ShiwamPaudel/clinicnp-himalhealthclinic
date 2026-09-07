@@ -23,7 +23,9 @@ export type StockMoveReason =
   | "lost"
   | "clinic_use"
   | "sample"
-  | "count_correction";
+  | "count_correction"
+  // what was already on the shelf when the software arrived (0014)
+  | "opening";
 
 export interface Batch {
   id: string;
@@ -53,7 +55,15 @@ function mapBatch(r: Row): Batch {
   };
 }
 
-/** Insert a batch and its opening purchase stock_move, atomically. */
+/**
+ * Insert a batch and the stock_move that puts it on the shelf, atomically.
+ *
+ * `reason` is deliberately NOT defaulted. Stock arriving from a supplier and
+ * stock that was already on the shelf when the software was installed are
+ * different facts, and the item's own history is where somebody looks when a
+ * count does not add up (0014). A default here would quietly make every
+ * opening balance look like a purchase.
+ */
 export async function createBatchWithStock(input: {
   itemId: string;
   batchNo: string;
@@ -64,6 +74,7 @@ export async function createBatchWithStock(input: {
   supplierId: string | null;
   purchaseId: string | null;
   userId: string;
+  reason: "purchase" | "opening";
 }): Promise<string> {
   const id = ulid();
   const now = new Date().toISOString();
@@ -91,8 +102,20 @@ export async function createBatchWithStock(input: {
     {
       sql: `INSERT INTO stock_moves
               (id, batch_id, item_id, base_qty_delta, reason, ref_table, ref_id, user_id, at)
-            VALUES (?, ?, ?, ?, 'purchase', 'purchases', ?, ?, ?)`,
-      args: [ulid(), id, input.itemId, input.baseQty, input.purchaseId, input.userId, now],
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        ulid(),
+        id,
+        input.itemId,
+        input.baseQty,
+        input.reason,
+        // Opening stock references nothing: there is no document behind it,
+        // which is the whole point of it not being a purchase.
+        input.reason === "purchase" ? "purchases" : null,
+        input.purchaseId,
+        input.userId,
+        now,
+      ],
     },
   ]);
   return id;

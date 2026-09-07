@@ -19,8 +19,27 @@
  *
  *   pnpm db:reset --yes
  *   pnpm db:bootstrap --name "…" --pan … --admin … --password "…" --pin ….
+ *
+ * --keep-access leaves `users`, `company` and `fiscal_years` alone, for the
+ * case this was written for second: a shop that has already typed its own
+ * name, address and PAN into Settings and only wants the sample catalogue and
+ * an afternoon of test bills gone. Everything else still goes.
+ *
+ * Do not use it to skip the password conversation — a seeded Admin left on a
+ * public URL is the reason that conversation exists.
  */
 import { createClient } from "@libsql/client";
+
+// The same loader db/migrate.ts and db/check.ts use. Without it this script
+// could only ever empty a database whose URL was already exported by hand,
+// which is not the database anybody needs to empty.
+for (const f of [".env.local", ".env"]) {
+  try {
+    process.loadEnvFile(f);
+  } catch {
+    // file absent — fine
+  }
+}
 
 /**
  * Every table holding business data, children before parents so foreign keys
@@ -87,6 +106,15 @@ async function main() {
   if (!url) throw new Error("TURSO_DATABASE_URL is not set");
 
   const confirmed = process.argv.includes("--yes");
+  const keepAccess = process.argv.includes("--keep-access");
+
+  // Kept out of the delete list, not deleted and restored: a window where the
+  // company row is missing is a window where the app has no name to print.
+  // A fiscal year is a calendar, not a dummy entry. `bills.ts` would recreate
+  // one on the first bill anyway, but until then reports would have no year to
+  // stand in, which looks like breakage rather than a fresh start.
+  const KEPT_BY_FLAG = keepAccess ? ["users", "company", "fiscal_years"] : [];
+  const doomed = TABLES_CHILD_FIRST.filter((t) => !KEPT_BY_FLAG.includes(t));
 
   // Say which database, every time. A reset pointed at the wrong one is not
   // something you can take back.
@@ -111,7 +139,7 @@ async function main() {
 
   let total = 0;
   const counts: [string, number][] = [];
-  for (const t of TABLES_CHILD_FIRST) {
+  for (const t of doomed) {
     if (!present.has(t)) continue;
     const n = Number(
       (await client.execute(`SELECT COUNT(*) AS n FROM "${t}"`)).rows[0]?.n ?? 0,
@@ -122,6 +150,13 @@ async function main() {
 
   for (const [t, n] of counts) console.log(`   ${t.padEnd(26)} ${n}`);
   console.log(`   ${"—".repeat(26)} ${total} row(s)\n`);
+
+  if (keepAccess) {
+    console.log("   --keep-access: users, company and fiscal years are left alone.");
+    console.log(
+      "   Change the Admin password afterwards if it is still the seeded one.\n",
+    );
+  }
 
   // Anything holding data that this script does not know about is a table
   // added since it was written. Say so rather than leaving it behind silently.
@@ -153,7 +188,7 @@ async function main() {
   // One transaction: either the database is empty afterwards or it is
   // untouched. A half-emptied database is the worst of the three outcomes.
   await client.batch(
-    TABLES_CHILD_FIRST.filter((t) => present.has(t)).map((t) => ({
+    doomed.filter((t) => present.has(t)).map((t) => ({
       sql: `DELETE FROM "${t}"`,
       args: [],
     })),
@@ -170,7 +205,12 @@ async function main() {
   }
 
   console.log(`Emptied ${total} row(s); patient numbering restarts at 1.`);
-  console.log("Now run: pnpm db:bootstrap --name \"…\" --pan … --admin … --password \"…\" --pin ….\n");
+  if (keepAccess) {
+    console.log("Users and company were kept. Check Settings → Company still");
+    console.log("reads right, and change the Admin password if it is seeded.\n");
+  } else {
+    console.log("Now run: pnpm db:bootstrap --name \"…\" --pan … --admin … --password \"…\" --pin ….\n");
+  }
   client.close();
 }
 

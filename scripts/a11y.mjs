@@ -33,6 +33,7 @@ const SCREENS = [
   ["/settings/services", "the service catalog"],
   ["/settings/racks", "the shop layout"],
   ["/stock/shelves", "the shelf plan"],
+  ["/stock/opening", "opening stock"],
   ["/reports/shelf", "the shelf list"],
 ];
 

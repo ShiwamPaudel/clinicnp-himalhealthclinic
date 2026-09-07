@@ -16,6 +16,9 @@ import { Button } from "@/components/ui/button";
 
 const REASON_LABEL: Record<string, string> = {
   purchase: "Stock in",
+  // Deliberately not "Stock in": this is stock the shop already owned, and the
+  // history is where somebody looks when a count does not add up.
+  opening: "Opening stock",
   sale: "Sold",
   sale_return: "Sale return",
   purchase_return: "Returned to supplier",

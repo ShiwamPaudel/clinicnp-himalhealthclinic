@@ -111,3 +111,27 @@ export function factorsFromRatios(ratios: number[]): number[] {
   }
   return factors;
 }
+
+/**
+ * A shelf counted in the unit somebody actually counts in, converted to the
+ * base unit everything is stored in.
+ *
+ * Its own function because it decides how much stock the software believes
+ * exists, and a wrong factor here puts a hundred times too much on the shelf.
+ * That is worth a test that does not need a web framework to run.
+ *
+ * Cost is rounded to whole paisa per base unit, so a Rs 10 strip of 3 becomes
+ * 333 paisa a tablet and loses one paisa across the strip. That is the right
+ * trade: money is integer paisa everywhere in this system (Rules §4), and a
+ * fractional cost per tablet would have to be rounded somewhere regardless.
+ */
+export function openingLineToBase(
+  qty: number,
+  costPaisaPerUnit: number,
+  factorToBase: number,
+): { baseQty: number; costPaisaPerBase: number } {
+  return {
+    baseQty: qty * factorToBase,
+    costPaisaPerBase: Math.round(costPaisaPerUnit / factorToBase),
+  };
+}

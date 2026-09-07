@@ -68,11 +68,11 @@ beforeAll(async () => {
   // batch A cheaper + nearer expiry, batch B costlier + later
   await createBatchWithStock({
     itemId, batchNo: "A", mfgDateAd: null, expiryDateAd: isoInDays(60),
-    costPaisaPerBase: 100, baseQty: 30, supplierId: null, purchaseId: null, userId: "u1",
+    costPaisaPerBase: 100, baseQty: 30, supplierId: null, purchaseId: null, userId: "u1", reason: "purchase",
   });
   await createBatchWithStock({
     itemId, batchNo: "B", mfgDateAd: null, expiryDateAd: isoInDays(300),
-    costPaisaPerBase: 200, baseQty: 100, supplierId: null, purchaseId: null, userId: "u1",
+    costPaisaPerBase: 200, baseQty: 100, supplierId: null, purchaseId: null, userId: "u1", reason: "purchase",
   });
 });
 

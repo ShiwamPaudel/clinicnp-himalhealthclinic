@@ -64,7 +64,7 @@ beforeAll(async () => {
   });
   await createBatchWithStock({
     itemId, batchNo: "A", mfgDateAd: null, expiryDateAd: isoInDays(200),
-    costPaisaPerBase: 100, baseQty: 50, supplierId: null, purchaseId: null, userId: "u1",
+    costPaisaPerBase: 100, baseQty: 50, supplierId: null, purchaseId: null, userId: "u1", reason: "purchase",
   });
 });
 

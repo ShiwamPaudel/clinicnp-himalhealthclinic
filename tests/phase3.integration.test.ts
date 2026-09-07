@@ -82,11 +82,11 @@ beforeAll(async () => {
   // near-expiry batch (30 base) + far batch (100 base)
   await createBatchWithStock({
     itemId, batchNo: "B-NEAR", mfgDateAd: null, expiryDateAd: isoInDays(30),
-    costPaisaPerBase: 150, baseQty: 30, supplierId: null, purchaseId: null, userId: "u1",
+    costPaisaPerBase: 150, baseQty: 30, supplierId: null, purchaseId: null, userId: "u1", reason: "purchase",
   });
   await createBatchWithStock({
     itemId, batchNo: "B-FAR", mfgDateAd: null, expiryDateAd: isoInDays(300),
-    costPaisaPerBase: 150, baseQty: 100, supplierId: null, purchaseId: null, userId: "u1",
+    costPaisaPerBase: 150, baseQty: 100, supplierId: null, purchaseId: null, userId: "u1", reason: "purchase",
   });
 });
 

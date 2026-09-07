@@ -90,10 +90,12 @@ beforeAll(async () => {
   batchA = await createBatchWithStock({
     itemId, batchNo: "A-1", mfgDateAd: null, expiryDateAd: "2027-06-01",
     costPaisaPerBase: 100, baseQty: 100, supplierId: "s1", purchaseId: null, userId: "u1",
+    reason: "purchase",
   });
   batchB = await createBatchWithStock({
     itemId, batchNo: "B-2", mfgDateAd: null, expiryDateAd: "2028-01-01",
     costPaisaPerBase: 200, baseQty: 50, supplierId: "s1", purchaseId: null, userId: "u1",
+    reason: "purchase",
   });
 });
 
