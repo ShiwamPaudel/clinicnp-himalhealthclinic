@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react";
 import { requireAdmin } from "@/lib/session";
 import { requireModulePage } from "@/lib/modules";
 import { getItem } from "@/lib/repos/items";
-import { getRack, cellLabel } from "@/lib/repos/racks";
+import { getRack, getItemLocation, cellLabel } from "@/lib/repos/racks";
 import { batchesForItem, itemHistory } from "@/lib/repos/batches";
 import { adFromIso, adToIso, formatBS, toBS } from "@/lib/bs";
 import { toMixedDisplay } from "@/lib/units";
@@ -42,13 +42,14 @@ export default async function ItemDetailPage({
   const batches = await batchesForItem(id);
   const history = await itemHistory(id);
 
-  // The drawn shelf if there is one, the typed note if there is not, and a dash
-  // rather than a blank when there is neither.
-  const rack = item.rackId ? await getRack(item.rackId) : null;
+  // Read-only here on purpose. Where a shop keeps a medicine is stock, not
+  // part of the product (0013), and it is set on Stock → Shelves.
+  const location = await getItemLocation(id);
+  const rack = location.rackId ? await getRack(location.rackId) : null;
   const keptAt =
-    rack && item.rackRow !== null && item.rackCol !== null
-      ? cellLabel(rack.name, item.rackRow, item.rackCol)
-      : item.rack || "—";
+    rack && location.row !== null && location.col !== null
+      ? cellLabel(rack.name, location.row, location.col)
+      : location.note || "—";
 
   return (
     <PageShell

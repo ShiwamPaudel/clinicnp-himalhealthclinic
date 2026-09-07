@@ -182,3 +182,22 @@ Redeploying an earlier build is safe **only if it does not need an earlier
 schema**. Migrations are append-only and are never automatically reversed, so a
 rollback across a migration means restoring a backup taken before it. Take one
 before deploying anything that migrates.
+
+## 0013 drops columns — back up before you migrate it
+
+`0013_furniture_and_locations.sql` is the first migration in this project that
+drops columns. It moves where-a-medicine-is-kept off `items` and into
+`item_locations`, then drops `items.rack`, `rack_id`, `rack_row` and
+`rack_col`.
+
+It copies before it drops, and it was dry-run against copies of real data both
+ways round (cells populated, and only free-text notes) with zero dangling
+foreign keys afterwards. It still drops columns, so:
+
+Take the backup from **Settings -> Backup** and download the file before you
+run anything. There is no backup script on the command line; that screen is
+the only path, and the download is the copy that matters.
+
+    pnpm db:migrate
+
+A deploy does not run migrations. Production needs both, in that order.

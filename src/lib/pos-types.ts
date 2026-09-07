@@ -50,6 +50,8 @@ export interface PosCell {
 export interface PosRack {
   id: string;
   name: string;
+  /** rack | shelf | desk — the counter draws each differently */
+  kind: string;
   rows: number;
   cols: number;
   posX: number;

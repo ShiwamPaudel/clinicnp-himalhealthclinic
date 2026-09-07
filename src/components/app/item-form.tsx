@@ -10,9 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { saveItemAction } from "@/app/(app)/items/actions";
 import { factorsFromRatios } from "@/lib/units";
 import { toPaisa, paisaToRupees } from "@/lib/money";
-import { CellPicker, NO_CELL, type CellValue } from "@/components/app/cell-picker";
 import type { Item, Category } from "@/lib/repos/items";
-import type { Rack } from "@/lib/repos/racks";
 import type { Supplier } from "@/lib/repos/suppliers";
 import {
   ITEM_SHAPES,
@@ -34,9 +32,6 @@ interface FormState {
   genericName: string;
   category: Category;
   manufacturer: string;
-  /** the free-text note, kept for shops with no racks drawn */
-  rack: string;
-  cell: CellValue;
   minStockBaseQty: string;
   controlledFlag: boolean;
   preferredSupplierId: string;
@@ -60,12 +55,6 @@ function fromItem(item: Item): FormState {
     genericName: item.genericName,
     category: item.category,
     manufacturer: item.manufacturer,
-    rack: item.rack,
-    cell: {
-      rackId: item.rackId,
-      row: item.rackRow,
-      col: item.rackCol,
-    },
     minStockBaseQty: String(item.minStockBaseQty),
     controlledFlag: item.controlledFlag,
     preferredSupplierId: item.preferredSupplierId ?? "",
@@ -81,8 +70,6 @@ const BLANK: FormState = {
   genericName: "",
   category: "Medicine",
   manufacturer: "",
-  rack: "",
-  cell: NO_CELL,
   minStockBaseQty: "0",
   controlledFlag: false,
   preferredSupplierId: "",
@@ -95,23 +82,16 @@ const BLANK: FormState = {
 export function ItemForm({
   item,
   suppliers,
-  racks,
-  cellCounts,
 }: {
   item?: Item;
   suppliers: Supplier[];
-  racks: Rack[];
-  /** rackId → "row:col" → how many items already stand there. */
-  cellCounts?: Record<string, Record<string, number>>;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [f, setF] = useState<FormState>(item ? fromItem(item) : BLANK);
   const [saving, setSaving] = useState(false);
   // Show the optional fields expanded when editing an item that already uses them.
-  const [showMore, setShowMore] = useState(
-    !!(item && (item.rack || item.rackId || item.preferredSupplierId)),
-  );
+  const [showMore, setShowMore] = useState(!!item?.preferredSupplierId);
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setF((s) => ({ ...s, [k]: v }));
@@ -162,10 +142,6 @@ export function ItemForm({
       genericName: f.genericName.trim(),
       category: f.category,
       manufacturer: f.manufacturer.trim(),
-      rack: f.rack.trim(),
-      rackId: f.cell.rackId,
-      rackRow: f.cell.row,
-      rackCol: f.cell.col,
       minStockBaseQty: Number(f.minStockBaseQty) || 0,
       controlledFlag: f.controlledFlag,
       preferredSupplierId: f.preferredSupplierId || null,
@@ -276,19 +252,6 @@ export function ItemForm({
         </button>
         {showMore && (
           <div className="mt-3 flex flex-col gap-5">
-            <div>
-              <div className="mb-2 text-[13px] font-medium text-sage-900">
-                Where it is kept
-              </div>
-              <CellPicker
-                racks={racks}
-                counts={cellCounts}
-                value={f.cell}
-                onChange={(cell) => set("cell", cell)}
-                shelfNote={f.rack}
-                onShelfNoteChange={(v) => set("rack", v)}
-              />
-            </div>
             <Field label="Preferred supplier">
               <Select
                 value={f.preferredSupplierId}

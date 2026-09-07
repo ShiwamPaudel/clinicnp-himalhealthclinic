@@ -1,5 +1,15 @@
 /**
- * items.ts — item master + unit hierarchy. All SQL for items/item_units.
+ * items.ts — the item master. All SQL for items/item_units.
+ *
+ * This table describes WHAT A PRODUCT IS, and nothing about one shop's copy of
+ * it. Vicks VapoRub comes in a jar, and that is true in every pharmacy in
+ * Nepal — which is the point: this is the table a shared Nepali catalogue can
+ * be imported into and refreshed from.
+ *
+ * Where a shop keeps it lives in `item_locations` (0013). It used to live
+ * here, on four columns, and could not have survived a catalogue refresh.
+ * Selling rates live on `item_units` and are per-shop too; an import must
+ * create missing items and never overwrite a rate somebody set.
  */
 import "server-only";
 import { ulid } from "ulid";
@@ -23,16 +33,6 @@ export interface Item {
   genericName: string;
   category: Category;
   manufacturer: string;
-  /**
-   * The free-text shelf note from before racks were drawable. Kept, shown and
-   * still editable when no racks exist: a shop that wrote "behind the counter"
-   * should not lose it because a newer, better field arrived.
-   */
-  rack: string;
-  /** The drawn shelf. Null when the item is not on the map. */
-  rackId: string | null;
-  rackRow: number | null;
-  rackCol: number | null;
   minStockBaseQty: number;
   controlledFlag: boolean;
   preferredSupplierId: string | null;
@@ -46,10 +46,6 @@ export interface ItemInput {
   genericName: string;
   category: Category;
   manufacturer: string;
-  rack: string;
-  rackId: string | null;
-  rackRow: number | null;
-  rackCol: number | null;
   minStockBaseQty: number;
   controlledFlag: boolean;
   preferredSupplierId: string | null;
@@ -65,10 +61,6 @@ function mapItem(r: Row): Omit<Item, "units"> {
     genericName: r.generic_name as string,
     category: r.category as Category,
     manufacturer: r.manufacturer as string,
-    rack: r.rack as string,
-    rackId: (r.rack_id as string | null) ?? null,
-    rackRow: r.rack_row === null ? null : Number(r.rack_row),
-    rackCol: r.rack_col === null ? null : Number(r.rack_col),
     minStockBaseQty: Number(r.min_stock_base_qty),
     controlledFlag: Number(r.controlled_flag) === 1,
     preferredSupplierId: (r.preferred_supplier_id as string | null) ?? null,
@@ -151,20 +143,15 @@ export async function createItem(input: ItemInput): Promise<string> {
   const now = new Date().toISOString();
   await db().execute({
     sql: `INSERT INTO items
-            (id, brand_name, generic_name, category, manufacturer, rack,
-             rack_id, rack_row, rack_col,
+            (id, brand_name, generic_name, category, manufacturer,
              min_stock_base_qty, controlled_flag, preferred_supplier_id, active, shape, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.brandName,
       input.genericName,
       input.category,
       input.manufacturer,
-      input.rack,
-      input.rackId,
-      input.rackRow,
-      input.rackCol,
       input.minStockBaseQty,
       input.controlledFlag ? 1 : 0,
       input.preferredSupplierId,
@@ -185,7 +172,6 @@ export async function updateItem(
   await db().execute({
     sql: `UPDATE items SET
             brand_name = ?, generic_name = ?, category = ?, manufacturer = ?,
-            rack = ?, rack_id = ?, rack_row = ?, rack_col = ?,
             min_stock_base_qty = ?, controlled_flag = ?,
             preferred_supplier_id = ?, active = ?, shape = ?, updated_at = ?
           WHERE id = ?`,
@@ -194,10 +180,6 @@ export async function updateItem(
       input.genericName,
       input.category,
       input.manufacturer,
-      input.rack,
-      input.rackId,
-      input.rackRow,
-      input.rackCol,
       input.minStockBaseQty,
       input.controlledFlag ? 1 : 0,
       input.preferredSupplierId,

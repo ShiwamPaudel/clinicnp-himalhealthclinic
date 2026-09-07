@@ -1,10 +1,14 @@
 "use server";
 
 /**
- * rack-actions.ts — Settings → Racks.
+ * rack-actions.ts — drawing the shop floor, and saying what is kept where.
  *
  * Admin-only and pharmacy-only: a clinic-only install has no shelves of
  * medicine to map, and its route returns 404 rather than an empty screen.
+ *
+ * Two screens use these. Settings → Shop layout draws the furniture; Stock →
+ * Shelves puts medicines on it. That split is deliberate — the room is a
+ * setting, what is in it is stock.
  */
 import { revalidatePath } from "next/cache";
 import { assertAdmin, NotAuthorizedError } from "@/lib/session";
@@ -16,11 +20,11 @@ import {
   deleteRack,
   getRack,
   rackItemCount,
-  setItemCell,
+  setItemLocation,
   BadCellError,
   RackPositionTakenError,
 } from "@/lib/repos/racks";
-import { rackSchema, itemCellSchema } from "@/lib/validators";
+import { rackSchema, itemLocationSchema } from "@/lib/validators";
 
 export interface ActionResult {
   ok: boolean;
@@ -61,6 +65,7 @@ export async function saveRackAction(
       await recordAudit(user.id, "rack.create", { id: newId, name: parsed.data.name });
     }
     revalidatePath("/settings/racks");
+    revalidatePath("/stock/shelves");
     return OK;
   } catch (err) {
     return handle(err);
@@ -85,6 +90,7 @@ export async function deleteRackAction(id: string): Promise<ActionResult> {
       itemsLeftWithoutShelf: n,
     });
     revalidatePath("/settings/racks");
+    revalidatePath("/stock/shelves");
     revalidatePath("/items");
     return OK;
   } catch (err) {
@@ -92,18 +98,22 @@ export async function deleteRackAction(id: string): Promise<ActionResult> {
   }
 }
 
-export async function setItemCellAction(input: unknown): Promise<ActionResult> {
+export async function setItemLocationAction(
+  input: unknown,
+): Promise<ActionResult> {
   try {
     const user = await assertAdmin();
     await requireModule("pharmacy");
-    const parsed = itemCellSchema.safeParse(input);
+    const parsed = itemLocationSchema.safeParse(input);
     if (!parsed.success) return fail("Please choose a shelf, or none at all.");
-    const { itemId, rackId, row, col } = parsed.data;
-    await setItemCell(itemId, { rackId, row, col });
+    const { itemId, rackId, row, col, note } = parsed.data;
+    await setItemLocation(itemId, { rackId, row, col, note });
     await recordAudit(user.id, "item.shelf", {
       itemId,
       cell: rackId ? `R${row}C${col}` : null,
+      note: note || null,
     });
+    revalidatePath("/stock/shelves");
     revalidatePath("/settings/racks");
     revalidatePath(`/items/${itemId}`);
     return OK;

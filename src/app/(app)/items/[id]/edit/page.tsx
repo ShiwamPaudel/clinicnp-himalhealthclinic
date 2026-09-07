@@ -3,7 +3,6 @@ import { requireAdmin } from "@/lib/session";
 import { requireModulePage } from "@/lib/modules";
 import { getItem } from "@/lib/repos/items";
 import { listSuppliers } from "@/lib/repos/suppliers";
-import { listRacks, cellCounts } from "@/lib/repos/racks";
 import { PageShell } from "@/components/app/page-shell";
 import { ItemForm } from "@/components/app/item-form";
 
@@ -17,19 +16,10 @@ export default async function EditItemPage({
   const { id } = await params;
   const item = await getItem(id);
   if (!item) notFound();
-  const [suppliers, racks, counts] = await Promise.all([
-    listSuppliers(),
-    listRacks(),
-    cellCounts(),
-  ]);
+  const suppliers = await listSuppliers();
   return (
     <PageShell title={`Edit ${item.brandName}`}>
-      <ItemForm
-        item={item}
-        suppliers={suppliers}
-        racks={racks}
-        cellCounts={counts}
-      />
+      <ItemForm item={item} suppliers={suppliers} />
     </PageShell>
   );
 }

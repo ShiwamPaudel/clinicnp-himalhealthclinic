@@ -68,6 +68,7 @@ const TABLES_CHILD_FIRST = [
   "doctors",
   "lab_partners",
   "item_units",
+  "item_locations",
   "items",
   "racks",
   "suppliers",

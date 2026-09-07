@@ -316,11 +316,12 @@ export async function allBatchesWithStock(): Promise<Batch[]> {
 /**
  * A monotonic-ish catalog version (latest stock move / item edit / rack edit).
  *
- * Racks are in here because the counter draws them. Moving an item to another
- * shelf touches items.updated_at and would be caught anyway, but renaming or
- * resizing a rack touches nothing else — and a counter still lighting up
- * "Rack 1" after it was renamed to "Fridge" is worse than no map at all. The
- * count catches a deletion, which lowers nothing.
+ * Furniture and locations are in here because the counter draws them, and
+ * since 0013 neither touches `items` at all: moving a medicine to another
+ * shelf writes only to `item_locations`, and renaming a rack writes only to
+ * `racks`. Without both in this string a counter would keep pointing at the
+ * old shelf for as long as its cache lasted. The counts catch deletions,
+ * which lower no MAX.
  */
 export async function catalogVersion(): Promise<string> {
   const res = await db().execute(
@@ -328,7 +329,9 @@ export async function catalogVersion(): Promise<string> {
        (SELECT IFNULL(MAX(at), '') FROM stock_moves) AS m,
        (SELECT IFNULL(MAX(updated_at), '') FROM items) AS i,
        (SELECT IFNULL(MAX(updated_at), '') FROM racks) AS k,
-       (SELECT COUNT(*) FROM racks) AS n`,
+       (SELECT COUNT(*) FROM racks) AS n,
+       (SELECT IFNULL(MAX(updated_at), '') FROM item_locations) AS l,
+       (SELECT COUNT(*) FROM item_locations) AS c`,
   );
   const r = res.rows[0];
   return [
@@ -336,6 +339,8 @@ export async function catalogVersion(): Promise<string> {
     (r?.m as string) ?? "",
     (r?.k as string) ?? "",
     String(r?.n ?? 0),
+    (r?.l as string) ?? "",
+    String(r?.c ?? 0),
   ].join("|");
 }
 

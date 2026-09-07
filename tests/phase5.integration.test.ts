@@ -59,7 +59,7 @@ beforeAll(async () => {
   const { createBatchWithStock } = await import("@/lib/repos/batches");
   itemId = await createItem({
     brandName: "ABC Med", genericName: "Amox", category: "Medicine", manufacturer: "X",
-    rack: "A1", rackId: null, rackRow: null, rackCol: null, minStockBaseQty: 10, controlledFlag: false, preferredSupplierId: null, active: true, shape: "capsule",
+    minStockBaseQty: 10, controlledFlag: false, preferredSupplierId: null, active: true, shape: "capsule",
     units: [{ level: 0, name: "Tablet", factorToBase: 1, sellingRatePaisa: 200, isDefaultSelling: true }],
   });
   await createBatchWithStock({
@@ -89,7 +89,7 @@ describe("Phase 5 — backup / restore", () => {
     const { createItem } = await import("@/lib/repos/items");
     await createItem({
       brandName: "Extra Med", genericName: "", category: "Other", manufacturer: "",
-      rack: "", rackId: null, rackRow: null, rackCol: null, minStockBaseQty: 0, controlledFlag: false, preferredSupplierId: null, active: true, shape: "tablet",
+      minStockBaseQty: 0, controlledFlag: false, preferredSupplierId: null, active: true, shape: "tablet",
       units: [{ level: 0, name: "Piece", factorToBase: 1, sellingRatePaisa: 50, isDefaultSelling: true }],
     });
     let count = await db().execute("SELECT COUNT(*) n FROM items");

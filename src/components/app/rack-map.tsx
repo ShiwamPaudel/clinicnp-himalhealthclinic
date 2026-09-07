@@ -9,6 +9,8 @@
 export interface MapRack {
   id: string;
   name: string;
+  /** rack | shelf | desk — a label for the reader, no behaviour attached */
+  kind?: string;
   rows: number;
   cols: number;
   posX: number;
@@ -31,7 +33,14 @@ interface Props {
   /** Small enough to sit beside the billing lines rather than fill a page. */
   compact?: boolean;
   /** Draw the rack that is being typed but does not exist yet. */
-  ghost?: { name: string; rows: number; cols: number; posX: number; posY: number } | null;
+  ghost?: {
+    name: string;
+    kind?: string;
+    rows: number;
+    cols: number;
+    posX: number;
+    posY: number;
+  } | null;
 }
 
 /**
@@ -59,6 +68,7 @@ export function RackMap({
         {
           id: "__ghost__",
           name: ghost.name || "New rack",
+          kind: ghost.kind,
           rows: ghost.rows,
           cols: ghost.cols,
           posX: ghost.posX,
@@ -99,7 +109,15 @@ export function RackMap({
               gridRowStart: rack.posY - minY + 1,
             }}
             className={
-              "rounded-lg border p-2 " +
+              "border p-2 " +
+              // A desk is squared off, a shelf is a thin plank, a rack is the
+              // rounded default. Shape carries the kind, so the map still
+              // reads without stopping to look up a legend.
+              (rack.kind === "desk"
+                ? "rounded-sm border-2 "
+                : rack.kind === "shelf"
+                  ? "rounded-lg border-b-4 "
+                  : "rounded-lg ") +
               (isGhost
                 ? "border-dashed border-sage-300 bg-cream-50 opacity-80"
                 : "border-line bg-cream-50")
@@ -111,6 +129,7 @@ export function RackMap({
               </span>
               {!compact && (
                 <span className="text-[11px] text-sage-500">
+                  {rack.kind && rack.kind !== "rack" ? `${rack.kind} · ` : ""}
                   {rack.rows}×{rack.cols}
                 </span>
               )}

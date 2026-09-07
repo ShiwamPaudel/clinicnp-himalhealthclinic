@@ -33,10 +33,12 @@ const TABLES = [
 
   // pharmacy
   "suppliers",
-  // racks come before items: an item carries a foreign key to the shelf it
-  // stands on, and a restore inserts in this order.
+  // A restore inserts in this order, so a table comes after everything it
+  // points at. item_locations points at both racks and items. Since 0013 the
+  // item itself holds no shelf, so items no longer depend on racks.
   "racks",
   "items",
+  "item_locations",
   "item_units",
   "purchases",
   "batches",

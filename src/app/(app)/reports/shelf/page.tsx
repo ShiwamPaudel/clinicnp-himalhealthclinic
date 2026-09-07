@@ -72,7 +72,7 @@ export default async function ShelfListPage() {
       exportReport="shelf-list"
     >
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Card label="Racks drawn" value={String(racks.length)} />
+        <Card label="Racks, shelves and desks" value={String(racks.length)} />
         <Card label="On a shelf" value={String(placed)} />
         <Card
           label="Not on a shelf"
@@ -83,10 +83,10 @@ export default async function ShelfListPage() {
 
       {racks.length === 0 ? (
         <EmptyState
-          message="No racks drawn yet. Draw them in Settings → Racks and the counter can light up the shelf a medicine is on."
+          message="Nothing drawn yet. Draw the shop floor in Settings → Shop layout, then put medicines on it in Stock → Shelves."
         />
       ) : groups.length === 0 ? (
-        <EmptyState message="Racks are drawn, but nothing has been put on them yet." />
+        <EmptyState message="The shop floor is drawn, but nothing has been put on it yet." />
       ) : (
         <div className="flex flex-col gap-6">
           {groups.map((g) => (
@@ -151,8 +151,8 @@ export default async function ShelfListPage() {
           </h2>
           <p className="mb-2 text-[13px] text-sage-500">
             The counter cannot point anyone at these. Open a shelf in{" "}
-            <Link href="/settings/racks" className="underline hover:text-sage-700">
-              Settings → Racks
+            <Link href="/stock/shelves" className="underline hover:text-sage-700">
+              Stock → Shelves
             </Link>{" "}
             and put them on it.
           </p>

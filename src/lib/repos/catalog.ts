@@ -12,7 +12,7 @@ import { allBatchesWithStock, catalogVersion } from "@/lib/repos/batches";
 import { listPosServices } from "@/lib/repos/services";
 import { listDoctors } from "@/lib/repos/doctors";
 import { listLabPartners } from "@/lib/repos/lab-partners";
-import { listRacks } from "@/lib/repos/racks";
+import { listRacks, allItemLocations } from "@/lib/repos/racks";
 import type {
   PosService,
   PosDoctor,
@@ -75,6 +75,7 @@ export async function catalogSnapshot(
       includeClinic ? listLabPartners() : Promise.resolve([]),
       listRacks(),
     ]);
+  const locations = await allItemLocations();
 
   const batchesByItem = new Map<string, CatalogBatch[]>();
   for (const b of batches) {
@@ -102,6 +103,7 @@ export async function catalogSnapshot(
     racks: racks.map((r) => ({
       id: r.id,
       name: r.name,
+      kind: r.kind,
       rows: r.rows,
       cols: r.cols,
       posX: r.posX,
@@ -117,11 +119,13 @@ export async function catalogSnapshot(
       units: i.units,
       batches: batchesByItem.get(i.id) ?? [],
       // All three or none: a half-written cell would draw a light on nothing.
-      cell:
-        i.rackId !== null && i.rackRow !== null && i.rackCol !== null
-          ? { rackId: i.rackId, row: i.rackRow, col: i.rackCol }
-          : null,
-      shelfNote: i.rack,
+      cell: (() => {
+        const l = locations.get(i.id);
+        return l && l.rackId !== null && l.row !== null && l.col !== null
+          ? { rackId: l.rackId, row: l.row, col: l.col }
+          : null;
+      })(),
+      shelfNote: locations.get(i.id)?.note ?? "",
     })),
   };
 }

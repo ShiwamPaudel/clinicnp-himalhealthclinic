@@ -140,9 +140,9 @@ async function main() {
     const itemId = ulid();
     const now = new Date().toISOString();
     await c.execute({
-      sql: `INSERT INTO items (id, brand_name, generic_name, category, manufacturer, rack,
+      sql: `INSERT INTO items (id, brand_name, generic_name, category, manufacturer,
               min_stock_base_qty, controlled_flag, preferred_supplier_id, active, shape, created_at, updated_at)
-            VALUES (?, ?, ?, 'Medicine', 'Citizen Pharma', 'A1', 100, 0, ?, 1, ?, ?, ?)`,
+            VALUES (?, ?, ?, 'Medicine', 'Citizen Pharma', 100, 0, ?, 1, ?, ?, ?)`,
       args: [itemId, brand, generic, supplierId, shape, now, now],
     });
     for (let level = 0; level < units.length; level++) {
@@ -200,13 +200,14 @@ async function main() {
 
   // --- two sample racks, with the demo medicines standing on them ---
   //
-  // The rack map is worth nothing until something is on it, and a training
-  // database that shows an empty floor plan teaches the wrong lesson: whoever
-  // is learning the software concludes the feature does not work. Two racks
-  // laid out side by side, and the two demo medicines placed on different
-  // shelves of the same one, so the highlight visibly moves as you search.
+  // The map is worth nothing until something is on it, and a training database
+  // that shows an empty floor plan teaches the wrong lesson: whoever is
+  // learning the software concludes the feature does not work. Two racks and a
+  // desk laid out as a small room, with the two demo medicines on different
+  // shelves of the same rack so the highlight visibly moves as you search.
   async function ensureDemoRack(
     name: string,
+    kind: string,
     rows: number,
     cols: number,
     posX: number,
@@ -221,32 +222,50 @@ async function main() {
     const id = ulid();
     const at = new Date().toISOString();
     await c.execute({
-      sql: `INSERT INTO racks (id, name, rows_count, cols_count, pos_x, pos_y,
+      sql: `INSERT INTO racks (id, name, kind, rows_count, cols_count, pos_x, pos_y,
                                note, active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-      args: [id, name, rows, cols, posX, posY, note, at, at],
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      args: [id, name, kind, rows, cols, posX, posY, note, at, at],
     });
-    console.log(`seeded sample rack: ${name}`);
+    console.log(`seeded sample ${kind}: ${name}`);
     return id;
   }
 
+  // Where a shop keeps things is its own table since 0013 — not a column on
+  // the product. See db/migrations/0013 for why.
   async function shelve(brand: string, rackId: string, row: number, col: number) {
+    const now = new Date().toISOString();
+    const item = await c.execute({
+      sql: "SELECT id FROM items WHERE brand_name = ?",
+      args: [brand],
+    });
+    const itemId = item.rows[0]?.id;
+    if (!itemId) return;
     await c.execute({
-      sql: `UPDATE items SET rack_id = ?, rack_row = ?, rack_col = ?
-            WHERE brand_name = ?`,
-      args: [rackId, row, col, brand],
+      sql: `INSERT INTO item_locations
+              (id, item_id, rack_id, rack_row, rack_col, note, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, '', ?, ?)
+            ON CONFLICT(item_id) DO UPDATE SET
+              rack_id = excluded.rack_id,
+              rack_row = excluded.rack_row,
+              rack_col = excluded.rack_col,
+              updated_at = excluded.updated_at`,
+      args: [ulid(), itemId, rackId, row, col, now, now],
     });
   }
 
   const frontRack = await ensureDemoRack(
     "Sample Rack 1",
+    "rack",
     4,
     5,
     0,
     0,
     "By the counter",
   );
-  await ensureDemoRack("Sample Rack 2", 3, 4, 1, 0, "Back wall");
+  await ensureDemoRack("Sample Rack 2", "rack", 3, 4, 1, 0, "Back wall");
+  // One of each kind, so the training database shows what the picker offers.
+  await ensureDemoRack("Sample Front Desk", "desk", 2, 4, 0, 1, "Where you bill");
   await shelve("Sample Amoxicillin 500", frontRack, 2, 3);
   await shelve("Sample Paracetamol 500", frontRack, 4, 1);
 

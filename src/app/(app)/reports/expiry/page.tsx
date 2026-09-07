@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/session";
 import { requireModulePage } from "@/lib/modules";
 import { listItems } from "@/lib/repos/items";
-import { listRacks } from "@/lib/repos/racks";
+import { listRacks, allItemLocations } from "@/lib/repos/racks";
 import { cellLabel } from "@/lib/rack-label";
 import { nearExpiryBatches } from "@/lib/repos/batches";
 import { getCompany } from "@/lib/repos/company";
@@ -38,10 +38,11 @@ export default async function ExpiryReportPage({
   const windowIso = adToIso(
     new Date(Date.now() + company.expiryAlertDays * 86400000),
   );
-  const [items, batches, racks] = await Promise.all([
+  const [items, batches, racks, locations] = await Promise.all([
     listItems(true),
     nearExpiryBatches(todayIso, windowIso),
     listRacks(true),
+    allItemLocations(),
   ]);
 
   const unitsByItem = new Map(items.map((i) => [i.id, i.units]));
@@ -55,19 +56,19 @@ export default async function ExpiryReportPage({
     string,
     { label: string; rank: number; row: number; col: number }
   >();
-  for (const i of items) {
-    if (i.rackId === null || i.rackRow === null || i.rackCol === null) continue;
-    const rack = rackById.get(i.rackId);
+  const shelfNoteByItem = new Map<string, string>();
+  for (const [itemId, loc] of locations) {
+    if (loc.note) shelfNoteByItem.set(itemId, loc.note);
+    if (loc.rackId === null || loc.row === null || loc.col === null) continue;
+    const rack = rackById.get(loc.rackId);
     if (!rack) continue;
-    shelfByItem.set(i.id, {
-      label: cellLabel(rack.name, i.rackRow, i.rackCol),
-      rank: rackOrder.get(i.rackId) ?? 9999,
-      row: i.rackRow,
-      col: i.rackCol,
+    shelfByItem.set(itemId, {
+      label: cellLabel(rack.name, loc.row, loc.col),
+      rank: rackOrder.get(loc.rackId) ?? 9999,
+      row: loc.row,
+      col: loc.col,
     });
   }
-
-  const shelfNoteByItem = new Map(items.map((i) => [i.id, i.rack]));
 
   // Anything with no shelf sorts last: it is not a place to walk to.
   const rows =

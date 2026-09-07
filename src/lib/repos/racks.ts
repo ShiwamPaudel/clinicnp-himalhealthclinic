@@ -1,24 +1,33 @@
 /**
- * racks.ts — the shop floor.
+ * racks.ts — the shop floor, and what this shop keeps where.
  *
- * A rack is a grid with a position in the room. The position is the whole
- * point: a map drawn in a different order from the shop is slower to read than
- * no map, because the person has to translate it. So racks carry `pos_x` and
- * `pos_y` in rack-widths, and a rack added to the left of the first one gets
- * -1 rather than renumbering everything that already exists.
+ * A piece of furniture is a grid with a position in the room. The position is
+ * the whole point: a map drawn in a different order from the shop is slower to
+ * read than no map, because the person has to translate it. So rows carry
+ * `pos_x` and `pos_y` in widths, and something added to the left of the first
+ * one gets -1 rather than renumbering everything that already exists.
  *
  * Rows and columns are numbered from 1 and shown as "R2C3". They are not
  * lettered: the person reading it is looking at a shelf across a room, often
  * in a hurry, and digits survive that better than "B3" does.
+ *
+ * WHERE A MEDICINE IS KEPT LIVES IN `item_locations`, NOT ON THE ITEM (0013).
+ * The item master describes a product — Vicks comes in a jar, everywhere in
+ * Nepal. Which shelf it sits on is true in one shop only, so a shared
+ * catalogue can be imported and refreshed without trampling what a shop
+ * arranged. If you find yourself adding a location column to `items`, that is
+ * the reason not to.
  */
 import "server-only";
 import { ulid } from "ulid";
 import { db } from "@/lib/db";
 import type { Row } from "@/lib/db";
+import { asFurnitureKind, type FurnitureKind } from "@/lib/furniture";
 
 export interface Rack {
   id: string;
   name: string;
+  kind: FurnitureKind;
   rows: number;
   cols: number;
   posX: number;
@@ -29,6 +38,7 @@ export interface Rack {
 
 export interface RackInput {
   name: string;
+  kind: FurnitureKind;
   rows: number;
   cols: number;
   posX: number;
@@ -44,12 +54,25 @@ export interface ItemCell {
   col: number | null;
 }
 
+/** A cell, plus the free-text fallback for a shop that drew no furniture. */
+export interface ItemLocation extends ItemCell {
+  note: string;
+}
+
+export const EMPTY_LOCATION: ItemLocation = {
+  rackId: null,
+  row: null,
+  col: null,
+  note: "",
+};
+
 export const MAX_RACK_SIDE = 26;
 
 function mapRack(r: Row): Rack {
   return {
     id: r.id as string,
     name: r.name as string,
+    kind: asFurnitureKind(r.kind),
     rows: Number(r.rows_count),
     cols: Number(r.cols_count),
     posX: Number(r.pos_x),
@@ -69,10 +92,10 @@ export class BadCellError extends Error {
   }
 }
 
-/** Two racks cannot stand in the same place on the floor. */
+/** Two pieces of furniture cannot stand in the same place. */
 export class RackPositionTakenError extends Error {
   code = "rack_position_taken" as const;
-  userMessage = "There is already a rack in that spot.";
+  userMessage = "There is already something in that spot.";
 }
 
 export async function listRacks(includeInactive = false): Promise<Rack[]> {
@@ -95,7 +118,7 @@ export async function getRack(id: string): Promise<Rack | null> {
 function assertSide(n: number, what: string): void {
   if (!Number.isInteger(n) || n < 1 || n > MAX_RACK_SIDE) {
     throw new BadCellError(
-      `A rack can have between 1 and ${MAX_RACK_SIDE} ${what}.`,
+      `One piece of furniture can have between 1 and ${MAX_RACK_SIDE} ${what}.`,
     );
   }
 }
@@ -113,12 +136,13 @@ export async function createRack(input: RackInput): Promise<string> {
   const now = new Date().toISOString();
   await db().execute({
     sql: `INSERT INTO racks
-            (id, name, rows_count, cols_count, pos_x, pos_y, note, active,
+            (id, name, kind, rows_count, cols_count, pos_x, pos_y, note, active,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.name.trim(),
+      input.kind,
       input.rows,
       input.cols,
       input.posX,
@@ -142,10 +166,10 @@ export async function updateRack(id: string, input: RackInput): Promise<void> {
   });
   if (taken.rows[0]) throw new RackPositionTakenError();
 
-  // Shrinking a rack can strand items on cells that no longer exist. Say so
-  // rather than quietly leaving a medicine pointing at a shelf that is gone.
+  // Shrinking can strand items on cells that no longer exist. Say so rather
+  // than quietly leaving a medicine pointing at a shelf that is gone.
   const stranded = await db().execute({
-    sql: `SELECT COUNT(*) AS n FROM items
+    sql: `SELECT COUNT(*) AS n FROM item_locations
           WHERE rack_id = ? AND (rack_row > ? OR rack_col > ?)`,
     args: [id, input.rows, input.cols],
   });
@@ -160,11 +184,12 @@ export async function updateRack(id: string, input: RackInput): Promise<void> {
 
   await db().execute({
     sql: `UPDATE racks
-             SET name = ?, rows_count = ?, cols_count = ?, pos_x = ?, pos_y = ?,
-                 note = ?, active = ?, updated_at = ?
+             SET name = ?, kind = ?, rows_count = ?, cols_count = ?,
+                 pos_x = ?, pos_y = ?, note = ?, active = ?, updated_at = ?
            WHERE id = ?`,
     args: [
       input.name.trim(),
+      input.kind,
       input.rows,
       input.cols,
       input.posX,
@@ -179,33 +204,41 @@ export async function updateRack(id: string, input: RackInput): Promise<void> {
 
 export async function rackItemCount(id: string): Promise<number> {
   const res = await db().execute({
-    sql: "SELECT COUNT(*) AS n FROM items WHERE rack_id = ?",
+    sql: "SELECT COUNT(*) AS n FROM item_locations WHERE rack_id = ?",
     args: [id],
   });
   return Number(res.rows[0]?.n ?? 0);
 }
 
 /**
- * Remove a rack. Items standing on it lose their cell but keep everything
- * else — an item without a shelf is ordinary, not broken.
+ * Remove a piece of furniture. Items standing on it lose their cell but keep
+ * a written note if they had one — and a location row that ends up holding
+ * neither is deleted, because "no row" is how this table says nobody has
+ * decided yet.
  */
 export async function deleteRack(id: string): Promise<void> {
   await db().batch([
     {
-      sql: "UPDATE items SET rack_id = NULL, rack_row = NULL, rack_col = NULL WHERE rack_id = ?",
-      args: [id],
+      sql: `UPDATE item_locations
+               SET rack_id = NULL, rack_row = NULL, rack_col = NULL, updated_at = ?
+             WHERE rack_id = ?`,
+      args: [new Date().toISOString(), id],
+    },
+    {
+      sql: "DELETE FROM item_locations WHERE rack_id IS NULL AND trim(note) = ''",
+      args: [],
     },
     { sql: "DELETE FROM racks WHERE id = ?", args: [id] },
   ]);
 }
 
 /**
- * Check a cell before anything is written to an item.
+ * Check a cell before anything is written.
  *
- * Two screens put medicines on shelves — the item form and the shelf inspector
- * on the racks page — and a third will exist the moment somebody imports a
- * price list. They all come through here, so a rule added once is a rule
- * everywhere. Returns the normalised cell, with a null rack meaning no shelf.
+ * Several screens put medicines on shelves — the shelf plan under Stock, and
+ * whatever imports a price list next — so they all come through here and a
+ * rule added once is a rule everywhere. Returns the normalised cell, with a
+ * null rack meaning no shelf.
  */
 export async function assertCellFits(cell: ItemCell): Promise<ItemCell> {
   if (cell.rackId === null || cell.rackId === "") {
@@ -225,21 +258,56 @@ export async function assertCellFits(cell: ItemCell): Promise<ItemCell> {
   return { rackId: rack.id, row, col };
 }
 
-/** Put an item on a shelf, or take it off one by passing a null rack. */
-export async function setItemCell(
+/** Where one item is kept. Never null — "nowhere" is a real answer. */
+export async function getItemLocation(itemId: string): Promise<ItemLocation> {
+  const res = await db().execute({
+    sql: "SELECT * FROM item_locations WHERE item_id = ?",
+    args: [itemId],
+  });
+  const r = res.rows[0];
+  if (!r) return EMPTY_LOCATION;
+  return {
+    rackId: (r.rack_id as string | null) ?? null,
+    row: r.rack_row === null ? null : Number(r.rack_row),
+    col: r.rack_col === null ? null : Number(r.rack_col),
+    note: (r.note as string) ?? "",
+  };
+}
+
+/**
+ * Put an item somewhere, or nowhere.
+ *
+ * A location holding neither a cell nor a note is deleted rather than stored:
+ * an empty row and no row would mean the same thing, and two ways to say one
+ * thing is how reports start disagreeing.
+ */
+export async function setItemLocation(
   itemId: string,
-  cell: ItemCell,
+  input: ItemLocation,
 ): Promise<void> {
-  const fitted = await assertCellFits(cell);
+  const cell = await assertCellFits(input);
+  const note = input.note.trim();
+  const now = new Date().toISOString();
+
+  if (cell.rackId === null && note === "") {
+    await db().execute({
+      sql: "DELETE FROM item_locations WHERE item_id = ?",
+      args: [itemId],
+    });
+    return;
+  }
+
   await db().execute({
-    sql: "UPDATE items SET rack_id = ?, rack_row = ?, rack_col = ?, updated_at = ? WHERE id = ?",
-    args: [
-      fitted.rackId,
-      fitted.row,
-      fitted.col,
-      new Date().toISOString(),
-      itemId,
-    ],
+    sql: `INSERT INTO item_locations
+            (id, item_id, rack_id, rack_row, rack_col, note, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(item_id) DO UPDATE SET
+            rack_id = excluded.rack_id,
+            rack_row = excluded.rack_row,
+            rack_col = excluded.rack_col,
+            note = excluded.note,
+            updated_at = excluded.updated_at`,
+    args: [ulid(), itemId, cell.rackId, cell.row, cell.col, note, now, now],
   });
 }
 
@@ -260,9 +328,11 @@ export async function itemsOnCell(
   col: number,
 ): Promise<ShelfItem[]> {
   const res = await db().execute({
-    sql: `SELECT id, brand_name, generic_name FROM items
-          WHERE rack_id = ? AND rack_row = ? AND rack_col = ? AND active = 1
-          ORDER BY brand_name`,
+    sql: `SELECT i.id, i.brand_name, i.generic_name
+            FROM item_locations l JOIN items i ON i.id = l.item_id
+           WHERE l.rack_id = ? AND l.rack_row = ? AND l.rack_col = ?
+             AND i.active = 1
+           ORDER BY i.brand_name`,
     args: [rackId, row, col],
   });
   return res.rows.map((r) => ({
@@ -272,53 +342,57 @@ export async function itemsOnCell(
   }));
 }
 
-/** How many items stand on each cell of each rack, for the settings preview. */
+/** How many items stand on each cell, for the map. */
 export async function cellCounts(): Promise<
   Record<string, Record<string, number>>
 > {
   const res = await db().execute(
-    `SELECT rack_id, rack_row, rack_col, COUNT(*) AS n
-       FROM items
-      WHERE rack_id IS NOT NULL AND active = 1
-      GROUP BY rack_id, rack_row, rack_col`,
+    `SELECT l.rack_id, l.rack_row, l.rack_col, COUNT(*) AS n
+       FROM item_locations l JOIN items i ON i.id = l.item_id
+      WHERE l.rack_id IS NOT NULL AND i.active = 1
+      GROUP BY l.rack_id, l.rack_row, l.rack_col`,
   );
   const out: Record<string, Record<string, number>> = {};
   for (const r of res.rows) {
     const rackId = r.rack_id as string;
-    out[rackId] ??= {};
-    out[rackId][`${Number(r.rack_row)}:${Number(r.rack_col)}`] = Number(r.n);
+    const cells = (out[rackId] ??= {});
+    cells[`${Number(r.rack_row)}:${Number(r.rack_col)}`] = Number(r.n);
   }
   return out;
 }
 
 /**
- * One row per active item, in the order a person walks the shop: rack by rack
- * across the floor, then down each rack, then across each shelf. Items with no
- * shelf sort last, because during setup they are the list of work remaining
- * rather than a place to visit.
+ * One row per active item, in the order a person walks the shop: piece by
+ * piece across the floor, then down each one, then across each shelf. Items
+ * with no place sort last, because during setup they are the list of work
+ * remaining rather than somewhere to visit.
  */
 export interface ShelfRow {
   itemId: string;
   brandName: string;
   genericName: string;
   category: string;
-  /** the free-text note from before racks existed, kept and shown, never lost */
+  /** the free-text note, for a shop that has drawn no furniture */
   shelfNote: string;
   rackId: string | null;
   rackName: string | null;
+  rackKind: FurnitureKind | null;
   row: number | null;
   col: number | null;
 }
 
 export async function shelfRows(): Promise<ShelfRow[]> {
   const res = await db().execute(
-    `SELECT i.id, i.brand_name, i.generic_name, i.category, i.rack AS shelf_note,
-            i.rack_id, i.rack_row, i.rack_col, r.name AS rack_name
+    `SELECT i.id, i.brand_name, i.generic_name, i.category,
+            COALESCE(l.note, '') AS shelf_note,
+            l.rack_id, l.rack_row, l.rack_col,
+            r.name AS rack_name, r.kind AS rack_kind
        FROM items i
-       LEFT JOIN racks r ON r.id = i.rack_id
+       LEFT JOIN item_locations l ON l.item_id = i.id
+       LEFT JOIN racks r ON r.id = l.rack_id
       WHERE i.active = 1
-      ORDER BY (i.rack_id IS NULL), r.pos_y, r.pos_x, r.name,
-               i.rack_row, i.rack_col, i.brand_name`,
+      ORDER BY (l.rack_id IS NULL), r.pos_y, r.pos_x, r.name,
+               l.rack_row, l.rack_col, i.brand_name`,
   );
   return res.rows.map((r) => ({
     itemId: r.id as string,
@@ -328,7 +402,23 @@ export async function shelfRows(): Promise<ShelfRow[]> {
     shelfNote: (r.shelf_note as string) ?? "",
     rackId: (r.rack_id as string | null) ?? null,
     rackName: (r.rack_name as string | null) ?? null,
+    rackKind: r.rack_kind === null ? null : asFurnitureKind(r.rack_kind),
     row: r.rack_row === null ? null : Number(r.rack_row),
     col: r.rack_col === null ? null : Number(r.rack_col),
   }));
+}
+
+/** Every item's location in one map, for the catalog snapshot. */
+export async function allItemLocations(): Promise<Map<string, ItemLocation>> {
+  const res = await db().execute("SELECT * FROM item_locations");
+  const out = new Map<string, ItemLocation>();
+  for (const r of res.rows) {
+    out.set(r.item_id as string, {
+      rackId: (r.rack_id as string | null) ?? null,
+      row: r.rack_row === null ? null : Number(r.rack_row),
+      col: r.rack_col === null ? null : Number(r.rack_col),
+      note: (r.note as string) ?? "",
+    });
+  }
+  return out;
 }

@@ -3,6 +3,7 @@
  */
 import { z } from "zod";
 import { ITEM_SHAPE_KEYS, type ItemShape } from "@/lib/item-shape";
+import { FURNITURE_KINDS, type FurnitureKind } from "@/lib/furniture";
 
 export const loginSchema = z.object({
   username: z.string().min(1),
@@ -66,12 +67,6 @@ export const itemSchema = z.object({
   genericName: z.string(),
   category: categorySchema,
   manufacturer: z.string(),
-  rack: z.string(),
-  // The drawn shelf. All three travel together or not at all; the repo checks
-  // the cell is actually on the rack before anything is written.
-  rackId: z.string().nullable(),
-  rackRow: z.number().int().min(1).max(26).nullable(),
-  rackCol: z.number().int().min(1).max(26).nullable(),
   minStockBaseQty: z.number().int().min(0),
   controlledFlag: z.boolean(),
   preferredSupplierId: z.string().nullable(),
@@ -240,7 +235,8 @@ export type CompanyInput = z.infer<typeof companySchema>;
 // ---------------------------------------------------------------------------
 
 export const rackSchema = z.object({
-  name: z.string().min(1, "Give the rack a name"),
+  name: z.string().min(1, "Give it a name"),
+  kind: z.enum(FURNITURE_KINDS as unknown as [FurnitureKind, ...FurnitureKind[]]),
   rows: z.number().int().min(1, "At least one row").max(26, "That is too many rows for one rack"),
   cols: z.number().int().min(1, "At least one column").max(26, "That is too many columns for one rack"),
   posX: z.number().int().min(-99).max(99),
@@ -250,11 +246,12 @@ export const rackSchema = z.object({
 });
 export type RackFormInput = z.infer<typeof rackSchema>;
 
-export const itemCellSchema = z.object({
+export const itemLocationSchema = z.object({
   itemId: z.string().min(1),
   rackId: z.string().min(1).nullable(),
   row: z.number().int().min(1).max(26).nullable(),
   col: z.number().int().min(1).max(26).nullable(),
+  note: z.string().max(120, "Keep the note short"),
 });
 
 export const serviceGroupSchema = z.object({

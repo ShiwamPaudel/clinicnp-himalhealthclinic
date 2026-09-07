@@ -7,16 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import Link from "next/link";
+import { Select } from "@/components/ui/select";
 import { RackMap } from "@/components/app/rack-map";
-import {
-  ShelfInspector,
-  type SelectedCell,
-} from "@/components/app/shelf-inspector";
 import { saveRackAction, deleteRackAction } from "@/app/(app)/settings/rack-actions";
-import type { Rack, ShelfRow } from "@/lib/repos/racks";
+import {
+  FURNITURE_KINDS,
+  FURNITURE_LABEL,
+  DEFAULT_FURNITURE_KIND,
+  type FurnitureKind,
+} from "@/lib/furniture";
+import type { Rack } from "@/lib/repos/racks";
 
 interface FormState {
   name: string;
+  kind: FurnitureKind;
   rows: string;
   cols: string;
   posX: number;
@@ -24,7 +29,22 @@ interface FormState {
   note: string;
 }
 
-const BLANK: FormState = { name: "", rows: "4", cols: "5", posX: 0, posY: 0, note: "" };
+const BLANK: FormState = {
+  name: "",
+  kind: DEFAULT_FURNITURE_KIND,
+  rows: "4",
+  cols: "5",
+  posX: 0,
+  posY: 0,
+  note: "",
+};
+
+/** A desk is wide and shallow; a shelf is one long run. Racks are tall. */
+const SHAPE_FOR_KIND: Record<FurnitureKind, { rows: string; cols: string }> = {
+  rack: { rows: "4", cols: "5" },
+  shelf: { rows: "1", cols: "6" },
+  desk: { rows: "2", cols: "4" },
+};
 
 /** What the person typed, clamped to something drawable while they type. */
 function side(entry: string): number {
@@ -35,11 +55,11 @@ function side(entry: string): number {
 
 export function RacksManager({
   initial,
-  items,
+  counts,
 }: {
   initial: Rack[];
-  /** Every active item with the shelf it stands on, if any. */
-  items: ShelfRow[];
+  /** rackId → "row:col" → how many items stand there. */
+  counts: Record<string, Record<string, number>>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -47,39 +67,49 @@ export function RacksManager({
   const [editing, setEditing] = useState<Rack | null>(null);
   const [form, setForm] = useState<FormState>(BLANK);
   const [saving, setSaving] = useState(false);
-  const [selected, setSelected] = useState<SelectedCell | null>(null);
 
-  // Counts are derived from the same list the inspector shows, so the number
-  // drawn on a cell and the list inside it can never disagree.
-  const counts = useMemo(() => {
-    const out: Record<string, Record<string, number>> = {};
-    for (const i of items) {
-      if (!i.rackId || i.row === null || i.col === null) continue;
-      const cells = (out[i.rackId] ??= {});
-      const key = `${i.row}:${i.col}`;
-      cells[key] = (cells[key] ?? 0) + 1;
-    }
-    return out;
-  }, [items]);
-
-  const unshelved = useMemo(
-    () => items.filter((i) => i.rackId === null).length,
-    [items],
+  const placed = useMemo(
+    () =>
+      Object.values(counts).reduce(
+        (sum, cells) => sum + Object.values(cells).reduce((s, n) => s + n, 0),
+        0,
+      ),
+    [counts],
   );
-
-  const selectedRack = selected
-    ? (initial.find((r) => r.id === selected.rackId) ?? null)
-    : null;
 
   function openNew(at?: { posX: number; posY: number }) {
     setEditing(null);
     setForm({
       ...BLANK,
-      name: `Rack ${initial.length + 1}`,
+      name: `${FURNITURE_LABEL[DEFAULT_FURNITURE_KIND]} ${initial.length + 1}`,
       posX: at?.posX ?? nextFreeX(),
       posY: at?.posY ?? 0,
     });
     setOpen(true);
+  }
+
+  /**
+   * Changing the kind renames and reshapes only while both still look
+   * untouched. Somebody who typed "Cold shelf" and then realised it is a desk
+   * should not lose the name, and somebody who set 3x7 should keep it.
+   */
+  function pickKind(kind: FurnitureKind) {
+    setForm((f) => {
+      const wasDefaultName =
+        f.name === `${FURNITURE_LABEL[f.kind]} ${initial.length + 1}`;
+      const wasDefaultShape =
+        f.rows === SHAPE_FOR_KIND[f.kind].rows &&
+        f.cols === SHAPE_FOR_KIND[f.kind].cols;
+      return {
+        ...f,
+        kind,
+        name: wasDefaultName
+          ? `${FURNITURE_LABEL[kind]} ${initial.length + 1}`
+          : f.name,
+        rows: wasDefaultShape ? SHAPE_FOR_KIND[kind].rows : f.rows,
+        cols: wasDefaultShape ? SHAPE_FOR_KIND[kind].cols : f.cols,
+      };
+    });
   }
 
   /** Somewhere on the end of the row that is not already occupied. */
@@ -92,6 +122,7 @@ export function RacksManager({
     setEditing(rack);
     setForm({
       name: rack.name,
+      kind: rack.kind,
       rows: String(rack.rows),
       cols: String(rack.cols),
       posX: rack.posX,
@@ -105,6 +136,7 @@ export function RacksManager({
     setSaving(true);
     const res = await saveRackAction(editing?.id ?? null, {
       name: form.name.trim(),
+      kind: form.kind,
       rows: side(form.rows),
       cols: side(form.cols),
       posX: form.posX,
@@ -126,7 +158,7 @@ export function RacksManager({
     const n = Object.values(counts[rack.id] ?? {}).reduce((s, x) => s + x, 0);
     const warning =
       n > 0
-        ? `${rack.name} has ${n} item${n === 1 ? "" : "s"} on it. They will keep everything else but lose their shelf. Remove the rack?`
+        ? `${rack.name} has ${n} item${n === 1 ? "" : "s"} on it. They will keep everything else but lose their place. Remove it?`
         : `Remove ${rack.name}?`;
     if (!confirm(warning)) return;
     const res = await deleteRackAction(rack.id);
@@ -140,7 +172,8 @@ export function RacksManager({
 
   const ghost = open
     ? {
-        name: form.name || "New rack",
+        name: form.name || `New ${FURNITURE_LABEL[form.kind].toLowerCase()}`,
+        kind: form.kind,
         rows: side(form.rows),
         cols: side(form.cols),
         posX: form.posX,
@@ -156,49 +189,36 @@ export function RacksManager({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[16px] font-semibold text-sage-900">
-            Where things are kept
+            The shop floor
           </h2>
           <p className="text-[13px] text-sage-500">
-            Draw the racks the way they stand in the shop. The counter can then
-            light up the shelf a medicine is on.
+            Draw the racks, shelves and desks the way they stand in the room.
+            Put medicines on them in{" "}
+            <Link href="/stock/shelves" className="underline hover:text-sage-700">
+              Stock → Shelves
+            </Link>
+            .
           </p>
         </div>
         <Button onClick={() => openNew()}>
-          <Plus size={16} /> Add a rack
+          <Plus size={16} /> Add
         </Button>
       </div>
 
       <div className="overflow-x-auto rounded-[10px] border border-line bg-cream-50 p-4">
-        <RackMap
-          racks={drawn}
-          counts={counts}
-          ghost={ghost}
-          highlight={selected}
-          onCellClick={(rackId, row, col) =>
-            setSelected((cur) =>
-              cur && cur.rackId === rackId && cur.row === row && cur.col === col
-                ? null
-                : { rackId, row, col },
-            )
-          }
-        />
-        {initial.length > 0 && !selected && (
+        <RackMap racks={drawn} counts={counts} ghost={ghost} />
+        {initial.length > 0 && (
           <p className="mt-3 text-[12px] text-sage-500">
-            Click a shelf to see what is on it, or to put something there.
-            {unshelved > 0 &&
-              ` ${unshelved} item${unshelved === 1 ? " is" : "s are"} not on a shelf yet.`}
+            {placed === 0
+              ? "Nothing is on these yet."
+              : `${placed} item${placed === 1 ? " is" : "s are"} on these.`}{" "}
+            <Link href="/stock/shelves" className="underline hover:text-sage-700">
+              Put medicines on them
+            </Link>
+            .
           </p>
         )}
       </div>
-
-      {selectedRack && selected && (
-        <ShelfInspector
-          rack={selectedRack}
-          cell={selected}
-          items={items}
-          onClose={() => setSelected(null)}
-        />
-      )}
 
       {initial.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -214,12 +234,12 @@ export function RacksManager({
               >
                 <span className="font-medium text-sage-900">{rack.name}</span>
                 <span className="text-[13px] text-sage-500">
-                  {rack.rows} rows × {rack.cols} columns · {n} item
-                  {n === 1 ? "" : "s"}
+                  {FURNITURE_LABEL[rack.kind]} · {rack.rows} rows ×{" "}
+                  {rack.cols} columns · {n} item{n === 1 ? "" : "s"}
                 </span>
                 <div className="ml-auto flex flex-wrap items-center gap-1.5">
                   <span className="mr-1 text-[12px] text-sage-500">
-                    Add another rack:
+                    Add another:
                   </span>
                   <Button
                     variant="secondary"
@@ -269,7 +289,7 @@ export function RacksManager({
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        title={editing ? `Edit ${editing.name}` : "Add a rack"}
+        title={editing ? `Edit ${editing.name}` : "Add to the shop floor"}
         footer={
           <>
             <Button variant="secondary" onClick={() => setOpen(false)}>
@@ -282,14 +302,29 @@ export function RacksManager({
         }
       >
         <div className="flex flex-col gap-4">
-          <Field label="Name" htmlFor="rack-name">
-            <Input
-              id="rack-name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Rack 1"
-            />
-          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Kind" htmlFor="rack-kind">
+              <Select
+                id="rack-kind"
+                value={form.kind}
+                onChange={(e) => pickKind(e.target.value as FurnitureKind)}
+              >
+                {FURNITURE_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {FURNITURE_LABEL[k]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Name" htmlFor="rack-name">
+              <Input
+                id="rack-name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder={`${FURNITURE_LABEL[form.kind]} 1`}
+              />
+            </Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Rows" htmlFor="rack-rows">
               <Input
