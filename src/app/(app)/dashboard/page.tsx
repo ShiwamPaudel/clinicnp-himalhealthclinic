@@ -122,9 +122,9 @@ export default async function DashboardPage() {
                 value={String(clinic.newRegistrations)}
               />
               <AlertCard
-                href="/files/pending"
-                label="Files pending"
-                count={clinic.filesPending}
+                href="/lab"
+                label="Samples to collect"
+                count={clinic.samplesToCollect}
                 tone="warn"
               />
             </div>

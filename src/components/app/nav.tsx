@@ -15,7 +15,7 @@ import {
   CalendarClock,
   Users,
   Stethoscope,
-  Paperclip,
+  FlaskConical,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/lib/repos/users";
@@ -57,7 +57,7 @@ const GROUPS: NavGroup[] = [
       { href: "/visits/today", label: "Today", icon: CalendarClock },
       { href: "/patients", label: "Patients", icon: Users },
       { href: "/visits", label: "Visits", icon: Stethoscope },
-      { href: "/files/pending", label: "Files pending", icon: Paperclip },
+      { href: "/lab", label: "Laboratory", icon: FlaskConical },
     ],
   },
   {

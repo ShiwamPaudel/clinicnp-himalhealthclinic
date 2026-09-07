@@ -107,7 +107,7 @@ export async function saveServiceAction(
       outsourced: data.outsourced,
       defaultLabPartnerId: data.defaultLabPartnerId || null,
       partnerCostPaisa: data.partnerCostPaisa,
-      keepsFile: data.keepsFile,
+      sampleType: data.sampleType,
       followupDays: data.followupDays,
       followupRatePaisa: data.followupRatePaisa,
       vatApplicable: data.vatApplicable,

@@ -45,7 +45,6 @@ const REPORTS: ReportCard[] = [
   { href: "/reports/visits", label: "Patient visit register", desc: "Every visit in a date range", icon: Users, adminOnly: true, clinicOnly: true },
   { href: "/reports/new-patients", label: "New and returning patients", desc: "Who is coming back", icon: UserPlus, adminOnly: true, clinicOnly: true },
   { href: "/reports/utilisation", label: "Diagnostics utilisation", desc: "Which departments are busy", icon: PieChart, adminOnly: true, clinicOnly: true },
-  { href: "/files/pending", label: "Files pending", desc: "Reports that have not come back yet", icon: Paperclip, clinicOnly: true },
   { href: "/reports/sales-register", label: "Sales register", desc: "Every invoice in a date range", icon: ReceiptText, adminOnly: true },
   { href: "/reports/purchase-register", label: "Purchase register", desc: "Every purchase entry", icon: ShoppingCart, adminOnly: true, pharmacyOnly: true },
   { href: "/reports/profit", label: "Profit margin", desc: "Revenue, cost, margin by item", icon: TrendingUp, adminOnly: true, pharmacyOnly: true },

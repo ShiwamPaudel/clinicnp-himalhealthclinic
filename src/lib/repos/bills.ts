@@ -592,10 +592,13 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
           r.followupApplied ? 1 : 0,
           r.followupNote,
           visitId,
-          // The dispatch slip prints with the bill, so a line sent to an
-          // outside laboratory is on its way the moment the bill is saved.
-          // Reprinting the slip later does not move this date.
-          r.line.labPartnerId ? now : null,
+          // Not dispatched. Saving a bill means a test was ordered, not that
+          // a sample is at the laboratory — nobody has drawn it yet. It is
+          // stamped when somebody says so, on Laboratory -> To send (0016).
+          // This used to be stamped here, which is why the pipeline's stage
+          // conditions are written to survive a line dispatched without ever
+          // having been collected.
+          null,
         ],
       });
     }

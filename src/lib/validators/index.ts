@@ -273,7 +273,7 @@ export const serviceSchema = z.object({
   outsourced: z.boolean(),
   defaultLabPartnerId: z.string().nullable(),
   partnerCostPaisa: z.number().int().min(0, "A cost cannot be negative"),
-  keepsFile: z.boolean(),
+  sampleType: z.string().max(40),
   followupDays: z.number().int().min(0).max(365, "A follow-up window is at most a year"),
   followupRatePaisa: z.number().int().min(0),
   vatApplicable: z.boolean(),

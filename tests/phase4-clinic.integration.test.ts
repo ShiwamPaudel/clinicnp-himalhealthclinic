@@ -96,6 +96,7 @@ beforeAll(async () => {
                            active, created_at, updated_at)
      VALUES ('svc_cbc','CBC','grp_lab', 60000, 1, 'lab1', 40000, 1, 1, 't','t')`,
   );
+  await raw.execute("UPDATE services SET sample_type = 'Blood' WHERE id = 'svc_cbc'");
   await raw.execute(
     `INSERT INTO services (id, name, group_id, rate_paisa, keeps_file,
                            active, created_at, updated_at)
@@ -446,30 +447,87 @@ describe("Phase 4 — patients seen", () => {
   });
 });
 
-describe("Phase 4 — files pending", () => {
-  it("lists services that keep a file and have nothing attached", async () => {
-    const { filesPending } = await import("@/lib/repos/clinic-reports");
-    const rows = await filesPending();
-    // CBC and USG both keep a file; the consultation does not
-    expect(rows.every((r) => r.serviceName !== "OPD Consultation")).toBe(true);
-    expect(rows.some((r) => r.serviceName === "CBC")).toBe(true);
-    expect(rows.some((r) => r.partnerName === "Everest Laboratory")).toBe(true);
+describe("Phase 4 — the laboratory pipeline", () => {
+  it("puts outsourced tests on the collection list and leaves everything else off", async () => {
+    const { labWorklist } = await import("@/lib/repos/lab");
+    const rows = await labWorklist("to_collect");
+    // A consultation is not a sample, and an in-house ultrasound is not sent
+    // anywhere. Only what goes to an outside laboratory is work here.
+    expect(rows.every((r) => r.testName === "CBC")).toBe(true);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]!.sampleType).toBe("Blood");
+    expect(rows[0]!.partnerName).toBe("Everest Laboratory");
   });
 
-  it("drops a service off the list once a file is attached to its visit", async () => {
-    const { filesPending } = await import("@/lib/repos/clinic-reports");
-    const before = await filesPending();
-    const target = before.find((r) => r.visitId)!;
-
-    await q(
-      `INSERT INTO attachments (id, patient_id, visit_id, kind, title, file_name,
-                                mime, size_bytes, blob_key, uploaded_by, created_at)
-       VALUES (?, ?, ?, 'report', 'Report', 'r.pdf', 'application/pdf', 10, 'k', 'u1', 't')`,
-      [ulid(), patientId, target.visitId],
+  it("moves a test along one stage at a time and no further", async () => {
+    const { labWorklist, advanceLabLine, getLabLine, stageOf } = await import(
+      "@/lib/repos/lab"
     );
+    const line = (await labWorklist("to_collect"))[0]!;
 
-    const after = await filesPending();
-    expect(after.length).toBeLessThan(before.length);
+    expect((await advanceLabLine(line.lineId, "to_collect")).ok).toBe(true);
+    expect(stageOf((await getLabLine(line.lineId))!)).toBe("to_dispatch");
+
+    expect((await advanceLabLine(line.lineId, "to_dispatch")).ok).toBe(true);
+    expect(stageOf((await getLabLine(line.lineId))!)).toBe("awaiting_report");
+
+    expect((await advanceLabLine(line.lineId, "awaiting_report")).ok).toBe(true);
+    expect(stageOf((await getLabLine(line.lineId))!)).toBe("report_in");
+
+    expect((await advanceLabLine(line.lineId, "report_in")).ok).toBe(true);
+    expect(stageOf((await getLabLine(line.lineId))!)).toBe("done");
+  });
+
+  it("refuses a click for a stage the test has already left", async () => {
+    // Two people working the same queue on two machines is the normal case in
+    // a clinic. Without this the second click stamps a collection time for a
+    // sample that is already at the laboratory.
+    const { labWorklist, advanceLabLine } = await import("@/lib/repos/lab");
+    const done = (await labWorklist("done"))[0]!;
+    const res = await advanceLabLine(done.lineId, "to_collect");
+    expect(res.ok).toBe(false);
+    expect(res.reason).toContain("already");
+  });
+
+  it("undoes a mis-click by clearing the stamp", async () => {
+    const { labWorklist, revertLabLine, getLabLine, stageOf } = await import(
+      "@/lib/repos/lab"
+    );
+    const done = (await labWorklist("done"))[0]!;
+
+    expect((await revertLabLine(done.lineId, "done")).ok).toBe(true);
+    const back = (await getLabLine(done.lineId))!;
+    expect(stageOf(back)).toBe("report_in");
+    // A hand-over that did not happen must leave no trace of having happened.
+    expect(back.reportGivenAt).toBeNull();
+  });
+
+  it("counts every test in exactly one stage", async () => {
+    const { labCounts, labWorklist } = await import("@/lib/repos/lab");
+    const counts = await labCounts();
+    const total =
+      counts.to_collect +
+      counts.to_dispatch +
+      counts.awaiting_report +
+      counts.report_in +
+      counts.done;
+
+    const all = await Promise.all(
+      (["to_collect", "to_dispatch", "awaiting_report", "report_in", "done"] as const).map(
+        (st) => labWorklist(st),
+      ),
+    );
+    expect(total).toBe(all.reduce((n, rows) => n + rows.length, 0));
+  });
+
+  it("keeps a note about why something is stuck", async () => {
+    const { labWorklist, setLabNote } = await import("@/lib/repos/lab");
+    const line = (await labWorklist("report_in"))[0]!;
+    await setLabNote(line.lineId, "Patient asked us to hold it until Friday.");
+    const after = (await labWorklist("report_in")).find(
+      (r) => r.lineId === line.lineId,
+    )!;
+    expect(after.note).toBe("Patient asked us to hold it until Friday.");
   });
 });
 

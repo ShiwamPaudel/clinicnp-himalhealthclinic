@@ -25,7 +25,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Search, Paperclip, Send, Stethoscope, MapPin } from "lucide-react";
+import { Search, FlaskConical, Send, Stethoscope, MapPin } from "lucide-react";
 import { RackMap } from "@/components/app/rack-map";
 import { cellLabel } from "@/lib/rack-label";
 import type { PosItem, PosService, PosRack } from "@/lib/pos-types";
@@ -466,12 +466,12 @@ function ServiceRow({
                 <Send className="h-3 w-3" />
               </span>
             )}
-            {service.keepsFile && (
+            {service.sampleType && (
               <span
                 className="inline-flex items-center gap-0.5"
-                title="A report comes back for this"
+                title={`${service.sampleType} sample is collected for this`}
               >
-                <Paperclip className="h-3 w-3" />
+                <FlaskConical className="h-3 w-3" />
               </span>
             )}
           </div>

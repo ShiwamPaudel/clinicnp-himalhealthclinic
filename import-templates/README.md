@@ -139,11 +139,23 @@ One row per test.
 | `code` | no | A short typing shortcut for the counter. `cbc`, `lft`. Typing `cbc` then Enter reaches the test without spelling it. Worth filling for the common ones. |
 | `group_name` | **yes** | Must match a `group_name` in `lab-test-groups.csv` **exactly**, spelling and capitals included. |
 | `rate` | **yes** | What the patient pays, in rupees. |
-| `sample_type` | no | What has to be collected: `Blood`, `Urine`, `Stool`, `Swab`, `Sputum`. Leave blank for anything that collects nothing. This drives the sample-collection screen, so fill it for every test. |
+| `sample_type` | no | What has to be collected: `Blood`, `Urine`, `Stool`, `Swab`, `Sputum`, `Semen`, `Fluid`, `Tissue`. Leave blank for anything that collects nothing. **Fill it for every test** — it is what the sample-collection screen groups by, so a test with no sample type is one nobody is told to draw. |
 | `outsourced` | **yes** | `Yes` if the sample goes to an outside laboratory. For Himal this is `Yes` for essentially every test. |
 | `partner_cost` | only if outsourced | What the outside laboratory charges **you**, in rupees. The difference between this and `rate` is what the clinic keeps, and it is what the laboratory statement is built from. |
 | `doctor_required` | **yes** | `Yes` only if a bill for this cannot be saved without naming a doctor. For most lab tests this is `No`. |
 | `vat_applicable` | **yes** | `No` unless you are VAT registered and this test is taxable. |
+
+### What happens to a test once it is billed
+
+Every test with `outsourced` = `Yes` joins the laboratory queue the moment the
+bill is saved, and moves through it one click at a time:
+
+**To collect → To send → Awaiting report → Report in → Given out.**
+
+Nothing is assumed. Saving a bill does not mean the sample is drawn, and
+drawing it does not mean it has gone — each step is somebody saying it
+happened, and each is stamped with the time it happened. Any step can be put
+back if it was clicked by mistake.
 
 ### Not in this file, on purpose
 

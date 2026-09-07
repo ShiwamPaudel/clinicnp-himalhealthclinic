@@ -33,7 +33,8 @@ export interface Service {
   outsourced: boolean;
   defaultLabPartnerId: string | null;
   partnerCostPaisa: number;
-  keepsFile: boolean;
+  /** what has to be collected — "Blood", "Urine", or empty for nothing */
+  sampleType: string;
   followupDays: number;
   followupRatePaisa: number;
   vatApplicable: boolean;
@@ -51,7 +52,7 @@ export interface ServiceInput {
   outsourced: boolean;
   defaultLabPartnerId: string | null;
   partnerCostPaisa: number;
-  keepsFile: boolean;
+  sampleType: string;
   followupDays: number;
   followupRatePaisa: number;
   vatApplicable: boolean;
@@ -82,7 +83,7 @@ function mapService(r: Row): Service {
     outsourced: Number(r.outsourced) === 1,
     defaultLabPartnerId: (r.default_lab_partner_id as string | null) ?? null,
     partnerCostPaisa: Number(r.partner_cost_paisa),
-    keepsFile: Number(r.keeps_file) === 1,
+    sampleType: (r.sample_type as string | null) ?? "",
     followupDays: Number(r.followup_days),
     followupRatePaisa: Number(r.followup_rate_paisa),
     vatApplicable: Number(r.vat_applicable) === 1,
@@ -191,7 +192,7 @@ export async function createService(input: ServiceInput): Promise<string> {
   await db().execute({
     sql: `INSERT INTO services
             (id, name, code, group_id, rate_paisa, doctor_required, default_doctor_id,
-             outsourced, default_lab_partner_id, partner_cost_paisa, keeps_file,
+             outsourced, default_lab_partner_id, partner_cost_paisa, sample_type,
              followup_days, followup_rate_paisa, vat_applicable, sample_rate,
              active, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
@@ -206,7 +207,7 @@ export async function createService(input: ServiceInput): Promise<string> {
       input.outsourced ? 1 : 0,
       input.defaultLabPartnerId,
       input.partnerCostPaisa,
-      input.keepsFile ? 1 : 0,
+      input.sampleType,
       input.followupDays,
       input.followupRatePaisa,
       input.vatApplicable ? 1 : 0,
@@ -231,7 +232,7 @@ export async function updateService(id: string, input: ServiceInput): Promise<vo
     sql: `UPDATE services
              SET name = ?, code = ?, group_id = ?, rate_paisa = ?, doctor_required = ?,
                  default_doctor_id = ?, outsourced = ?, default_lab_partner_id = ?,
-                 partner_cost_paisa = ?, keeps_file = ?, followup_days = ?,
+                 partner_cost_paisa = ?, sample_type = ?, followup_days = ?,
                  followup_rate_paisa = ?, vat_applicable = ?, active = ?,
                  sample_rate = 0, updated_at = ?
            WHERE id = ?`,
@@ -245,7 +246,7 @@ export async function updateService(id: string, input: ServiceInput): Promise<vo
       input.outsourced ? 1 : 0,
       input.defaultLabPartnerId,
       input.partnerCostPaisa,
-      input.keepsFile ? 1 : 0,
+      input.sampleType,
       input.followupDays,
       input.followupRatePaisa,
       input.vatApplicable ? 1 : 0,
@@ -286,7 +287,7 @@ export async function listPosServices(): Promise<PosService[]> {
     outsourced: Number(r.outsourced) === 1,
     defaultLabPartnerId: (r.default_lab_partner_id as string | null) ?? null,
     partnerCostPaisa: Number(r.partner_cost_paisa),
-    keepsFile: Number(r.keeps_file) === 1,
+    sampleType: (r.sample_type as string | null) ?? "",
     followupDays: Number(r.followup_days),
     followupRatePaisa: Number(r.followup_rate_paisa),
     vatApplicable: Number(r.vat_applicable) === 1,
@@ -321,7 +322,7 @@ export async function getServiceForBilling(id: string): Promise<PosService | nul
     outsourced: Number(r.outsourced) === 1,
     defaultLabPartnerId: (r.default_lab_partner_id as string | null) ?? null,
     partnerCostPaisa: Number(r.partner_cost_paisa),
-    keepsFile: Number(r.keeps_file) === 1,
+    sampleType: (r.sample_type as string | null) ?? "",
     followupDays: Number(r.followup_days),
     followupRatePaisa: Number(r.followup_rate_paisa),
     vatApplicable: Number(r.vat_applicable) === 1,

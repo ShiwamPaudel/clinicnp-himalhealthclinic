@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, ClipboardList, Paperclip, Send, AlertTriangle } from "lucide-react";
+import { Plus, ClipboardList, FlaskConical, Send, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -17,6 +17,7 @@ import {
 } from "@/app/(app)/settings/catalog-actions";
 import { formatPaisa, toPaisa, paisaToRupees } from "@/lib/money";
 import { strings } from "@/lib/strings";
+import { SAMPLE_TYPES } from "@/lib/sample-types";
 import type { Service, ServiceGroup } from "@/lib/repos/services";
 import type { Doctor } from "@/lib/repos/doctors";
 import type { LabPartner } from "@/lib/repos/lab-partners";
@@ -31,7 +32,7 @@ interface FormState {
   outsourced: boolean;
   defaultLabPartnerId: string;
   partnerCost: string;
-  keepsFile: boolean;
+  sampleType: string;
   followupDays: string;
   followupRate: string;
   vatApplicable: boolean;
@@ -49,7 +50,7 @@ function blank(groupId: string): FormState {
     outsourced: false,
     defaultLabPartnerId: "",
     partnerCost: "",
-    keepsFile: false,
+    sampleType: "",
     followupDays: "",
     followupRate: "",
     vatApplicable: false,
@@ -121,7 +122,7 @@ export function ServicesManager({
       outsourced: s.outsourced,
       defaultLabPartnerId: s.defaultLabPartnerId ?? "",
       partnerCost: paisaToField(s.partnerCostPaisa),
-      keepsFile: s.keepsFile,
+      sampleType: s.sampleType,
       followupDays: s.followupDays > 0 ? String(s.followupDays) : "",
       followupRate: paisaToField(s.followupRatePaisa),
       vatApplicable: s.vatApplicable,
@@ -142,7 +143,7 @@ export function ServicesManager({
       outsourced: form.outsourced,
       defaultLabPartnerId: form.outsourced ? form.defaultLabPartnerId || null : null,
       partnerCostPaisa: form.outsourced ? rupeesToPaisa(form.partnerCost) : 0,
-      keepsFile: form.keepsFile,
+      sampleType: form.sampleType,
       followupDays: isConsultationGroup ? intOr0(form.followupDays) : 0,
       followupRatePaisa: isConsultationGroup ? rupeesToPaisa(form.followupRate) : 0,
       vatApplicable: form.vatApplicable,
@@ -292,13 +293,13 @@ export function ServicesManager({
                               Outside lab
                             </Badge>
                           )}
-                          {s.keepsFile && (
+                          {s.sampleType && (
                             <Badge tone="neutral">
-                              <Paperclip className="mr-1 inline h-3 w-3" />
-                              File
+                              <FlaskConical className="mr-1 inline h-3 w-3" />
+                              {s.sampleType}
                             </Badge>
                           )}
-                          {!s.doctorRequired && !s.outsourced && !s.keepsFile && "—"}
+                          {!s.doctorRequired && !s.outsourced && !s.sampleType && "—"}
                         </span>
                       </TD>
                       <TD className="text-sage-500">
@@ -443,15 +444,27 @@ export function ServicesManager({
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-[14px] text-sage-900">
-            <input
-              type="checkbox"
-              checked={form.keepsFile}
-              onChange={(e) => set("keepsFile", e.target.checked)}
-              className="h-4 w-4"
-            />
-            A report or image comes back for this
-          </label>
+          {/* What has to be collected. This drives the sample-collection
+              screen, so a test with a sample type set appears there the
+              moment it is billed. */}
+          <Field
+            label="Sample collected"
+            htmlFor="sampleType"
+            hint="Leave blank for anything that collects nothing"
+          >
+            <Select
+              id="sampleType"
+              value={form.sampleType}
+              onChange={(e) => set("sampleType", e.target.value)}
+            >
+              <option value="">— Nothing collected —</option>
+              {SAMPLE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
           {isConsultationGroup && (
             <div className="rounded-[8px] border border-line p-3">

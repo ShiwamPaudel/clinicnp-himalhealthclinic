@@ -186,7 +186,8 @@ export interface PosService {
   outsourced: boolean;
   defaultLabPartnerId: string | null;
   partnerCostPaisa: number;
-  keepsFile: boolean;
+  /** what has to be collected; empty for a service that collects nothing */
+  sampleType: string;
   followupDays: number;
   followupRatePaisa: number;
   vatApplicable: boolean;

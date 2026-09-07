@@ -559,7 +559,7 @@ describe("Phase 3 — a rate change does not rewrite history", () => {
       outsourced: false,
       defaultLabPartnerId: null,
       partnerCostPaisa: 0,
-      keepsFile: true,
+      sampleType: "",
       followupDays: 0,
       followupRatePaisa: 0,
       vatApplicable: false,

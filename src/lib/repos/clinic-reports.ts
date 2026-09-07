@@ -488,57 +488,6 @@ export async function diagnosticsUtilisation(
   }));
 }
 
-export interface FilePendingRow {
-  visitId: string;
-  billServiceLineId: string;
-  dateBs: string;
-  patientNo: number | null;
-  patientName: string;
-  serviceName: string;
-  partnerName: string;
-  dispatchedAt: string | null;
-}
-
-/**
- * Services that were billed, are flagged as producing a report, and have
- * nothing attached yet (PRD §4B.3). This replaces the Phase 2 stand-in, which
- * listed any visit with no file at all because services did not exist yet
- * (D-052).
- */
-export async function filesPending(limit = 200): Promise<FilePendingRow[]> {
-  const res = await db().execute({
-    sql: `SELECT sl.id AS line_id, sl.visit_id, sl.name_snapshot, sl.dispatched_at,
-                 b.date_bs, p.patient_no, p.name AS patient_name,
-                 lp.name AS partner_name
-            FROM bill_service_lines sl
-            JOIN bills b ON b.id = sl.bill_id
-            JOIN services s ON s.id = sl.service_id
-            LEFT JOIN patients p ON p.id = b.patient_id
-            LEFT JOIN lab_partners lp ON lp.id = sl.lab_partner_id
-           WHERE b.status = 'saved'
-             AND s.keeps_file = 1
-             AND NOT EXISTS (
-               SELECT 1 FROM attachments a
-                WHERE a.deleted_at IS NULL
-                  AND (a.bill_service_line_id = sl.id
-                       OR (sl.visit_id IS NOT NULL AND a.visit_id = sl.visit_id))
-             )
-           ORDER BY b.date_ad DESC, b.rowid DESC
-           LIMIT ?`,
-    args: [limit],
-  });
-  return res.rows.map((r: Row) => ({
-    visitId: (r.visit_id as string | null) ?? "",
-    billServiceLineId: r.line_id as string,
-    dateBs: r.date_bs as string,
-    patientNo: r.patient_no == null ? null : Number(r.patient_no),
-    patientName: (r.patient_name as string | null) ?? "—",
-    serviceName: r.name_snapshot as string,
-    partnerName: (r.partner_name as string | null) ?? "",
-    dispatchedAt: (r.dispatched_at as string | null) ?? null,
-  }));
-}
-
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
@@ -551,7 +500,7 @@ export interface ClinicToday {
   laboratoryPaisa: number;
   patientsSeen: number;
   newRegistrations: number;
-  filesPending: number;
+  samplesToCollect: number;
 }
 
 /**
@@ -599,17 +548,16 @@ export async function clinicToday(dayIso: string): Promise<ClinicToday> {
     args: [dayIso],
   });
 
+  // Samples billed and not yet drawn. Counted across all days on purpose: a
+  // sample nobody collected on Sunday is still uncollected on Monday, and a
+  // number that resets overnight would say the work had gone away.
   const pending = await db().execute({
     sql: `SELECT COUNT(*) AS n
             FROM bill_service_lines sl
             JOIN bills b ON b.id = sl.bill_id
             JOIN services s ON s.id = sl.service_id
-           WHERE b.status = 'saved' AND s.keeps_file = 1
-             AND NOT EXISTS (
-               SELECT 1 FROM attachments a
-                WHERE a.deleted_at IS NULL
-                  AND (a.bill_service_line_id = sl.id
-                       OR (sl.visit_id IS NOT NULL AND a.visit_id = sl.visit_id)))`,
+           WHERE b.status = 'saved' AND s.outsourced = 1
+             AND sl.collected_at IS NULL`,
     args: [],
   });
 
@@ -621,7 +569,7 @@ export async function clinicToday(dayIso: string): Promise<ClinicToday> {
     laboratoryPaisa: Number(r.lab ?? 0),
     patientsSeen: Number(seen.rows[0]!.n),
     newRegistrations: Number(registered.rows[0]!.n),
-    filesPending: Number(pending.rows[0]!.n),
+    samplesToCollect: Number(pending.rows[0]!.n),
   };
 }
 

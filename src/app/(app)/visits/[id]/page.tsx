@@ -4,7 +4,6 @@ import { ArrowLeft } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { requireModulePage } from "@/lib/modules";
 import { getVisitWithPatient } from "@/lib/repos/visits";
-import { attachmentsForVisit } from "@/lib/repos/attachments";
 import { getCompany } from "@/lib/repos/company";
 import { displayAge } from "@/lib/age";
 import { patientLabel } from "@/lib/patient-no";
@@ -12,7 +11,6 @@ import { adToIso, bsFromDbText, formatBS } from "@/lib/bs";
 import { PageShell } from "@/components/app/page-shell";
 import { PrintButton } from "@/components/app/print-button";
 import { VisitDetail } from "@/components/clinic/visit-detail";
-import { AttachmentGrid } from "@/components/clinic/attachment-grid";
 import { OpdSlip } from "@/components/print/opd-slip";
 
 const SEX_SHORT: Record<string, string> = { f: "F", m: "M", o: "—" };
@@ -29,10 +27,7 @@ export default async function VisitDetailPage({
   const visit = await getVisitWithPatient(id);
   if (!visit) notFound();
 
-  const [files, company] = await Promise.all([
-    attachmentsForVisit(visit.id),
-    getCompany(),
-  ]);
+  const company = await getCompany();
 
   const todayAd = adToIso(new Date());
   const age = displayAge(
@@ -107,24 +102,6 @@ export default async function VisitDetailPage({
           }}
         />
 
-        <section>
-          <h2 className="mb-3 text-[15px] font-semibold text-sage-900">Files</h2>
-          <AttachmentGrid
-            patientId={visit.patientId}
-            visitId={visit.id}
-            canDelete={isAdmin}
-            files={files.map((a) => ({
-              id: a.id,
-              title: a.title,
-              fileName: a.fileName,
-              mime: a.mime,
-              sizeBytes: a.sizeBytes,
-              kind: a.kind,
-              createdAt: a.createdAt,
-              uploaderName: a.uploaderName,
-            }))}
-          />
-        </section>
       </div>
 
       <div className="print-area">
