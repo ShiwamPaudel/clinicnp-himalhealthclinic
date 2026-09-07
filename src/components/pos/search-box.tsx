@@ -31,7 +31,7 @@ import { cellLabel } from "@/lib/rack-label";
 import type { PosItem, PosService, PosRack } from "@/lib/pos-types";
 import type { RackDisplay } from "@/lib/repos/company";
 import { defaultUnit } from "@/lib/bill-calc";
-import { toMixedDisplay } from "@/lib/units";
+import { toMixedDisplay, hasNoPrice } from "@/lib/units";
 import { formatPaisa } from "@/lib/money";
 import { adFromIso, toBS, formatBS } from "@/lib/bs";
 import { cn } from "@/lib/cn";
@@ -206,6 +206,11 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(
         : null;
 
     function pick(r: Result) {
+      // A medicine imported from a catalogue arrives without a price, because
+      // no file has the shop's own prices in it. Adding one here would put a
+      // Rs 0 line on a real bill, so the row says why instead and this refuses
+      // it — from Enter as well as from the click.
+      if (r.kind === "medicine" && hasNoPrice(r.item.units)) return;
       if (r.kind === "medicine") onPick(r.item);
       else onPickService(r.service);
       setQuery("");
@@ -345,14 +350,21 @@ function MedicineRow({
   const u = defaultUnit(item);
   const avail = availableBase(item, todayIso);
   const nearest = nearestExpiry(item, todayIso);
+  const unpriced = hasNoPrice(item.units);
   return (
     <li>
       <button
         onMouseEnter={onHover}
         onClick={onClick}
+        disabled={unpriced}
+        aria-disabled={unpriced || undefined}
         className={cn(
           "flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left",
-          activeRow ? "bg-sage-150" : "hover:bg-cream-200",
+          unpriced
+            ? "cursor-not-allowed opacity-70"
+            : activeRow
+              ? "bg-sage-150"
+              : "hover:bg-cream-200",
         )}
       >
         <div className="min-w-0">
@@ -384,9 +396,15 @@ function MedicineRow({
           )}
         </div>
         <div className="shrink-0 text-right text-[12px]">
-          <div className="text-[14px] font-medium text-sage-900 tnum">
-            {formatPaisa(u.sellingRatePaisa)} / {u.name}
-          </div>
+          {unpriced ? (
+            <div className="text-[13px] font-semibold text-warn-600">
+              No price yet
+            </div>
+          ) : (
+            <div className="text-[14px] font-medium text-sage-900 tnum">
+              {formatPaisa(u.sellingRatePaisa)} / {u.name}
+            </div>
+          )}
           <div className="text-sage-500">{toMixedDisplay(avail, item.units)}</div>
           {nearest && (
             <div className="text-sage-400">

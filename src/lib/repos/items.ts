@@ -16,6 +16,7 @@ import { ulid } from "ulid";
 import { db } from "@/lib/db";
 import type { Row } from "@/lib/db";
 import { asItemShape, type ItemShape } from "@/lib/item-shape";
+import { hasNoPrice } from "@/lib/units";
 
 export type Category = "Medicine" | "Consumable" | "Other";
 
@@ -190,4 +191,39 @@ export async function updateItem(
     ],
   });
   await writeUnits(id, input.units);
+}
+
+/**
+ * Set selling rates and nothing else.
+ *
+ * A catalogue arrives before a price list does — 211 medicines imported from a
+ * spreadsheet start out unpriced, and pricing them one edit form at a time is
+ * a day nobody has. This is the narrow write behind Items → Set prices: it
+ * touches `selling_rate_paisa` and the item's `updated_at`, and cannot reach
+ * a name, a unit factor, a shelf or a stock level however it is called.
+ *
+ * `updated_at` matters as much as the rates. `catalogVersion()` reads it, and
+ * without the bump a counter would keep serving the cached snapshot in which
+ * everything still costs nothing.
+ */
+export async function setUnitRates(
+  itemId: string,
+  rates: { level: number; sellingRatePaisa: number }[],
+): Promise<void> {
+  for (const r of rates) {
+    await db().execute({
+      sql: `UPDATE item_units SET selling_rate_paisa = ?
+            WHERE item_id = ? AND level = ?`,
+      args: [r.sellingRatePaisa, itemId, r.level],
+    });
+  }
+  await db().execute({
+    sql: "UPDATE items SET updated_at = ? WHERE id = ?",
+    args: [new Date().toISOString(), itemId],
+  });
+}
+
+/** True when nothing this item is sold by has a price yet. */
+export function isUnpriced(item: Item): boolean {
+  return hasNoPrice(item.units);
 }

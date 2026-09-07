@@ -135,3 +135,14 @@ export function openingLineToBase(
     costPaisaPerBase: Math.round(costPaisaPerUnit / factorToBase),
   };
 }
+
+/**
+ * True when nothing this thing is sold by has a price yet.
+ *
+ * An imported catalogue is unpriced until somebody prices it, and a zero rate
+ * reaching a bill is a real bill with Rs 0 on it. Client-safe on purpose: the
+ * counter has to be able to refuse one while offline.
+ */
+export function hasNoPrice(units: { sellingRatePaisa: number }[]): boolean {
+  return units.length === 0 || units.every((u) => u.sellingRatePaisa === 0);
+}

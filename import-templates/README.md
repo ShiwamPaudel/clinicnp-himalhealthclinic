@@ -12,6 +12,38 @@ They are split on purpose. Every number in an EXAMPLE file was made up to show
 the format. A made-up price that survives into a real bill is a real bill with
 a made-up number on it, so those rows must never reach the software.
 
+## Already done for you: `pharmacy-items.STARTER.csv`
+
+**211 real products** a clinic pharmacy in Nepal actually dispenses — brand and
+generic names, category, manufacturer where it is known, pack structure and
+the narcotics flagged. It is loaded with:
+
+```
+pnpm db:import-items import-templates/pharmacy-items.STARTER.csv          # shows what it would do
+pnpm db:import-items import-templates/pharmacy-items.STARTER.csv --commit # does it
+```
+
+**Every price column in it is empty, on purpose.** Brand names are public;
+what a shop charges is not, and there is no source for it that is not a guess.
+Prices go in inside the software at **Items → Set prices**, which lists every
+unpriced medicine on one screen. Until a medicine has a price the counter
+refuses to bill it and says so, rather than putting Rs 0 on a real bill.
+
+Two things worth spot-checking before you price it:
+
+- **Strip sizes.** Most are 10. The ones that are not — Azithral 500 in 3s,
+  Clavam and Augmentin in 6s, Becosules in 20s, Neurobion Forte in 30s — were
+  set deliberately, but pack sizes change and yours are the ones that count.
+- **`controlled`.** Only the five narcotics and psychotropics are set to `Yes`
+  (Tramazac, Alprax, Calmpose, Lonazep and the codeine syrup), because a `Yes`
+  forces a patient name onto every bill. Antibiotics are set to `No` so the
+  counter stays fast. DDA rules say antibiotics need a prescription, so if you
+  want the software to enforce that, change that one column to `Yes`.
+
+Re-running the import is safe. A brand name already in the database is skipped
+whole — never re-priced, never re-shaped, never moved off its shelf — so you
+can add rows to the bottom of a file and run it again.
+
 ## How to fill them
 
 Open in Excel or Google Sheets, type into the rows, then **Save As → CSV
@@ -46,7 +78,7 @@ manufacture and expiry dates are entered at the clinic afterwards under
 | `category` | **yes** | One of `Medicine`, `Consumable`, `Other`. Tissues, cotton and antiseptic are `Consumable`. Cosmetics and anything non-medical are `Other`. |
 | `manufacturer` | no | Company name. |
 | `shape` | no | How it looks, so the counter can show the right picture. One of: `capsule`, `tablet`, `strip`, `bottle`, `box`, `tube`, `sachet`, `drops`, `vial`. Leave blank if unsure. |
-| `controlled` | **yes** | `Yes` for narcotics and anything needing a prescription record. `No` otherwise. A `Yes` forces a patient name onto the bill. |
+| `controlled` | no | Blank counts as `No`. `Yes` for narcotics and anything needing a prescription record. `No` otherwise. A `Yes` forces a patient name onto the bill. |
 | `reorder_level_base` | no | Low-stock warning level, counted in the **smallest** unit. `100` on a tablet item means "warn me under 100 tablets". Blank or `0` means never warn. |
 
 ### The units — this is the part that matters
@@ -57,7 +89,7 @@ smallest thing you would ever sell**, and everything else is built from it.
 | Column | What goes in it |
 |---|---|
 | `unit1_name` | **Required.** The smallest sellable unit. `Tablet`, `Capsule`, `Bottle`, `Jar`, `Tube`, `Roll`. |
-| `unit1_rate` | Selling price of ONE of those, in rupees. |
+| `unit1_rate` | Selling price of ONE of those, in rupees. May be left empty — see **Set prices** above. |
 | `unit2_name` | The next size up, or blank. `Strip`, `Packet`. |
 | `unit2_per_unit1` | **How many unit-1s make one unit-2.** A strip of 10 tablets is `10`. |
 | `unit2_rate` | Selling price of one whole unit-2. |
