@@ -205,13 +205,17 @@ async function main() {
   // learning the software concludes the feature does not work. Two racks and a
   // desk laid out as a small room, with the two demo medicines on different
   // shelves of the same rack so the highlight visibly moves as you search.
+  // Position and size are centimetres from the room's top-left corner (0017),
+  // not the grid squares 0011 used.
   async function ensureDemoRack(
     name: string,
     kind: string,
     rows: number,
     cols: number,
-    posX: number,
-    posY: number,
+    xCm: number,
+    yCm: number,
+    widthCm: number,
+    depthCm: number,
     note: string,
   ): Promise<string> {
     const ex = await c.execute({
@@ -222,10 +226,11 @@ async function main() {
     const id = ulid();
     const at = new Date().toISOString();
     await c.execute({
-      sql: `INSERT INTO racks (id, name, kind, rows_count, cols_count, pos_x, pos_y,
+      sql: `INSERT INTO racks (id, name, kind, rows_count, cols_count,
+                               x_cm, y_cm, width_cm, depth_cm, rotation,
                                note, active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-      args: [id, name, kind, rows, cols, posX, posY, note, at, at],
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)`,
+      args: [id, name, kind, rows, cols, xCm, yCm, widthCm, depthCm, note, at, at],
     });
     console.log(`seeded sample ${kind}: ${name}`);
     return id;
@@ -259,13 +264,17 @@ async function main() {
     "rack",
     4,
     5,
-    0,
-    0,
+    20,
+    20,
+    100,
+    45,
     "By the counter",
   );
-  await ensureDemoRack("Sample Rack 2", "rack", 3, 4, 1, 0, "Back wall");
+  await ensureDemoRack("Sample Rack 2", "rack", 3, 4, 140, 20, 100, 45, "Back wall");
   // One of each kind, so the training database shows what the picker offers.
-  await ensureDemoRack("Sample Front Desk", "desk", 2, 4, 0, 1, "Where you bill");
+  await ensureDemoRack(
+    "Sample Front Desk", "desk", 2, 4, 20, 200, 140, 70, "Where you bill",
+  );
   await shelve("Sample Amoxicillin 500", frontRack, 2, 3);
   await shelve("Sample Paracetamol 500", frontRack, 4, 1);
 

@@ -44,14 +44,16 @@ export function InvoiceA4({ bill }: { bill: PrintBill }) {
         </div>
       )}
 
-      {/* The registration numbers stay as text even behind an image header:
-          they are what makes it a tax invoice, and an image cannot be relied
-          on to carry a number somebody may need to read back. */}
-      <div className="a4-regline">
-        <span>PAN: {c.panNo || "—"}</span>
-        {c.ddaNo && <span>DDA: {c.ddaNo}</span>}
-        {c.logoUrl && c.phone && <span>Ph: {c.phone}</span>}
-      </div>
+      {/* Printed only when there is no letterhead image. A shop's header
+          already carries its PAN and DDA, and repeating them underneath is a
+          second answer to a question that had one. Without an image they have
+          to appear somewhere, because they are what make it a tax invoice. */}
+      {!c.logoUrl && (
+        <div className="a4-regline">
+          <span>PAN: {c.panNo || "—"}</span>
+          {c.ddaNo && <span>DDA: {c.ddaNo}</span>}
+        </div>
+      )}
 
       <div className="a4-title">
         {c.vatRegistered ? "TAX INVOICE" : "INVOICE"}
@@ -210,20 +212,10 @@ export function InvoiceA4({ bill }: { bill: PrintBill }) {
         </table>
       </div>
 
-      {/* ---- foot ---- */}
-      <div className="a4-foot">
-        <div className="a4-sign">
-          <div className="a4-sign-line" />
-          <div>Received by</div>
-        </div>
-        <div className="a4-sign">
-          <div className="a4-sign-line" />
-          <div>For {c.name || "the pharmacy"}</div>
-        </div>
-      </div>
-
-      <div className="a4-thanks">{c.invoiceFooter || "Get well soon"}</div>
-      <div className="a4-by">Billed by {bill.userName}</div>
+      {/* The one line after the total. No signature blocks: nobody signs a
+          pharmacy counter bill, and two ruled lines at the bottom of every
+          sheet is a form asking to be filled in that never is. */}
+      {c.invoiceFooter && <div className="a4-thanks">{c.invoiceFooter}</div>}
     </div>
   );
 }

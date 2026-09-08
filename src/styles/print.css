@@ -80,6 +80,7 @@
     line-height: 1.15;
   }
 
+  /* Only drawn when there is no letterhead image to carry them. */
   .invoice-a4 .a4-regline {
     display: flex;
     justify-content: center;
@@ -166,38 +167,17 @@
     font-weight: 700;
   }
 
-  .invoice-a4 .a4-foot {
-    display: flex;
-    justify-content: space-between;
-    gap: 40px;
-    margin-top: 18mm;
-  }
-  .invoice-a4 .a4-sign {
-    width: 60mm;
-    text-align: center;
-    font-size: 10px;
-  }
-  .invoice-a4 .a4-sign-line {
-    border-top: 1px solid #000;
-    margin-bottom: 3px;
-  }
+  /* The shop's own line, and nothing else, under the total. */
   .invoice-a4 .a4-thanks {
-    margin-top: 8px;
-    text-align: center;
+    margin-top: 10px;
+    text-align: left;
     font-size: 11px;
-  }
-  .invoice-a4 .a4-by {
-    margin-top: 2px;
-    text-align: center;
-    font-size: 9px;
-    color: #555;
   }
 
   /* A table row must not be split across two sheets: half a medicine line at
      the bottom of page one is a bill somebody has to explain. */
   .invoice-a4 tr,
-  .invoice-a4 .a4-totals,
-  .invoice-a4 .a4-foot {
+  .invoice-a4 .a4-totals {
     page-break-inside: avoid;
   }
 

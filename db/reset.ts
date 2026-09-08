@@ -20,6 +20,12 @@
  *   pnpm db:reset --yes
  *   pnpm db:bootstrap --name "…" --pan … --admin … --password "…" --pin ….
  *
+ * --keep-setup is the one for going live: it deletes the afternoon of test
+ * bills, patients and visits, and leaves everything somebody typed to make the
+ * software theirs — the item catalogue, the shelves, the shop layout, the test
+ * list, the outside laboratories, the suppliers, the logins and the company
+ * details. A catalogue of five hundred medicines is not sample data.
+ *
  * --keep-access leaves `users`, `company` and `fiscal_years` alone, for the
  * case this was written for second: a shop that has already typed its own
  * name, address and PAN into Settings and only wants the sample catalogue and
@@ -107,13 +113,33 @@ async function main() {
 
   const confirmed = process.argv.includes("--yes");
   const keepAccess = process.argv.includes("--keep-access");
+  const keepSetup = process.argv.includes("--keep-setup");
 
   // Kept out of the delete list, not deleted and restored: a window where the
   // company row is missing is a window where the app has no name to print.
   // A fiscal year is a calendar, not a dummy entry. `bills.ts` would recreate
   // one on the first bill anyway, but until then reports would have no year to
   // stand in, which looks like breakage rather than a fresh start.
-  const KEPT_BY_FLAG = keepAccess ? ["users", "company", "fiscal_years"] : [];
+  // --keep-setup is the one for going live: the afternoon of test bills goes,
+  // and everything the shop typed to make the software theirs stays. A
+  // catalogue of five hundred medicines, the shelves they were placed on, the
+  // room those shelves stand in, the test list and the outside laboratory are
+  // all work somebody did with a keyboard, and none of it is a transaction.
+  const SETUP_TABLES = [
+    "services",
+    "service_groups",
+    "doctors",
+    "lab_partners",
+    "suppliers",
+    "item_units",
+    "item_locations",
+    "items",
+    "racks",
+  ];
+  const KEPT_BY_FLAG = [
+    ...(keepAccess || keepSetup ? ["users", "company", "fiscal_years"] : []),
+    ...(keepSetup ? SETUP_TABLES : []),
+  ];
   const doomed = TABLES_CHILD_FIRST.filter((t) => !KEPT_BY_FLAG.includes(t));
 
   // Say which database, every time. A reset pointed at the wrong one is not
@@ -151,7 +177,17 @@ async function main() {
   for (const [t, n] of counts) console.log(`   ${t.padEnd(26)} ${n}`);
   console.log(`   ${"—".repeat(26)} ${total} row(s)\n`);
 
-  if (keepAccess) {
+  if (keepSetup) {
+    console.log(
+      "   --keep-setup: users, company, fiscal years, the item catalogue,",
+    );
+    console.log(
+      "                 shelves, the shop layout, services, doctors, outside",
+    );
+    console.log(
+      "                 laboratories and suppliers are all left alone.",
+    );
+  } else if (keepAccess) {
     console.log("   --keep-access: users, company and fiscal years are left alone.");
     console.log(
       "   Change the Admin password afterwards if it is still the seeded one.\n",

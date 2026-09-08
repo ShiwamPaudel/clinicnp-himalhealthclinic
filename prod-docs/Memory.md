@@ -181,6 +181,9 @@ Then: `pnpm db:migrate`, `pnpm db:bootstrap` (**not** `db:seed`), deploy, and wa
 | D-099 | **Two pieces of furniture may now stand in the same place.** Overlap is drawn on the plan, never refused by the database | A shelf tucked under a counter is a real arrangement, and a planner that would not store it would be lying about the room. The warning belongs where somebody can see it and judge it |
 | D-100 | **The floor planner is hand-built SVG, with no canvas library** | Konva, Fabric and the rest are built for thousands of shapes and draw to a `<canvas>`, which is one opaque element to the keyboard and to a screen reader — and every screen here has to pass `scripts/a11y.mjs`. A pharmacy has twenty pieces of furniture, not twenty thousand. Every piece is a real SVG node that can be tabbed to, nudged with the arrow keys and read aloud; the theme colours come from the same tokens as the rest of the app; and it adds nothing to the bundle |
 | D-101 | **A drag saves geometry and nothing else.** `moveRacks` can touch position, size and rotation, and has no way to reach a name, a kind, or the grid of shelves inside a piece | The planner writes on every drop, so it must be the narrowest write in the app. Moving a rack across the room must never be able to strand a medicine on a shelf number that stopped existing, and the way to be certain is for the move to have no way of changing shelf numbers. It is also not audited per drag: a floor plan is moved dozens of times in one sitting, and an audit log full of "rack moved 5 cm" is an audit log nobody reads |
+| D-102 | **The letterhead carries PAN and DDA; the bill does not repeat them.** The registration strip prints only when no header image is set | D-091 kept them as text on the grounds that an image cannot be relied on to carry a number. The owner's letterhead does carry them, so the strip was printing the same two numbers twice. A shop without an image still needs them somewhere, which is what the fallback is for |
+| D-103 | **Nothing after the total but the shop's own footer line, left aligned.** No signature blocks, no "billed by" | Nobody signs a pharmacy counter bill. Two ruled lines at the foot of every sheet are a form asking to be filled in that never is, and they push a short bill down the page for nothing |
+| D-104 | **`--keep-setup` is the go-live reset.** It deletes bills, patients, visits and the audit trail, and keeps the item catalogue, shelves, shop layout, services, doctors, laboratories, suppliers, logins and company details | A catalogue of five hundred medicines is not sample data. `--keep-access` was written for a shop that had typed its own name into Settings; by the time a shop is ready to trade it has also typed its catalogue, drawn its room and listed its tests, and none of that is a transaction |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -364,3 +367,20 @@ Broke/fixed: my first stage conditions read `to_collect` as merely "not collecte
 Verified: 325 tests green across 28 files; typecheck, audit at 73 INSERTs and sweep all clean; build green with the five `/lab` routes at 119 kB, the floor planner at 113 kB and the counter at 145 kB.
 
 Still live and still wrong: **`admin` / `admin123` signs in as Owner on the public URL.** Flagged in C-008, C-009 and C-010.
+
+
+### C-012  ·  2083-05-25  ·  Going live: the catalogue doubled, the bill trimmed, the test data gone
+
+The owner opened Items and found it empty. **I had run the importer against a scratch database, seen "Created 211 medicines", and reported them as loaded — production had none.** Verifying against the thing I actually changed, rather than against a convenient copy of it, is the whole lesson.
+
+Loaded for real, then extended: **478 products**, 907 units, 358 Medicine / 66 Consumable / 54 Other, ten controlled. The second batch fills what a Nepali counter is actually asked for and the first pass skipped — more antibiotics and strengths, the cardiac and diabetes range, paediatric syrups and drops, dermatology, eye and ear drops, neurology and psychiatry, injectables and IV fluids, orthotics and surgical disposables, Ayurvedic lines (Liv 52, Cystone, Chyawanprash, Zandu, Honitus), infant formula, and the front-of-shop FMCG a pharmacy lives on. Every price column still empty (D-092).
+
+Bill trimmed to what the owner asked for (D-102, D-103) and checked the way it actually prints — a bill saved through the real counter on a scratch database, screenshotted under print media, with a letterhead image in place.
+
+Production cleared with the new `--keep-setup` (D-104): 63 rows gone — six test bills, two visits, one patient, the audit log, a backup record and the rate limits — and patient numbering restarted at 1. Kept: 478 items, 907 units, five pieces of furniture the owner placed at 06:21 that morning, two services, two service groups, the outside laboratory, both logins, the company row and the fiscal year. Zero dangling foreign keys afterwards.
+
+Decisions/assumptions: D-102, D-103, D-104.
+Schema changes: none.
+Broke/fixed: `db/seed.ts` still wrote `racks.pos_x` / `pos_y`, which 0017 removed — so `pnpm db:seed` threw on any fresh install. Found only because the bill demo needed a seeded database. Fixed to write centimetres.
+Verified: 325 tests, typecheck, audit, sweep, build, accessibility clean across 14 screens; the importer re-run as a no-op; the printed bill inspected as an image.
+Still live: **`admin` / `admin123`.** The owner has said they will change it themselves.

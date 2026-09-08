@@ -230,7 +230,7 @@ describe("the catalogue that ships with the software", () => {
 
   it("reads without a single bad row", () => {
     expect(errors).toEqual([]);
-    expect(items.length).toBeGreaterThan(150);
+    expect(items.length).toBeGreaterThan(400);
   });
 
   it("carries no prices, because every price in it would be invented", () => {
@@ -249,12 +249,20 @@ describe("the catalogue that ships with the software", () => {
 
   it("flags the narcotics and nothing else as controlled", () => {
     const controlled = items.filter((i) => i.controlledFlag).map((i) => i.brandName);
+    // Pinned as an exact list on purpose: this is precisely what forces a
+    // patient name onto a bill, and it should never grow or shrink by
+    // accident. Antibiotics are deliberately absent — see the README.
     expect(controlled.sort()).toEqual([
       "Alprax 0.25",
       "Calmpose 5",
       "Codeine Phosphate Cough Syrup 100ml",
+      "Etilaam 0.5",
+      "Frisium 10",
       "Lonazep 0.5",
+      "Tramadol Injection 2ml",
       "Tramazac 50mg",
+      "Ultracet",
+      "Zolfresh 10",
     ]);
   });
 
