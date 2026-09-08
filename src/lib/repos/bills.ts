@@ -99,6 +99,8 @@ export interface IngestResult {
   fiscalLabel: string;
   totalPaisa: number;
   alreadyExisted: boolean;
+  /** Units this bill priced for the first time, so it can be said out loud. */
+  firstPriced?: { itemId: string; unitLevel: number; ratePaisa: number }[];
 }
 
 /**
@@ -166,15 +168,20 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
   }
 
   // Resolve unit factors for every line up front (factors don't change mid-sale).
+  // The stored rate is read at the same time: a unit that still costs nothing
+  // is one this bill is allowed to price, once (D-105).
   const factorByLine = new Map<string, number>();
+  const storedRateByLine = new Map<string, number>();
   for (const line of input.lines) {
     const u = await db().execute({
-      sql: "SELECT factor_to_base FROM item_units WHERE item_id = ? AND level = ?",
+      sql: `SELECT factor_to_base, selling_rate_paisa FROM item_units
+            WHERE item_id = ? AND level = ?`,
       args: [line.itemId, line.unitLevel],
     });
     const f = u.rows[0];
     if (!f) throw new Error(`missing unit for item ${line.itemId}`);
     factorByLine.set(line.id, Number(f.factor_to_base));
+    storedRateByLine.set(line.id, Number(f.selling_rate_paisa));
   }
 
   // Price every service line against the catalog as it stands NOW, not as the
@@ -325,6 +332,12 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     // --- line allocation + stock decrement ---
     let subtotal = 0;
     const shortItemIds: string[] = [];
+    /** Units this bill gave a price to for the first time, for the audit log. */
+    const firstPriced: {
+      itemId: string;
+      unitLevel: number;
+      ratePaisa: number;
+    }[] = [];
     const lineInserts: {
       lineId: string;
       itemId: string;
@@ -380,6 +393,45 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
                 VALUES (?, ?, ?, ?, 'sale', 'bills', ?, ?, ?)`,
           args: [ulid(), a.batchId, line.itemId, -a.baseQty, input.id, input.userId, now],
         });
+      }
+
+      // The first price a medicine is ever sold at becomes its price.
+      //
+      // 478 medicines arrived from a catalogue with no prices, and making
+      // somebody stop and open Items for each one the first time it is asked
+      // for is how a counter ends up not using the software. So a unit that
+      // still costs nothing takes the rate typed on this bill and keeps it.
+      //
+      // Once, and only once. `AND selling_rate_paisa = 0` is what makes that
+      // true rather than merely intended: the second sale's UPDATE matches no
+      // row, so a rate typed later is this bill's business alone and does not
+      // quietly rewrite the shop's price list. Doing it in SQL rather than by
+      // reading first also means two counters selling the same new medicine in
+      // the same second cannot both win.
+      //
+      // Only the unit actually sold is priced. A strip at Rs 18 does not make
+      // a tablet Rs 1.80 — shops round loose sales up — and a derived price is
+      // a made-up price.
+      if (storedRateByLine.get(line.id) === 0 && line.ratePaisa > 0) {
+        const set = await tx.execute({
+          sql: `UPDATE item_units SET selling_rate_paisa = ?
+                 WHERE item_id = ? AND level = ? AND selling_rate_paisa = 0`,
+          args: [line.ratePaisa, line.itemId, line.unitLevel],
+        });
+        if (Number(set.rowsAffected) > 0) {
+          firstPriced.push({
+            itemId: line.itemId,
+            unitLevel: line.unitLevel,
+            ratePaisa: line.ratePaisa,
+          });
+          // The counter caches the catalogue, and catalogVersion() reads this.
+          // Without the bump every other till keeps offering the medicine at
+          // nothing.
+          await tx.execute({
+            sql: "UPDATE items SET updated_at = ? WHERE id = ?",
+            args: [now, line.itemId],
+          });
+        }
       }
 
       const amount = Math.max(0, line.qty * line.ratePaisa - line.discountPaisa);
@@ -610,6 +662,7 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
       fiscalLabel: fy.bsLabel,
       totalPaisa: total,
       alreadyExisted: false,
+      firstPriced,
     };
   } catch (err) {
     await tx.rollback();

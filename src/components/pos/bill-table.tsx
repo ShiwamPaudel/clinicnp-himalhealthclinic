@@ -138,6 +138,14 @@ function BillLineRow({
   const belowCost =
     config.minRateIsCost && costForUnit > 0 && line.ratePaisa < costForUnit;
 
+  // A unit the shop has never priced. What is typed here becomes the price,
+  // once, when the bill is saved — so the box is open even to somebody who is
+  // not allowed to edit rates. Supplying a price that does not exist is not
+  // the same act as overriding one that does, and blocking it would mean the
+  // counter cannot sell the medicine at all until an Admin is free.
+  const unpriced = (unit?.sellingRatePaisa ?? 0) === 0;
+  const needsPrice = unpriced && line.ratePaisa <= 0;
+
   return (
     <tr
       className={cn(
@@ -205,16 +213,23 @@ function BillLineRow({
         <div className="relative">
           <input
             inputMode="decimal"
-            value={rateStr}
-            disabled={!config.canEditRate}
+            value={unpriced && line.ratePaisa <= 0 ? "" : rateStr}
+            placeholder={unpriced ? "price" : undefined}
+            disabled={!config.canEditRate && !unpriced}
             onChange={(e) => {
               setRateStr(e.target.value);
               setRate(line.lineId, toPaisa(Number(e.target.value) || 0));
             }}
-            className="h-9 w-24 rounded-[8px] border border-line bg-cream-50 px-2 pr-4 text-right text-[15px] tnum focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-700 disabled:opacity-60"
-            aria-label="Rate"
+            className={cn(
+              "h-9 w-24 rounded-[8px] border bg-cream-50 px-2 pr-4 text-right text-[15px] tnum focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-700 disabled:opacity-60",
+              needsPrice
+                ? "border-warn-600 placeholder:text-warn-600"
+                : "border-line",
+            )}
+            aria-label={unpriced ? "Price this medicine" : "Rate"}
+            aria-invalid={needsPrice || undefined}
           />
-          {line.rateOverridden && (
+          {line.rateOverridden && !unpriced && (
             <span
               title="Rate edited for this bill"
               className="absolute right-1 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-magenta-600"

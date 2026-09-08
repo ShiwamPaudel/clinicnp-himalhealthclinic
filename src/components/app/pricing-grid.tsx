@@ -141,10 +141,11 @@ export function PricingGrid({ items }: { items: PricingItem[] }) {
               <strong className="font-semibold text-warn-600">
                 {unpricedCount} medicine{unpricedCount === 1 ? " has" : "s have"} no
                 price yet
-              </strong>{" "}
-              and cannot be sold until they do — the counter refuses them rather
-              than billing zero. Type a price against each unit you sell by and
-              save. Leaving a box empty leaves that price exactly as it is.
+              </strong>
+              . The counter asks for a price the first time one is sold and
+              keeps whatever is typed, so this screen is the faster way rather
+              than the only way. Type a price against each unit you sell by and
+              save; leaving a box empty leaves that price as it is.
             </>
           ) : (
             <>

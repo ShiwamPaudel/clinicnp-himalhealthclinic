@@ -7,6 +7,7 @@ import {
   ServiceLineError,
 } from "@/lib/repos/bills";
 import { getModules } from "@/lib/modules";
+import { recordAudit } from "@/lib/repos/audit";
 import { ingestBillSchema } from "@/lib/validators";
 import {
   checkRateLimit,
@@ -90,6 +91,17 @@ export async function POST(req: Request) {
       ...parsed.data,
       userId: session.user.id,
     });
+
+    // A price set from the counter is a change to the shop's price list, made
+    // by whoever happened to be serving. It goes in the audit log for the same
+    // reason a rate override does: somebody will ask where that price came
+    // from, and "the first bill" should be an answer with a name on it.
+    if (result.firstPriced?.length) {
+      await recordAudit(session.user.id, "item.first_price", {
+        billId: result.id,
+        priced: result.firstPriced,
+      });
+    }
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     // Not enough stock: a definite business rejection, not a transient fault.

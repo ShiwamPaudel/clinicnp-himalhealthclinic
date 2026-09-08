@@ -52,7 +52,7 @@ export default async function ItemsPage() {
             <strong className="font-semibold">
               {unpriced} medicine{unpriced === 1 ? " has" : "s have"} no price yet
             </strong>{" "}
-            — the counter refuses them rather than billing zero.
+            — price them here, or let the first sale set the price.
           </div>
           <span className="shrink-0 text-[13px] font-semibold text-sage-900">
             Set prices →

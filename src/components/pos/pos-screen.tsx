@@ -205,6 +205,23 @@ export function PosScreen({ config }: { config: PosConfig }) {
       }
     }
 
+    // A medicine the shop has never priced can go on a bill, and what is typed
+    // becomes its price (D-105). What it cannot do is go on at nothing: a Rs 0
+    // line is a real bill with a real hole in it, and it would set the price
+    // to zero for good.
+    const unpriced = s.lines.filter((l) => l.ratePaisa <= 0);
+    if (unpriced.length > 0) {
+      const names = Array.from(
+        new Set(unpriced.map((l) => l.item.brandName)),
+      ).join(", ");
+      toast.error(
+        unpriced.length === 1
+          ? `Enter the price for ${names}. It has never been sold before, so this price becomes its price.`
+          : `Enter a price for: ${names}.`,
+      );
+      return;
+    }
+
     const hasControlled = s.lines.some((l) => l.item.controlledFlag);
     if (hasControlled && s.patientName.trim() === "") {
       toast.error("Enter the patient name for the prescription item.");
