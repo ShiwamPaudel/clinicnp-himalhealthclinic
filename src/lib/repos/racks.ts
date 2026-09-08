@@ -1,11 +1,15 @@
 /**
  * racks.ts — the shop floor, and what this shop keeps where.
  *
- * A piece of furniture is a grid with a position in the room. The position is
- * the whole point: a map drawn in a different order from the shop is slower to
- * read than no map, because the person has to translate it. So rows carry
- * `pos_x` and `pos_y` in widths, and something added to the left of the first
- * one gets -1 rather than renumbering everything that already exists.
+ * A piece of furniture is a grid of shelves standing somewhere in a room. The
+ * position is the whole point: a map drawn in a different order from the shop
+ * is slower to read than no map, because the person has to translate it.
+ *
+ * Position and size are centimetres from the room's top-left corner (0017),
+ * not the whole "rack widths" 0011 used. A shop is a room with things at
+ * particular places in it — a long shallow counter, a small square fridge, a
+ * narrow shelf tucked in a gap — and none of that fits on a grid of identical
+ * squares. Integers, because a floor plan does not need half a millimetre.
  *
  * Rows and columns are numbered from 1 and shown as "R2C3". They are not
  * lettered: the person reading it is looking at a shelf across a room, often
@@ -22,7 +26,12 @@ import "server-only";
 import { ulid } from "ulid";
 import { db } from "@/lib/db";
 import type { Row } from "@/lib/db";
-import { asFurnitureKind, type FurnitureKind } from "@/lib/furniture";
+import {
+  asFurnitureKind,
+  asRotation,
+  type FurnitureKind,
+  type Rotation,
+} from "@/lib/furniture";
 
 export interface Rack {
   id: string;
@@ -30,8 +39,12 @@ export interface Rack {
   kind: FurnitureKind;
   rows: number;
   cols: number;
-  posX: number;
-  posY: number;
+  /** centimetres from the room's top-left corner */
+  xCm: number;
+  yCm: number;
+  widthCm: number;
+  depthCm: number;
+  rotation: Rotation;
   note: string;
   active: boolean;
 }
@@ -41,11 +54,18 @@ export interface RackInput {
   kind: FurnitureKind;
   rows: number;
   cols: number;
-  posX: number;
-  posY: number;
+  xCm: number;
+  yCm: number;
+  widthCm: number;
+  depthCm: number;
+  rotation: Rotation;
   note?: string;
   active?: boolean;
 }
+
+/** The smallest and largest a piece of furniture may be, in centimetres. */
+export const MIN_SIDE_CM = 10;
+export const MAX_SIDE_CM = 2000;
 
 /** Where one item sits. Null cell means the item simply has no shelf. */
 export interface ItemCell {
@@ -75,8 +95,11 @@ function mapRack(r: Row): Rack {
     kind: asFurnitureKind(r.kind),
     rows: Number(r.rows_count),
     cols: Number(r.cols_count),
-    posX: Number(r.pos_x),
-    posY: Number(r.pos_y),
+    xCm: Number(r.x_cm),
+    yCm: Number(r.y_cm),
+    widthCm: Number(r.width_cm),
+    depthCm: Number(r.depth_cm),
+    rotation: asRotation(r.rotation),
     note: (r.note as string) ?? "",
     active: Number(r.active) === 1,
   };
@@ -92,7 +115,12 @@ export class BadCellError extends Error {
   }
 }
 
-/** Two pieces of furniture cannot stand in the same place. */
+/**
+ * Kept so an older client's error path still resolves, and nothing throws it
+ * any more. 0011 refused two pieces of furniture in one grid square; 0017
+ * removed that constraint, because a shelf tucked under a counter is a real
+ * arrangement and the plan has to be able to show it.
+ */
 export class RackPositionTakenError extends Error {
   code = "rack_position_taken" as const;
   userMessage = "There is already something in that spot.";
@@ -101,8 +129,8 @@ export class RackPositionTakenError extends Error {
 export async function listRacks(includeInactive = false): Promise<Rack[]> {
   const res = await db().execute(
     includeInactive
-      ? "SELECT * FROM racks ORDER BY pos_y, pos_x, name"
-      : "SELECT * FROM racks WHERE active = 1 ORDER BY pos_y, pos_x, name",
+      ? "SELECT * FROM racks ORDER BY y_cm, x_cm, name"
+      : "SELECT * FROM racks WHERE active = 1 ORDER BY y_cm, x_cm, name",
   );
   return res.rows.map(mapRack);
 }
@@ -123,30 +151,42 @@ function assertSide(n: number, what: string): void {
   }
 }
 
+/** A size the room could actually contain. */
+function assertSize(n: number, what: string): void {
+  if (!Number.isInteger(n) || n < MIN_SIDE_CM || n > MAX_SIDE_CM) {
+    throw new BadCellError(
+      `${what} must be between ${MIN_SIDE_CM} and ${MAX_SIDE_CM} cm.`,
+    );
+  }
+}
+
 export async function createRack(input: RackInput): Promise<string> {
   assertSide(input.rows, "rows");
   assertSide(input.cols, "columns");
-  const taken = await db().execute({
-    sql: "SELECT id FROM racks WHERE pos_x = ? AND pos_y = ?",
-    args: [input.posX, input.posY],
-  });
-  if (taken.rows[0]) throw new RackPositionTakenError();
+  assertSize(input.widthCm, "Width");
+  assertSize(input.depthCm, "Depth");
 
+  // Two pieces standing in the same place is no longer refused (0017). A shelf
+  // tucked under a counter is a real arrangement, and a planner that would not
+  // store it would be lying about the room. Overlap is drawn, not blocked.
   const id = ulid();
   const now = new Date().toISOString();
   await db().execute({
     sql: `INSERT INTO racks
-            (id, name, kind, rows_count, cols_count, pos_x, pos_y, note, active,
-             created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, name, kind, rows_count, cols_count, x_cm, y_cm,
+             width_cm, depth_cm, rotation, note, active, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       input.name.trim(),
       input.kind,
       input.rows,
       input.cols,
-      input.posX,
-      input.posY,
+      input.xCm,
+      input.yCm,
+      input.widthCm,
+      input.depthCm,
+      input.rotation,
       input.note?.trim() ?? "",
       input.active === false ? 0 : 1,
       now,
@@ -160,11 +200,8 @@ export async function updateRack(id: string, input: RackInput): Promise<void> {
   assertSide(input.rows, "rows");
   assertSide(input.cols, "columns");
 
-  const taken = await db().execute({
-    sql: "SELECT id FROM racks WHERE pos_x = ? AND pos_y = ? AND id <> ?",
-    args: [input.posX, input.posY, id],
-  });
-  if (taken.rows[0]) throw new RackPositionTakenError();
+  assertSize(input.widthCm, "Width");
+  assertSize(input.depthCm, "Depth");
 
   // Shrinking can strand items on cells that no longer exist. Say so rather
   // than quietly leaving a medicine pointing at a shelf that is gone.
@@ -185,21 +222,69 @@ export async function updateRack(id: string, input: RackInput): Promise<void> {
   await db().execute({
     sql: `UPDATE racks
              SET name = ?, kind = ?, rows_count = ?, cols_count = ?,
-                 pos_x = ?, pos_y = ?, note = ?, active = ?, updated_at = ?
+                 x_cm = ?, y_cm = ?, width_cm = ?, depth_cm = ?, rotation = ?,
+                 note = ?, active = ?, updated_at = ?
            WHERE id = ?`,
     args: [
       input.name.trim(),
       input.kind,
       input.rows,
       input.cols,
-      input.posX,
-      input.posY,
+      input.xCm,
+      input.yCm,
+      input.widthCm,
+      input.depthCm,
+      input.rotation,
       input.note?.trim() ?? "",
       input.active === false ? 0 : 1,
       new Date().toISOString(),
       id,
     ],
   });
+}
+
+/**
+ * Save where things now stand, and nothing else.
+ *
+ * The planner writes this on every drag, resize and turn. It deliberately
+ * cannot touch a name, a kind or the grid of shelves inside a piece: moving a
+ * rack across the room must never be able to strand a medicine on a shelf
+ * number that stopped existing, and the only way to be sure of that is for the
+ * move to have no way of changing the shelf numbers.
+ */
+export async function moveRacks(
+  moves: {
+    id: string;
+    xCm: number;
+    yCm: number;
+    widthCm: number;
+    depthCm: number;
+    rotation: Rotation;
+  }[],
+): Promise<void> {
+  const now = new Date().toISOString();
+  for (const m of moves) {
+    assertSize(m.widthCm, "Width");
+    assertSize(m.depthCm, "Depth");
+    await db().execute({
+      sql: `UPDATE racks
+               SET x_cm = ?, y_cm = ?, width_cm = ?, depth_cm = ?,
+                   rotation = ?, updated_at = ?
+             WHERE id = ?`,
+      args: [m.xCm, m.yCm, m.widthCm, m.depthCm, m.rotation, now, m.id],
+    });
+  }
+}
+
+/** How many medicines sit on each piece, keyed by rack id. */
+export async function rackItemCounts(): Promise<Record<string, number>> {
+  const res = await db().execute(
+    `SELECT rack_id, COUNT(*) AS n FROM item_locations
+      WHERE rack_id IS NOT NULL GROUP BY rack_id`,
+  );
+  const out: Record<string, number> = {};
+  for (const r of res.rows) out[r.rack_id as string] = Number(r.n);
+  return out;
 }
 
 export async function rackItemCount(id: string): Promise<number> {
@@ -391,7 +476,7 @@ export async function shelfRows(): Promise<ShelfRow[]> {
        LEFT JOIN item_locations l ON l.item_id = i.id
        LEFT JOIN racks r ON r.id = l.rack_id
       WHERE i.active = 1
-      ORDER BY (l.rack_id IS NULL), r.pos_y, r.pos_x, r.name,
+      ORDER BY (l.rack_id IS NULL), r.y_cm, r.x_cm, r.name,
                l.rack_row, l.rack_col, i.brand_name`,
   );
   return res.rows.map((r) => ({

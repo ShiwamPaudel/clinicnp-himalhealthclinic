@@ -110,6 +110,48 @@ export async function saveCompany(c: Company): Promise<void> {
 }
 
 // ============================================================
+// The shop floor's own size (0017)
+//
+// Kept off the Company profile deliberately, even though it lives on the same
+// row. The Settings form owns that row and rewrites every column it knows
+// about; the floor planner owns these two and nothing else. Threading them
+// through `saveCompany` would mean saving the company details from one screen
+// could quietly resize the room drawn on another.
+// ============================================================
+
+export interface FloorSize {
+  floorWidthCm: number;
+  floorDepthCm: number;
+}
+
+/** A shop that has never drawn a room gets a plausible one: 6m by 4.5m. */
+export const DEFAULT_FLOOR: FloorSize = {
+  floorWidthCm: 600,
+  floorDepthCm: 450,
+};
+
+export async function getFloorSize(): Promise<FloorSize> {
+  const res = await db().execute(
+    "SELECT floor_width_cm, floor_depth_cm FROM company WHERE id = 1",
+  );
+  const r = res.rows[0];
+  if (!r) return { ...DEFAULT_FLOOR };
+  return {
+    floorWidthCm: Number(r.floor_width_cm) || DEFAULT_FLOOR.floorWidthCm,
+    floorDepthCm: Number(r.floor_depth_cm) || DEFAULT_FLOOR.floorDepthCm,
+  };
+}
+
+export async function setFloorSize(size: FloorSize): Promise<void> {
+  await db().execute({
+    sql: `UPDATE company
+             SET floor_width_cm = ?, floor_depth_cm = ?, updated_at = ?
+           WHERE id = 1`,
+    args: [size.floorWidthCm, size.floorDepthCm, new Date().toISOString()],
+  });
+}
+
+// ============================================================
 // Module flags (PRD §3.1). Kept apart from the Company profile: they are a
 // system boundary, not a business detail, and they are read on nearly every
 // request, so they travel on their own narrow query.

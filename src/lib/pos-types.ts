@@ -50,12 +50,22 @@ export interface PosCell {
 export interface PosRack {
   id: string;
   name: string;
-  /** rack | shelf | desk — the counter draws each differently */
+  /** rack | shelf | desk | counter | fridge | door */
   kind: string;
   rows: number;
   cols: number;
-  posX: number;
-  posY: number;
+  /** where it stands and how big it is, in centimetres (0017) */
+  xCm: number;
+  yCm: number;
+  widthCm: number;
+  depthCm: number;
+  rotation: number;
+}
+
+/** The room the furniture stands in, carried so the counter can draw walls. */
+export interface PosFloor {
+  floorWidthCm: number;
+  floorDepthCm: number;
 }
 
 export interface PosCatalog {
@@ -65,6 +75,9 @@ export interface PosCatalog {
   doctors: PosDoctor[];
   labPartners: PosLabPartner[];
   racks: PosRack[];
+  /** Absent in a snapshot cached before 0017; the map falls back to the
+   *  bounding box of whatever furniture it has. */
+  floor?: PosFloor;
 }
 
 /** A service line as it travels to the server. */

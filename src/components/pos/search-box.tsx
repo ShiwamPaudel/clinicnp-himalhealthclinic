@@ -51,6 +51,8 @@ interface Props {
   services: PosService[];
   /** The shop floor, from the offline catalog. Empty for most shops. */
   racks: PosRack[];
+  /** The room they stand in. Absent in a catalog cached before 0017. */
+  floor?: { floorWidthCm: number; floorDepthCm: number } | null;
   /** What the shop asked for: nothing, the shelf written out, or the map. */
   rackDisplay: RackDisplay;
   todayIso: string;
@@ -148,6 +150,7 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(
       items,
       services,
       racks,
+      floor,
       rackDisplay,
       todayIso,
       onPick,
@@ -309,7 +312,12 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(
                       {shelfOf(activeItem, racks)}
                     </div>
                     <div className="overflow-x-auto">
-                      <RackMap racks={racks} highlight={highlight} compact />
+                      <RackMap
+                        racks={racks}
+                        floor={floor ?? null}
+                        highlight={highlight}
+                        compact
+                      />
                     </div>
                   </>
                 ) : (

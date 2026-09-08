@@ -34,9 +34,11 @@ interface SelectedCell {
 export function ShelfPlan({
   racks,
   items,
+  floor,
 }: {
   racks: Rack[];
   items: ShelfRow[];
+  floor?: { floorWidthCm: number; floorDepthCm: number };
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -152,6 +154,7 @@ export function ShelfPlan({
       <div className="overflow-x-auto rounded-[10px] border border-line bg-cream-50 p-4">
         <RackMap
           racks={racks}
+          floor={floor ?? null}
           counts={counts}
           highlight={selected}
           onCellClick={(rackId, row, col) =>

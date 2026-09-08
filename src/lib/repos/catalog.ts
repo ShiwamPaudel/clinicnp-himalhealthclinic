@@ -13,12 +13,14 @@ import { listPosServices } from "@/lib/repos/services";
 import { listDoctors } from "@/lib/repos/doctors";
 import { listLabPartners } from "@/lib/repos/lab-partners";
 import { listRacks, allItemLocations } from "@/lib/repos/racks";
+import { getFloorSize } from "@/lib/repos/company";
 import type {
   PosService,
   PosDoctor,
   PosLabPartner,
   PosRack,
   PosCell,
+  PosFloor,
 } from "@/lib/pos-types";
 
 export interface CatalogBatch {
@@ -56,6 +58,9 @@ export interface CatalogSnapshot {
   labPartners: PosLabPartner[];
   /** The shop floor, so the counter can light up a shelf while offline. */
   racks: PosRack[];
+  /** The room those racks stand in. Absent in a snapshot cached before 0017,
+   *  and the map falls back to whatever the furniture covers. */
+  floor?: PosFloor;
 }
 
 /**
@@ -76,6 +81,7 @@ export async function catalogSnapshot(
       listRacks(),
     ]);
   const locations = await allItemLocations();
+  const floor = await getFloorSize();
 
   const batchesByItem = new Map<string, CatalogBatch[]>();
   for (const b of batches) {
@@ -91,6 +97,7 @@ export async function catalogSnapshot(
 
   return {
     version,
+    floor,
     services,
     doctors: doctors.map((d) => ({
       id: d.id,
@@ -106,8 +113,11 @@ export async function catalogSnapshot(
       kind: r.kind,
       rows: r.rows,
       cols: r.cols,
-      posX: r.posX,
-      posY: r.posY,
+      xCm: r.xCm,
+      yCm: r.yCm,
+      widthCm: r.widthCm,
+      depthCm: r.depthCm,
+      rotation: r.rotation,
     })),
     items: items.map((i) => ({
       id: i.id,

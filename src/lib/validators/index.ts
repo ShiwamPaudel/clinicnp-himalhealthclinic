@@ -241,12 +241,46 @@ export const rackSchema = z.object({
   kind: z.enum(FURNITURE_KINDS as unknown as [FurnitureKind, ...FurnitureKind[]]),
   rows: z.number().int().min(1, "At least one row").max(26, "That is too many rows for one rack"),
   cols: z.number().int().min(1, "At least one column").max(26, "That is too many columns for one rack"),
-  posX: z.number().int().min(-99).max(99),
-  posY: z.number().int().min(-99).max(99),
+  // Centimetres from the room's top-left corner (0017). Negative is allowed
+  // on purpose: something dragged past the corner is recorded where it was
+  // put rather than clamped to a place it is not.
+  xCm: z.number().int().min(-5000).max(5000),
+  yCm: z.number().int().min(-5000).max(5000),
+  widthCm: z.number().int().min(10).max(2000),
+  depthCm: z.number().int().min(10).max(2000),
+  rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
   note: z.string().max(120, "Keep the note short").optional(),
   active: z.boolean(),
 });
 export type RackFormInput = z.infer<typeof rackSchema>;
+
+/** A drag, a resize or a turn. Geometry only — see `moveRacks`. */
+export const layoutMoveSchema = z.object({
+  moves: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        xCm: z.number().int().min(-5000).max(5000),
+        yCm: z.number().int().min(-5000).max(5000),
+        widthCm: z.number().int().min(10).max(2000),
+        depthCm: z.number().int().min(10).max(2000),
+        rotation: z.union([
+          z.literal(0),
+          z.literal(90),
+          z.literal(180),
+          z.literal(270),
+        ]),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+/** How big the room itself is, in centimetres. */
+export const floorSizeSchema = z.object({
+  floorWidthCm: z.number().int().min(100).max(5000),
+  floorDepthCm: z.number().int().min(100).max(5000),
+});
 
 export const itemLocationSchema = z.object({
   itemId: z.string().min(1),

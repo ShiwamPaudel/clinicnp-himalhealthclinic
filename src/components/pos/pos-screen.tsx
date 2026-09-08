@@ -20,6 +20,7 @@ import type {
   PosDoctor,
   PosLabPartner,
   PosRack,
+  PosFloor,
   OutboxBill,
   HeldBill,
 } from "@/lib/pos-types";
@@ -30,6 +31,7 @@ import {
   getCachedDoctors,
   getCachedLabPartners,
   getCachedRacks,
+  getCachedFloor,
   syncCatalog,
   syncPatients,
   applyLocalAllocation,
@@ -62,6 +64,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
   const [doctors, setDoctors] = useState<PosDoctor[]>([]);
   const [partners, setPartners] = useState<PosLabPartner[]>([]);
   const [racks, setRacks] = useState<PosRack[]>([]);
+  const [floor, setFloor] = useState<PosFloor | null>(null);
   // bumped when `P` is pressed, so the patient bar knows to open itself
   const [patientOpenSignal, setPatientOpenSignal] = useState(0);
   const [held, setHeld] = useState<HeldBill[]>([]);
@@ -86,6 +89,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
     setDoctors(await getCachedDoctors());
     setPartners(await getCachedLabPartners());
     setRacks(await getCachedRacks());
+    setFloor(await getCachedFloor());
   }, []);
 
   const refreshHeld = useCallback(async () => {
@@ -561,6 +565,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
             items={items}
             services={services}
             racks={racks}
+            floor={floor}
             rackDisplay={config.rackDisplay}
             todayIso={config.todayIso}
             onPick={addItem}

@@ -102,13 +102,13 @@ describe("racks, shelves and desks", () => {
     const { createRack, getRack } = await import("@/lib/repos/racks");
 
     const rack = await createRack({
-      name: "Rack 1", kind: "rack", rows: 4, cols: 5, posX: 0, posY: 0,
+      name: "Rack 1", kind: "rack", rows: 4, cols: 5, xCm: 0, yCm: 0, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const shelf = await createRack({
-      name: "Window shelf", kind: "shelf", rows: 1, cols: 6, posX: 1, posY: 0,
+      name: "Window shelf", kind: "shelf", rows: 1, cols: 6, xCm: 100, yCm: 0, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const desk = await createRack({
-      name: "Front desk", kind: "desk", rows: 2, cols: 4, posX: 2, posY: 0,
+      name: "Front desk", kind: "desk", rows: 2, cols: 4, xCm: 200, yCm: 0, widthCm: 100, depthCm: 45, rotation: 0,
     });
 
     expect((await getRack(rack))?.kind).toBe("rack");
@@ -121,7 +121,7 @@ describe("racks, shelves and desks", () => {
     // deliberately no CHECK on the column, so this is the only guard.
     const { createRack, getRack } = await import("@/lib/repos/racks");
     const id = await createRack({
-      name: "From the future", kind: "rack", rows: 1, cols: 1, posX: 8, posY: 8,
+      name: "From the future", kind: "rack", rows: 1, cols: 1, xCm: 800, yCm: 800, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const c = createClient({ url: `file:${DB_FILE}` });
     await c.execute({
@@ -132,18 +132,21 @@ describe("racks, shelves and desks", () => {
     expect((await getRack(id))?.kind).toBe("rack");
   });
 
-  it("will not stand two things in the same spot", async () => {
-    const { createRack, RackPositionTakenError } = await import(
-      "@/lib/repos/racks"
-    );
+  it("lets two things stand in the same spot, because rooms are like that", async () => {
+    // 0011 refused this outright. 0017 allows it: a shelf tucked under a
+    // counter is a real arrangement, and a planner that would not store it
+    // would be lying about the room. Overlap is drawn, not refused.
+    const { createRack, listRacks } = await import("@/lib/repos/racks");
     await createRack({
-      name: "First", kind: "rack", rows: 1, cols: 1, posX: 20, posY: 20,
+      name: "First", kind: "rack", rows: 1, cols: 1,
+      xCm: 2000, yCm: 2000, widthCm: 100, depthCm: 45, rotation: 0,
     });
-    await expect(
-      createRack({
-        name: "Second", kind: "desk", rows: 1, cols: 1, posX: 20, posY: 20,
-      }),
-    ).rejects.toBeInstanceOf(RackPositionTakenError);
+    await createRack({
+      name: "Second", kind: "desk", rows: 1, cols: 1,
+      xCm: 2000, yCm: 2000, widthCm: 100, depthCm: 45, rotation: 0,
+    });
+    const both = (await listRacks(true)).filter((r) => r.xCm === 2000 && r.yCm === 2000);
+    expect(both).toHaveLength(2);
   });
 });
 
@@ -151,7 +154,7 @@ describe("putting a medicine somewhere", () => {
   it("saves the cell against the item and reads it back", async () => {
     const { createRack, getItemLocation } = await import("@/lib/repos/racks");
     const rackId = await createRack({
-      name: "Rack A", kind: "rack", rows: 4, cols: 5, posX: 3, posY: 0,
+      name: "Rack A", kind: "rack", rows: 4, cols: 5, xCm: 300, yCm: 0, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Cetamol", { rackId, row: 2, col: 3 });
 
@@ -168,7 +171,7 @@ describe("putting a medicine somewhere", () => {
       "@/lib/repos/racks"
     );
     const rackId = await createRack({
-      name: "Small", kind: "shelf", rows: 2, cols: 2, posX: 5, posY: 5,
+      name: "Small", kind: "shelf", rows: 2, cols: 2, xCm: 500, yCm: 500, widthCm: 100, depthCm: 45, rotation: 0,
     });
 
     await expect(
@@ -187,7 +190,7 @@ describe("putting a medicine somewhere", () => {
   it("names the thing when it refuses, because there are several", async () => {
     const { createRack, assertCellFits } = await import("@/lib/repos/racks");
     const rackId = await createRack({
-      name: "By the window", kind: "shelf", rows: 2, cols: 2, posX: 7, posY: 5,
+      name: "By the window", kind: "shelf", rows: 2, cols: 2, xCm: 700, yCm: 500, widthCm: 100, depthCm: 45, rotation: 0,
     });
     await expect(assertCellFits({ rackId, row: 5, col: 5 })).rejects.toThrow(
       /By the window/,
@@ -199,7 +202,7 @@ describe("putting a medicine somewhere", () => {
       "@/lib/repos/racks"
     );
     const rackId = await createRack({
-      name: "Half-answered", kind: "rack", rows: 3, cols: 3, posX: 6, posY: 5,
+      name: "Half-answered", kind: "rack", rows: 3, cols: 3, xCm: 600, yCm: 500, widthCm: 100, depthCm: 45, rotation: 0,
     });
     // Somebody picked the rack and was interrupted. Storing no shelf at all
     // would lose their intent without saying so.
@@ -253,7 +256,7 @@ describe("putting a medicine somewhere", () => {
       "@/lib/repos/racks"
     );
     const rackId = await createRack({
-      name: "Two shelves", kind: "rack", rows: 3, cols: 3, posX: 11, posY: 11,
+      name: "Two shelves", kind: "rack", rows: 3, cols: 3, xCm: 1100, yCm: 1100, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Mover", { rackId, row: 1, col: 1 });
     await setItemLocation(itemId, { rackId, row: 3, col: 3, note: "" });
@@ -271,7 +274,7 @@ describe("putting a medicine somewhere", () => {
     const { getItem } = await import("@/lib/repos/items");
 
     const rackId = await createRack({
-      name: "Rack 9", kind: "rack", rows: 2, cols: 2, posX: 9, posY: 9,
+      name: "Rack 9", kind: "rack", rows: 2, cols: 2, xCm: 900, yCm: 900, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Removable", { rackId, row: 1, col: 1 });
 
@@ -294,21 +297,21 @@ describe("furniture that changes under the things standing on it", () => {
       "@/lib/repos/racks"
     );
     const rackId = await createRack({
-      name: "Shrinking", kind: "rack", rows: 4, cols: 4, posX: 1, posY: 1,
+      name: "Shrinking", kind: "rack", rows: 4, cols: 4, xCm: 100, yCm: 100, widthCm: 100, depthCm: 45, rotation: 0,
     });
     await makeItemAt("Stranded", { rackId, row: 4, col: 4 });
 
     await expect(
       updateRack(rackId, {
         name: "Shrinking", kind: "rack", rows: 2, cols: 2,
-        posX: 1, posY: 1, active: true,
+        xCm: 100, yCm: 100, widthCm: 100, depthCm: 45, rotation: 0, active: true,
       }),
     ).rejects.toBeInstanceOf(BadCellError);
 
     // Growing is always fine.
     await updateRack(rackId, {
       name: "Shrinking", kind: "rack", rows: 6, cols: 6,
-      posX: 1, posY: 1, active: true,
+      xCm: 100, yCm: 100, widthCm: 100, depthCm: 45, rotation: 0, active: true,
     });
   });
 
@@ -319,7 +322,7 @@ describe("furniture that changes under the things standing on it", () => {
     const { getItem } = await import("@/lib/repos/items");
 
     const rackId = await createRack({
-      name: "Doomed", kind: "desk", rows: 2, cols: 2, posX: 2, posY: 2,
+      name: "Doomed", kind: "desk", rows: 2, cols: 2, xCm: 200, yCm: 200, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Survivor", { rackId, row: 1, col: 2 });
 
@@ -335,7 +338,7 @@ describe("furniture that changes under the things standing on it", () => {
     const { createRack, deleteRack, setItemLocation, getItemLocation } =
       await import("@/lib/repos/racks");
     const rackId = await createRack({
-      name: "Also doomed", kind: "rack", rows: 2, cols: 2, posX: 12, posY: 12,
+      name: "Also doomed", kind: "rack", rows: 2, cols: 2, xCm: 1200, yCm: 1200, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItem("Noted");
     await setItemLocation(itemId, {
@@ -356,7 +359,7 @@ describe("what the counter is told", () => {
     const { catalogVersion } = await import("@/lib/repos/batches");
 
     const rackId = await createRack({
-      name: "Front", kind: "rack", rows: 2, cols: 2, posX: 30, posY: 30,
+      name: "Front", kind: "rack", rows: 2, cols: 2, xCm: 3000, yCm: 3000, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const before = await catalogVersion();
 
@@ -364,7 +367,7 @@ describe("what the counter is told", () => {
     await new Promise((r) => setTimeout(r, 5));
     await updateRack(rackId, {
       name: "Fridge", kind: "rack", rows: 2, cols: 2,
-      posX: 30, posY: 30, active: true,
+      xCm: 3000, yCm: 3000, widthCm: 100, depthCm: 45, rotation: 0, active: true,
     });
     expect(await catalogVersion()).not.toBe(before);
   });
@@ -374,7 +377,7 @@ describe("what the counter is told", () => {
     const { catalogVersion } = await import("@/lib/repos/batches");
 
     const rackId = await createRack({
-      name: "Moving day", kind: "rack", rows: 2, cols: 2, posX: 32, posY: 30,
+      name: "Moving day", kind: "rack", rows: 2, cols: 2, xCm: 3200, yCm: 3000, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Shifted", { rackId, row: 1, col: 1 });
     const before = await catalogVersion();
@@ -391,7 +394,7 @@ describe("what the counter is told", () => {
     const { catalogVersion } = await import("@/lib/repos/batches");
 
     const rackId = await createRack({
-      name: "Temporary", kind: "shelf", rows: 1, cols: 1, posX: 31, posY: 30,
+      name: "Temporary", kind: "shelf", rows: 1, cols: 1, xCm: 3100, yCm: 3000, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const before = await catalogVersion();
     await deleteRack(rackId);
@@ -403,7 +406,7 @@ describe("what the counter is told", () => {
     const { catalogSnapshot } = await import("@/lib/repos/catalog");
 
     const rackId = await createRack({
-      name: "Catalogued", kind: "desk", rows: 3, cols: 3, posX: 40, posY: 40,
+      name: "Catalogued", kind: "desk", rows: 3, cols: 3, xCm: 4000, yCm: 4000, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Findable", { rackId, row: 3, col: 2 });
 
@@ -449,7 +452,7 @@ describe("the item master", () => {
     const { getItem, updateItem } = await import("@/lib/repos/items");
 
     const rackId = await createRack({
-      name: "Edit test", kind: "rack", rows: 2, cols: 2, posX: 50, posY: 50,
+      name: "Edit test", kind: "rack", rows: 2, cols: 2, xCm: 5000, yCm: 5000, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const itemId = await makeItemAt("Renamed", { rackId, row: 2, col: 1 });
 
@@ -472,10 +475,10 @@ describe("the shelf list", () => {
 
     // Drawn deliberately out of order: the near one is created last.
     const far = await createRack({
-      name: "Back wall", kind: "rack", rows: 2, cols: 2, posX: 1, posY: 1,
+      name: "Back wall", kind: "rack", rows: 2, cols: 2, xCm: 100, yCm: 100, widthCm: 100, depthCm: 45, rotation: 0,
     });
     const near = await createRack({
-      name: "By the door", kind: "desk", rows: 2, cols: 2, posX: 0, posY: 0,
+      name: "By the door", kind: "desk", rows: 2, cols: 2, xCm: 0, yCm: 0, widthCm: 100, depthCm: 45, rotation: 0,
     });
 
     await makeItemAt("Zinc", { rackId: far, row: 1, col: 1 });
@@ -485,7 +488,7 @@ describe("the shelf list", () => {
 
     const rows = await shelfRows();
     expect(rows.map((r) => r.brandName)).toEqual([
-      // By the door first (posY 0), top shelf before the one below it
+      // By the door first (nearest the front), top shelf before the one below
       "Bandage",
       "Aspirin",
       // then the back wall

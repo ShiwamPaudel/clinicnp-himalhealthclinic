@@ -35,6 +35,9 @@ const SCREENS = [
   ["/stock/shelves", "the shelf plan"],
   ["/stock/opening", "opening stock"],
   ["/reports/shelf", "the shelf list"],
+  ["/lab", "the laboratory queue"],
+  ["/lab/reports", "reports waiting to be handed over"],
+  ["/items/pricing", "setting prices"],
 ];
 
 const findings = [];

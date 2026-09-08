@@ -12,6 +12,7 @@ import type {
   PosDoctor,
   PosLabPartner,
   PosRack,
+  PosFloor,
   PosCatalog,
   CachedPatient,
 } from "@/lib/pos-types";
@@ -20,6 +21,7 @@ const VERSION_KEY = "catalog_version";
 const DOCTORS_KEY = "doctors";
 const PARTNERS_KEY = "lab_partners";
 const RACKS_KEY = "racks";
+const FLOOR_KEY = "floor";
 
 /** All cached items. */
 export async function getCachedItems(): Promise<PosItem[]> {
@@ -55,6 +57,17 @@ export async function getCachedRacks(): Promise<PosRack[]> {
   return Array.isArray(rows) ? (rows as PosRack[]) : [];
 }
 
+/** The room, if it has ever been synced. Null before 0017 or before a sync. */
+export async function getCachedFloor(): Promise<PosFloor | null> {
+  const db = await posDB();
+  const row: unknown = await db.get("meta", FLOOR_KEY);
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const f = row as Partial<PosFloor>;
+  return typeof f.floorWidthCm === "number" && typeof f.floorDepthCm === "number"
+    ? { floorWidthCm: f.floorWidthCm, floorDepthCm: f.floorDepthCm }
+    : null;
+}
+
 export async function getCachedVersion(): Promise<string | undefined> {
   const db = await posDB();
   const v = await db.get("meta", VERSION_KEY);
@@ -77,6 +90,7 @@ export async function replaceCatalog(catalog: PosCatalog): Promise<void> {
   await tx.objectStore("meta").put(catalog.doctors ?? [], DOCTORS_KEY);
   await tx.objectStore("meta").put(catalog.labPartners ?? [], PARTNERS_KEY);
   await tx.objectStore("meta").put(catalog.racks ?? [], RACKS_KEY);
+  await tx.objectStore("meta").put(catalog.floor ?? null, FLOOR_KEY);
   await tx.done;
 }
 

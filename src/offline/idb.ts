@@ -18,6 +18,7 @@ import type {
   PosDoctor,
   PosLabPartner,
   PosRack,
+  PosFloor,
   OutboxBill,
   HeldBill,
   QueuedPatient,
@@ -31,7 +32,7 @@ interface PosDB extends DBSchema {
   // short enough that a store of their own would be ceremony
   meta: {
     key: string;
-    value: string | PosDoctor[] | PosLabPartner[] | PosRack[];
+    value: string | PosDoctor[] | PosLabPartner[] | PosRack[] | PosFloor | null;
   };
   outbox: { key: string; value: OutboxBill };
   held: { key: string; value: HeldBill };

@@ -20,15 +20,24 @@ import {
   deleteRack,
   getRack,
   rackItemCount,
+  moveRacks,
   setItemLocation,
   BadCellError,
   RackPositionTakenError,
 } from "@/lib/repos/racks";
-import { rackSchema, itemLocationSchema } from "@/lib/validators";
+import { setFloorSize } from "@/lib/repos/company";
+import {
+  rackSchema,
+  itemLocationSchema,
+  layoutMoveSchema,
+  floorSizeSchema,
+} from "@/lib/validators";
 
 export interface ActionResult {
   ok: boolean;
   userMessage?: string;
+  /** the id of a newly created piece, so the planner can select it */
+  id?: string;
 }
 
 const OK: ActionResult = { ok: true };
@@ -63,6 +72,9 @@ export async function saveRackAction(
     } else {
       const newId = await createRack(parsed.data);
       await recordAudit(user.id, "rack.create", { id: newId, name: parsed.data.name });
+      revalidatePath("/settings/racks");
+      revalidatePath("/stock/shelves");
+      return { ok: true, id: newId };
     }
     revalidatePath("/settings/racks");
     revalidatePath("/stock/shelves");
@@ -116,6 +128,55 @@ export async function setItemLocationAction(
     revalidatePath("/stock/shelves");
     revalidatePath("/settings/racks");
     revalidatePath(`/items/${itemId}`);
+    return OK;
+  } catch (err) {
+    return handle(err);
+  }
+}
+
+/**
+ * Where everything now stands, after a drag, a resize or a turn.
+ *
+ * Geometry only. The planner sends this constantly — every drop, every handle
+ * released — so it must be the narrowest write in the app: it cannot rename a
+ * piece of furniture, change what kind it is, or alter the grid of shelves
+ * inside it. Moving a rack across the room must never be able to strand a
+ * medicine on a shelf number that stopped existing, and the way to be certain
+ * is for the move to have no way of changing shelf numbers.
+ *
+ * Not audited per drag. A floor plan is moved dozens of times in one sitting
+ * while somebody decides where things go, and an audit log full of "rack moved
+ * 5cm" is an audit log nobody reads.
+ */
+export async function saveLayoutAction(input: unknown): Promise<ActionResult> {
+  try {
+    await assertAdmin();
+    await requireModule("pharmacy");
+    const parsed = layoutMoveSchema.safeParse(input);
+    if (!parsed.success) return fail("That layout could not be saved.");
+
+    await moveRacks(parsed.data.moves);
+    revalidatePath("/settings/racks");
+    revalidatePath("/stock/shelves");
+    return OK;
+  } catch (err) {
+    return handle(err);
+  }
+}
+
+/** How big the room is. Its own action, so it is its own undo. */
+export async function setFloorSizeAction(input: unknown): Promise<ActionResult> {
+  try {
+    const user = await assertAdmin();
+    await requireModule("pharmacy");
+    const parsed = floorSizeSchema.safeParse(input);
+    if (!parsed.success) {
+      return fail("A room has to be between 1 and 50 metres each way.");
+    }
+    await setFloorSize(parsed.data);
+    await recordAudit(user.id, "floor.resize", parsed.data);
+    revalidatePath("/settings/racks");
+    revalidatePath("/stock/shelves");
     return OK;
   } catch (err) {
     return handle(err);
