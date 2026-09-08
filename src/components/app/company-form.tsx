@@ -120,7 +120,9 @@ export function CompanyForm({ initial }: { initial: Company }) {
         </div>
       </form>
 
-      {/* Print-preview stub — proves PAN appears on invoices */}
+      {/* A picture of what invoice-a4.tsx prints. It is drawn separately here
+          rather than rendering the real bill, which needs a whole saved bill to
+          render at all — so when the bill changes, this has to change with it. */}
       <div className="h-fit rounded-[10px] border border-line bg-cream-50 p-4">
         <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-sage-500">
           Top of the bill
@@ -146,15 +148,14 @@ export function CompanyForm({ initial }: { initial: Company }) {
               </div>
             </>
           )}
-          <div className="flex justify-center gap-3 border-y border-sage-950/60 py-1 text-[11px] font-semibold">
-            <span>PAN: {values.panNo || "—"}</span>
-            {values.ddaNo && <span>DDA: {values.ddaNo}</span>}
-          </div>
+          {/* No PAN or DDA line: both are printed on the letterhead image
+              itself, and the bill does not repeat them. */}
           <div className="mt-2 text-center text-[11px] font-bold tracking-[0.14em]">
             {values.vatRegistered ? "TAX INVOICE" : "INVOICE"}
           </div>
           <div className="my-2 border-t border-dashed border-line" />
-          <div className="text-center text-[11px] text-sage-500">
+          {/* Left, and last. Nothing prints below this line. */}
+          <div className="text-left text-[11px] text-sage-500">
             {values.invoiceFooter || "Get well soon"}
           </div>
         </div>

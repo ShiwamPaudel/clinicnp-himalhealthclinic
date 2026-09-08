@@ -106,10 +106,10 @@ beforeAll(async () => {
           VALUES ('u1','Sarita','admin','x','admin',?)`,
     args: [now],
   });
-  await c.execute({
-    sql: `INSERT INTO fiscal_years (bs_label, start_ad, end_ad, active, status)
-          VALUES ('2083/84','2026-07-16','2027-07-15',1,'open')`,
-  });
+  await c.execute(
+    `INSERT INTO fiscal_years (bs_label, start_ad, end_ad, active, status)
+     VALUES ('2083/84','2026-07-16','2027-07-15',1,'open')`,
+  );
 
   unpricedId = await makeItem(c, "Never Sold Before", 0, 0);
   pricedId = await makeItem(c, "Already Priced", 200, 1800);

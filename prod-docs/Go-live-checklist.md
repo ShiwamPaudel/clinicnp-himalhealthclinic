@@ -33,8 +33,13 @@ clinic bills a real patient.
 ## 1. The clinic's own details
 
 - [ ] **Company name** exactly as it should print on an invoice.
-- [ ] **PAN** entered and checked against their registration certificate. It
-      prints on every invoice and it is the one number an inspector looks at.
+- [ ] **Letterhead image uploaded** under Settings → Company. It is the band
+      across the top of every invoice, and at Himal it already carries the PAN
+      and DDA numbers, so read them off the image and check them against the
+      registration certificate. A wrong number there is wrong on every bill.
+- [ ] **PAN** entered and checked against their registration certificate. The
+      invoice does not print it — the letterhead does — but the stock-out note
+      and the refund note are plain slips with no letterhead, and they use this.
 - [ ] **DDA number** entered if they hold one.
 - [ ] **Address and phone** as they should appear on a slip a patient carries.
 - [ ] **VAT decision confirmed with their accountant**, not assumed. If they are
@@ -97,10 +102,12 @@ clinic bills a real patient.
 
 ## 5. Printing
 
-- [ ] Print a **test invoice on the real printer**. Check: the clinic's name and
-      PAN, the BS date, the patient block, the service block above the medicine
-      block, batch and expiry on a medicine line, one set of totals, and that
-      nothing runs off the edge of 80 mm.
+- [ ] Print a **test invoice on the real printer**, on a normal A4 sheet. Check:
+      the letterhead image is sharp and not stretched, the BS date, the patient
+      block, the service block above the medicine block, batch and expiry on a
+      medicine line, one set of totals, and that nothing runs off the margin.
+      Nothing prints below the total except the one footer line — no signature
+      box, and no second PAN line under the letterhead.
 - [ ] Print an **OPD slip** and confirm there is room for the doctor to write.
 - [ ] Print a **lab dispatch slip** and confirm it names the laboratory.
 - [ ] Print a **refund note**.
