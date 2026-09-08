@@ -87,8 +87,15 @@ export default async function ItemsPage() {
               const sellable = s?.sellableBaseQty ?? 0;
               const defaultUnit =
                 item.units.find((u) => u.isDefaultSelling) ?? item.units[0];
+              // Something never stocked is not "running low" — it has not
+              // started. Saying otherwise puts an amber warning on every row
+              // of a freshly imported catalogue, which is how people learn to
+              // stop reading the amber warnings.
+              const neverStocked = sellable <= 0;
               const low =
-                item.minStockBaseQty > 0 && sellable < item.minStockBaseQty;
+                !neverStocked &&
+                item.minStockBaseQty > 0 &&
+                sellable < item.minStockBaseQty;
               return (
                 <TR key={item.id}>
                   <TD>
@@ -123,6 +130,9 @@ export default async function ItemsPage() {
                   <TD>
                     <div className="flex flex-wrap gap-1">
                       {!item.active && <Badge tone="neutral">Inactive</Badge>}
+                      {item.active && neverStocked && (
+                        <Badge tone="neutral">Not stocked</Badge>
+                      )}
                       {low && <Badge tone="warn">Low</Badge>}
                       {item.controlledFlag && <Badge tone="info">Rx</Badge>}
                       {item.active && !low && sellable > 0 && (
