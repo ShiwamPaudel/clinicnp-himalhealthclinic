@@ -240,3 +240,46 @@ Default is stillness. Allowed: the save-stamp on the counter (250 ms), dialog fa
 - Touch targets ≥ 44 px; the counter works on a 10" Android tablet; the file uploader works from a phone camera.
 - Colour is never the only signal: the Service tag carries the word "Service"; the allergy strip carries a warning glyph and the word "Allergy"; the closed-year banner says "closed" in words.
 - Language: sentence case, verbs on buttons ("Register patient", "Start visit", "Add file", "Record stock out", "Close year"), an action keeps its name through to its toast ("Register patient" → "Patient registered"), and no technical vocabulary anywhere (Rules.md §1).
+
+---
+
+## 9. The sign-in screen — the only branded screen
+
+Everything behind the login belongs to the clinic: their name on the bill, their letterhead, their stock, their patients. A maker's badge in the corner of a counter screen is the maker talking over the shopkeeper all day, so there isn't one. The sign-in screen is the deliberate exception — nobody is working yet, and it is the screen a new member of staff stares at while somebody explains what this thing is.
+
+**Layout.** Two halves, `lg:grid-cols-[1.05fr_1fr]`, each filling the viewport height.
+
+```
+┌───────────────────────────────┬────────────────────────┐
+│ ClinicNP  (white artwork)     │                        │
+│                               │  ┌──────────────────┐  │
+│ The whole counter,            │  │ their letterhead │  │
+│ on one screen.                │  └──────────────────┘  │
+│ <derived tagline>             │                        │
+│                               │  Log in                │
+│ ▢ One bill for everything     │  Use the username and  │
+│ ▢ Stock that watches itself   │  password you were     │
+│ ▢ Patients and their visits   │  given.                │
+│ ▢ Samples followed to report  │                        │
+│ ▢ Keeps working offline       │  Username [_________]  │
+│                               │  Password [______][👁] │
+│ ─────────────────────────────  │  [      Log in      ]  │
+│ by Infobytes Nepal Pvt. Ltd.  │                        │
+│              ☎ Support ×2     │  Accounts are set up   │
+│                               │  by the owner…         │
+└───────────────────────────────┴────────────────────────┘
+     sage-900, cream text            cream-100
+```
+
+**Rules that hold it together:**
+
+- **Sage, never navy.** Navy means a patient is involved (§1) and nobody has signed in. The mark itself is the sanctioned exception and it arrives as artwork, not as a colour token.
+- **The form comes first on a phone.** `order-1 lg:order-2` on the form, `order-2 lg:order-1` on the brand panel. Somebody opening this on the shop's tablet wants the password box, not the sales pitch. The pitch is still there, below it.
+- **The clinic's own letterhead sits above the fields**, so somebody at a shared machine can see whose system this is before typing into it. Falls back to their name set in type, then to nothing — never to a placeholder. Only `company.name` and `company.logoUrl` cross to the browser; both are printed on every bill that leaves the shop, so neither is a secret, and nothing else from the company profile is sent to a page anybody can open.
+- **Four or five features, never more**, each with an icon, a title and one sentence. Built by `featuresFor(modules)` in `components/auth/brand-panel.tsx` and **filtered by the modules actually switched on** — a pharmacy-only install must not be told about patients and samples, because those pages 404 for it (D-030) and the first thing a new user would learn is that the software describes itself wrongly.
+- **Offline outranks Nepali dates for the last slot.** Five is the cap and a clinic with a pharmacy fills four; Bikram Sambat is table stakes for anything sold here, and billing through a power cut is not. Pinned by `tests/login-screen.test.ts`.
+- **Everything is claimed in the present tense**, because everything listed is already built. A sign-in screen that advertises what is coming is the first thing a user learns not to trust.
+- **The support numbers live here** because this is the screen somebody is looking at when they cannot get in — which is exactly when they are needed and exactly when a number stored inside the software is no use. They and the vendor name come from `lib/vendor.ts`, which is the only place in the product that names the maker.
+- **One word for one action.** The heading, the button and its busy state all come from `strings.login` — "Log in", never a mix of "Sign in" and "Log in" on the same screen.
+
+**Brand assets** (`public/icons/`): `logo-main.png` is the mark on light surfaces, `logo-white.png` on anything that isn't white, `favicon.png` is the round mark. The three installed-app icons and `apple-touch-icon.png` are **derived** from `favicon.png` by `scripts/make-icons.mjs` — never hand-cropped, so they cannot drift apart. The artwork spells "ClinicNP", so a pharmacy-only install falls back to the wordmark set in type (`components/ui/wordmark.tsx`) rather than showing the wrong name in a picture.

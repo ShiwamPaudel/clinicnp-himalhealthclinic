@@ -28,6 +28,16 @@ const shot = (slug) => dataUri(join(SCREENS, `${slug}.png`));
 // which modules are on, and a fixed picture cannot say two different things.
 const WORDMARK = "ClinicNP";
 
+/**
+ * The cover mark. The owner supplied real artwork, so the cover uses it; the
+ * name set in type stays as the fallback so this script still runs in a tree
+ * where the file is missing.
+ */
+const LOGO = join(__dirname, "..", "public", "icons", "logo-main.png");
+const COVER_MARK = existsSync(LOGO)
+  ? `<img src="${dataUri(LOGO)}" alt="${WORDMARK}">`
+  : `<div class="wordmark">${WORDMARK}</div>`;
+
 // ---- The walkthrough content -------------------------------------------------
 // Plain language only. Each section pairs a real screenshot with what the user
 // sees and what to do. `n` numbers appear in the printed table of contents.
@@ -38,14 +48,16 @@ const CHAPTERS = [
     sections: [
       {
         img: "01-login",
-        title: "Signing in",
+        title: "Logging in",
         blurb:
-          "ClinicNP opens to a sign-in screen. Every person who works the counter gets their own username so the shop always knows who made each bill.",
+          "ClinicNP opens here. Your clinic's own letterhead sits above the boxes, so you can always tell it is your shop's system you are typing into. Every person who works the counter gets their own username, so the shop always knows who made each bill.",
         points: [
-          "Type your <b>username</b> and <b>password</b>, then press <b>Log in</b> (or hit Enter).",
-          "Demo logins for trying things out: <b>admin / admin123</b> (Owner) and <b>bikash / staff123</b> (Counter staff).",
-          "Get the password wrong too many times in a row and ClinicNP pauses sign-in for a few minutes. This is on purpose — it stops anyone guessing their way in. Just wait and try again.",
+          "Type your <b>username</b> and <b>password</b>, then press <b>Log in</b>.",
+          "The eye button at the end of the password box shows what you have typed — useful on a tablet keyboard.",
+          "There is no sign-up. The owner creates every account under <b>Settings → Users</b>, and only the owner can reset a forgotten password.",
+          "Get the password wrong too many times in a row and ClinicNP pauses logging in for a few minutes. This is on purpose — it stops anyone guessing their way in. Just wait and try again.",
           "Owners see every tab. Counter staff see only what they need for billing and stock — this keeps the shop's numbers safe.",
+          "The <b>support numbers are printed on this screen</b>, at the bottom. That is deliberate: it is the one screen you can still read when you cannot get in.",
         ],
       },
     ],
@@ -539,7 +551,9 @@ const CHAPTERS = [
 // ---- HTML assembly -----------------------------------------------------------
 const GREEN = "#20342a";
 const GREEN2 = "#35553f";
-const ORANGE = "#e87e28";
+// The accent. Design.md retired the Faarma orange (#e87e28) at the rename and
+// says it never comes back; this document was still printing it on its cover.
+const ACCENT = "#b02a6e"; // magenta-600, the sanctioned accent
 const CREAM = "#faf6eb";
 const LINE = "#e3dbc6";
 
@@ -594,7 +608,7 @@ const html = `<!doctype html>
   .cover h1 { font-size: 40px; margin: 0; letter-spacing: -0.5px; }
   .cover .sub { color: ${GREEN2}; font-size: 16px; margin-top: 8px; }
   .cover .meta { margin-top: 40px; color: ${GREEN2}; font-size: 12px; }
-  .cover .rule { width: 64px; height: 4px; background: ${ORANGE}; border-radius: 999px; margin: 24px auto 0; }
+  .cover .rule { width: 64px; height: 4px; background: ${ACCENT}; border-radius: 999px; margin: 24px auto 0; }
 
   /* Intro + TOC */
   .card {
@@ -606,14 +620,14 @@ const html = `<!doctype html>
   .concepts { list-style: none; padding: 0; margin: 12px 0 0; }
   .concepts li { padding: 8px 0; border-top: 1px solid ${LINE}; }
   .concepts li:first-child { border-top: 0; }
-  .concepts b { color: ${ORANGE}; }
+  .concepts b { color: ${ACCENT}; }
 
   ol.toc { list-style: none; padding: 0; margin: 0; counter-reset: none; }
   ol.toc li {
     display: flex; align-items: baseline; gap: 10px;
     padding: 6px 0; border-bottom: 1px dotted ${LINE};
   }
-  .toc-n { color: ${ORANGE}; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .toc-n { color: ${ACCENT}; font-weight: 700; font-variant-numeric: tabular-nums; }
   .toc-ch { margin-left: auto; color: ${GREEN2}; font-size: 11px; opacity: .8; }
 
   h2 {
@@ -626,7 +640,7 @@ const html = `<!doctype html>
   .shot h3 { font-size: 16px; margin: 0 0 4px; color: ${GREEN}; }
   .shot h3::before {
     content: ""; display: inline-block; width: 8px; height: 8px;
-    background: ${ORANGE}; border-radius: 2px; margin-right: 8px; vertical-align: middle;
+    background: ${ACCENT}; border-radius: 2px; margin-right: 8px; vertical-align: middle;
   }
   .blurb { margin: 0 0 12px; color: #2c3b32; }
   figure { margin: 0 0 12px; }
@@ -653,7 +667,7 @@ const html = `<!doctype html>
       position: sticky; top: 0; z-index: 10; background: ${GREEN}; color: ${CREAM};
       text-align: center; padding: 10px; font-size: 12.5px;
     }
-    .printhint b { color: ${ORANGE}; }
+    .printhint b { color: ${ACCENT}; }
   }
   @media print { .printhint { display: none; } }
 </style>
@@ -663,7 +677,7 @@ const html = `<!doctype html>
 <div class="wrap">
 
   <div class="cover">
-    <div class="wordmark">${WORDMARK}</div>
+    ${COVER_MARK}
     <h1>User Guide</h1>
     <div class="sub">Clinic and pharmacy, on one counter</div>
     <div class="rule"></div>
@@ -672,13 +686,14 @@ const html = `<!doctype html>
 
   <div class="card">
     <h2>Welcome to ClinicNP</h2>
-    <p class="lede">ClinicNP runs your pharmacy counter and your stock room from one place — billing customers, tracking every batch, and turning the day's work into clear numbers. This guide walks through each screen with a real picture and plain steps. No jargon.</p>
+    <p class="lede">ClinicNP runs your counter, your stock room and your patient records from one place — billing medicines and services on a single invoice, tracking every batch, following a sample out to the laboratory and back, and turning the day's work into clear numbers. This guide walks through each screen with a real picture and plain steps. No jargon.</p>
     <ul class="concepts">
       <li><b>Nepali dates.</b> Every date is in Bikram Sambat, the way you already work.</li>
       <li><b>Sells the oldest first.</b> ClinicNP always picks the nearest-to-expiry batch, and never sells an expired one.</li>
       <li><b>Works offline.</b> Keep billing with no internet; bills send themselves when you're back online.</li>
-      <li><b>Two roles.</b> Owners see everything; counter staff see billing and stock. Set this up in Settings → Users.</li>
-      <li><b>Try it now.</b> Sign in with <b>admin / admin123</b> to explore with sample data.</li>
+      <li><b>One bill.</b> Medicines and services go on the same invoice, printed on A4 under your own letterhead.</li>
+      <li><b>Roles.</b> Owners see everything; counter staff see billing and stock. Set this up in Settings → Users.</li>
+      <li><b>Your own login.</b> The owner creates an account for each person under Settings → Users. Ask them for yours — never share one, because the shop's record of who did what depends on it.</li>
     </ul>
   </div>
 

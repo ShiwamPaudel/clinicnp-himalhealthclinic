@@ -126,20 +126,26 @@ async function syncOne(bill: OutboxBill): Promise<SyncOneResult> {
     // Surface the server's message (e.g. an insufficient-stock rejection from a
     // rare two-device offline race). It keeps retrying at backoff — which self-
     // heals once stock is entered — but the reason is now visible on the bill.
-    let msg = `HTTP ${res.status}`;
+    // This reason is printed on the Stuck queue for somebody at a counter, so
+    // it has to be a sentence rather than a status code or whatever the
+    // browser happened to throw.
+    let msg =
+      res.status >= 500
+        ? "Something went wrong at the other end. It will keep trying."
+        : "It was refused. Show this to the owner.";
     try {
       const body = await res.json();
       if (body?.userMessage) msg = body.userMessage as string;
     } catch {
-      /* body wasn't JSON */
+      /* body wasn't readable — keep the plain wording */
     }
     bill.attempts += 1;
     bill.lastError = msg;
     await updateBill(bill);
     return { ok: false };
-  } catch (err) {
+  } catch {
     bill.attempts += 1;
-    bill.lastError = err instanceof Error ? err.message : "network";
+    bill.lastError = "The connection dropped while sending.";
     await updateBill(bill);
     return { ok: false };
   }

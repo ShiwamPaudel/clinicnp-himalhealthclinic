@@ -255,10 +255,14 @@ attachments(id, ulid UNIQUE, patient_id, visit_id NULL, bill_service_line_id NUL
 
 ```
 clinicnp/
-├── public/                          # ★ brand/ (ClinicNP marks), icons/, manifest
+├── public/icons/                    # logo-main, logo-white, favicon (supplied);
+│                                    #   192/512/maskable/apple derived by
+│                                    #   scripts/make-icons.mjs, never by hand (D-111)
 ├── src/
 │   ├── app/
-│   │   ├── (auth)/login/
+│   │   ├── (auth)/login/          # brand panel + sign-in; reads the company
+│   │   │                          #   name and letterhead pre-auth, nothing
+│   │   │                          #   else crosses to the browser (D-108)
 │   │   ├── (pos)/billing/           # the counter — now medicines + services + patient
 │   │   ├── (app)/
 │   │   │   ├── dashboard/

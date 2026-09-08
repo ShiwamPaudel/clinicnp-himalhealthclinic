@@ -33,7 +33,7 @@ export async function GET() {
     status: 200,
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="clinicnp-backup-${date}.json"`,
+      "Content-Disposition": `attachment; filename="clinicnp-backup-${date}.json"`, // sweep-ok: a downloaded file's extension, not prose
     },
   });
 }

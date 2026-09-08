@@ -160,8 +160,8 @@ export function CompanyForm({ initial }: { initial: Company }) {
           </div>
         </div>
         <p className="mt-2 text-[11px] text-sage-500">
-          Printed on a normal A4 sheet. There is one bill format — the header
-          image is the only thing that changes how it looks.
+          Bills print on a normal A4 sheet. Change the header image above to
+          change how this looks.
         </p>
       </div>
     </div>

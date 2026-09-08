@@ -8,6 +8,32 @@ clinic bills a real patient.
 
 ---
 
+## Where Himal Health Clinic actually stands  ·  2083-05-25
+
+Kept current so nobody re-does finished work or assumes unfinished work is done.
+
+**Done and verified in production:**
+company name, address and phone · letterhead image uploaded (it carries the PAN
+and DDA, so the bill does not print them again) · both modules on · fiscal year
+2083/84 open · 478 items and 907 units loaded · five pieces of furniture placed
+on the shop floor plan · one laboratory partner (Proton Preventive Lab) · two
+service groups and two services · 17 migrations applied · all test data cleared,
+patient numbering restarted at 1.
+
+**Left, and all of it needs the clinic in the room:**
+
+| | What | Where |
+|---|---|---|
+| 🔴 | **Replace `admin` / `admin123`** — blocking, see §6 | Settings → Users |
+| 🔴 | Real user accounts, roles and PINs | Settings → Users |
+| 🟠 | Services, rates, doctors, follow-up rules | Settings → Services / Doctors |
+| 🟠 | Prices for the 478 medicines, or let the counter set them as they sell | Items → Set prices |
+| 🟠 | Opening stock: batch numbers and expiry dates | Stock → Opening stock |
+| 🟡 | `company.pan_no` is empty — only the stock-out and refund slips use it | Settings → Company |
+| 🟡 | Invoice footer reads "ClincNP", missing an `i` | Settings → Company |
+
+---
+
 ## 0. Before the day
 
 - [ ] **Turso database created**, and its URL and token in hand.
@@ -46,10 +72,15 @@ clinic bills a real patient.
       registered, switch it on and check that an invoice shows the VAT block. If
       they are not, leave it off — a VAT line on the invoice of a business that
       is not registered is a real problem for them.
-- [ ] **Invoice footer** set to whatever they want at the bottom of a bill.
-- [ ] **Print format** chosen — 80 mm thermal or A5 — and matching the printer
-      actually in the room.
+- [ ] **Invoice footer** set to whatever they want at the bottom of a bill. It
+      is the only line that prints after the total, and it prints on every bill,
+      so read it back to them character by character. Himal's said
+      "Billed with ClincNP" — one letter short of the product's own name —
+      for its first weeks.
 - [ ] **Rounding** decided: on if they round the final amount to the rupee.
+
+There is no print-format choice to make. There is one bill, on A4, and the
+letterhead image is what makes it theirs.
 
 ---
 
@@ -90,13 +121,23 @@ clinic bills a real patient.
 
 ## 4. Medicines and opening stock
 
-- [ ] **Items entered** with their unit ladder (box / strip / tablet) and
-      selling rates.
-- [ ] **Opening stock entered** — through a stock-count correction, so every
+- [ ] **Items entered** with their unit ladder (box / strip / tablet). A starter
+      catalogue of 478 Nepali products ships in
+      `import-templates/pharmacy-items.STARTER.csv` and loads with
+      `pnpm db:import-items`; it only ever creates, and skips any brand name
+      already present, so it is safe to re-run.
+- [ ] **Prices set.** The catalogue arrives with none, deliberately — brand
+      names are public and a shop's prices are not, and an invented price that
+      reaches a bill is worse than no price. Two ways, and both are fine:
+      **Items → Set prices** for a sitting with the price list, or let the
+      counter ask the first time each medicine is sold and keep what is typed.
+- [ ] **Opening stock entered** — through **Stock → Opening stock**, so every
       figure has a batch number, an expiry and a reason behind it. Not by
       editing numbers.
 - [ ] Spot-check five items against the shelf. If the screen and the shelf
       disagree on day one they will never agree again.
+- [ ] Check the **Items** list shows no medicine you do not stock. A catalogue
+      is easier to delete from now than to explain to a customer later.
 
 ---
 
@@ -114,16 +155,37 @@ clinic bills a real patient.
 
 ---
 
-## 6. People
+## 6. People — **do this before anything else goes live**
 
+- [ ] **The `admin` / `admin123` login is gone.** Not changed later, not on the
+      list for next week: gone, before the address is given to anybody. It is
+      the bootstrap login, it is written in this repository, and while it works
+      the public URL signs anybody in as Owner. Either change the password and
+      the username, or make a real Owner account and delete `admin`.
 - [ ] **One user per person.** Shared logins mean the audit log cannot tell you
-      who did anything.
+      who did anything — and the audit log is the only answer to "who priced
+      this at Rs 12" or "who cancelled that bill".
 - [ ] Roles set: Admin for the owner, Staff for the counter, Accountant if their
       accountant needs to read the reports.
 - [ ] **PINs set** for anyone who switches at the counter.
-- [ ] The bootstrap admin password changed if the installer chose it.
+- [ ] Sign out and sign back in **as a Staff account**, and confirm the counter
+      still works and Settings does not open.
 - [ ] Whoever works the counter has actually **made a bill themselves** before
       you leave.
+
+---
+
+## 6a. The sign-in screen
+
+The first screen anyone sees, and the only one that is about the software
+rather than about the clinic.
+
+- [ ] The **clinic's letterhead** shows above the fields. If it shows their name
+      set in plain type instead, no header image has been uploaded (§1).
+- [ ] The **support numbers** are right, and the owner knows they are there —
+      that screen is what they will be looking at when they cannot get in.
+- [ ] Open it on the **shop's own phone or tablet** and confirm the password box
+      is the first thing on screen without scrolling.
 
 ---
 

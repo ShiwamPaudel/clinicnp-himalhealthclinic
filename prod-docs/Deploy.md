@@ -161,8 +161,21 @@ pnpm a11y http://localhost:3000   # against a running instance
 name and it wins, so `pnpm audit` silently reports dependency advisories
 instead of running any of the checks above.
 
+**Never run `pnpm build` while `pnpm dev` is running.** They share `.next`, and
+the build fails part-way through prerendering with
+`TypeError: Cannot read properties of undefined (reading 'call')` from
+`webpack-runtime.js` — which reads like a real fault in whichever page happened
+to be next in the queue, and is not. Stop the dev server, `rm -rf .next`, build
+again.
+
+`pnpm sweep` also refuses vendor names (Turso, Vercel, IndexedDB…) and
+build-plumbing words (migration, schema, deploy, JSON) in anything a user can
+read — Rules §1a. Put `sweep-ok` on the line when the word genuinely never
+reaches a screen, such as a file extension or a URL pattern.
+
 The counter bundle is worth watching: v1 shipped at 140 kB First Load, and
-Phases.md allows 15% growth. The build output prints it as `/billing`.
+Phases.md allows 15% growth. The build output prints it as `/billing`
+(145 kB as of 2083-05-25); `/login` is 128 kB.
 
 ---
 
@@ -241,3 +254,44 @@ line and lets the build through, because a check that breaks deploys for
 unrelated reasons gets deleted within a week and then protects nothing.
 
 Run it on its own any time with `pnpm db:check`.
+
+---
+
+## Brand artwork, and the icons derived from it
+
+Three files are supplied by the owner and are the only hand-made artwork in the
+repository:
+
+| File | What it is | Used by |
+|---|---|---|
+| `public/icons/logo-main.png` | the full mark, navy and red | light surfaces |
+| `public/icons/logo-white.png` | the same mark in white | the sign-in panel, and anything that is not white |
+| `public/icons/favicon.png` | the round mark, white on navy | the browser tab |
+
+Everything else is **derived** and must never be hand-cropped:
+
+```bash
+node scripts/make-icons.mjs
+```
+
+That reads `favicon.png` and writes `icon-192.png`, `icon-512.png`,
+`icon-maskable-512.png` and `apple-touch-icon.png`. There is no image library
+in this project and adding one for a job that runs about once a year is not
+worth it, so it resizes in the browser that is already installed for the
+accessibility gate.
+
+Two of the four are not obvious:
+
+- **The maskable icon** gets a solid tile in the mark's own navy with the mark
+  inset 12%. Android crops an installed icon to whatever shape the launcher
+  uses and may eat everything outside the middle 80%, so the corners it loses
+  are corners with nothing in them.
+- **`apple-touch-icon.png` is opaque.** iOS ignores transparency and composites
+  a home-screen icon onto black, which would put black corners around a
+  transparent disc.
+
+Re-run it whenever `favicon.png` changes, and commit all four outputs.
+
+**A pharmacy-only install shows no artwork.** The files spell "ClinicNP" and
+that install is called something else (D-025), so it falls back to the wordmark
+set in type. Do not "fix" this by showing the logo anyway.

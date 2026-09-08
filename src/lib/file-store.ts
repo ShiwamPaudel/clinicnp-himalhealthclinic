@@ -145,13 +145,17 @@ export async function deleteFile(key: string): Promise<void> {
   await unlink(`${path}.type`).catch(() => {});
 }
 
-/** Where files are going, for the settings screen and the go-live checklist. */
+/**
+ * Where patient files are being kept, in words meant for the person reading a
+ * settings screen rather than for whoever set the storage up.
+ */
 export async function storageDescription(): Promise<string> {
   if (await privateStoreAvailable()) return "secure cloud storage";
-  if (hasBlobToken()) {
-    return "this computer — the cloud storage is set up to make files public, so it is not being used";
-  }
-  return "this computer — for development only";
+  // The cloud store is reachable but would publish every file it holds, so it
+  // is refused and files stay here. Saying so is the point: this machine is
+  // the only copy, and whoever reads it should be backing the machine up.
+  if (hasBlobToken()) return "this computer only — secure storage is not set up yet";
+  return "this computer only";
 }
 
 /** Local-only helper so tests can point the store somewhere disposable. */

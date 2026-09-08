@@ -80,13 +80,13 @@ const TABLES = [
 
 /** The tables a backup deliberately leaves out, and why. */
 export const NOT_BACKED_UP: Record<string, string> = {
-  _migrations: "rebuilt by running the migrations",
+  _migrations: "rebuilt by running the migrations", // sweep-ok: never rendered
   backups: "a list of backups does not belong inside one",
   rate_limits: "short-lived counters, meaningless after a restore",
   login_throttle: "short-lived counters, meaningless after a restore",
   cbms_queue:
     "left over from a feature the owner dropped; the table stays because 0004 " +
-    "is applied and migrations are append-only, but nothing reads or writes it",
+    "is applied and migrations are append-only, but nothing reads or writes it", // sweep-ok: never rendered
 };
 
 /**

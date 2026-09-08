@@ -38,6 +38,64 @@ const BANNED = [
 ];
 
 /**
+ * The names of things we happen to have built this on. A shopkeeper has no
+ * idea what any of them are and should never have to find out: "could not
+ * reach the database" and "Turso is unavailable" are the same unhelpful
+ * sentence, and the second is worse, because it sounds like their fault for
+ * not knowing what a Turso is.
+ *
+ * Kept apart from BANNED only so a failure can say which kind of problem it
+ * is. Same rule, same escape hatch: `sweep-ok` on the line.
+ */
+const VENDORS = [
+  "turso",
+  "libsql",
+  "sqlite",
+  "vercel",
+  "nextjs",
+  "indexeddb",
+  "serwist",
+  "service worker",
+  "postgres",
+  "webhook",
+  "localstorage",
+  "tailwind",
+  "playwright",
+  "vitest",
+  "typescript",
+  "javascript",
+];
+
+/**
+ * Words that describe how the software was built rather than what it does for
+ * anybody. A migration, a schema and a deploy are all real, and all somebody
+ * else's business.
+ */
+const PLUMBING = [
+  "migration",
+  "migrations",
+  "schema",
+  "deploy",
+  "deployment",
+  "backend",
+  "frontend",
+  "server-side",
+  "client-side",
+  "http",
+  "json",
+  "boolean",
+  "integer",
+  "timestamp",
+];
+
+/** All three lists, each labelled so a failure says what kind it is. */
+const GROUPS = [
+  ["banned word", BANNED],
+  ["vendor name", VENDORS],
+  ["plumbing word", PLUMBING],
+];
+
+/**
  * Words that are banned on screen but unavoidable in the codebase's own
  * plumbing, so they are only checked inside files that can render.
  * "record", "row", "cache", "API" and "500" live here: `apiRoute`, `cacheKey`
@@ -143,10 +201,14 @@ for (const file of walk(ROOT)) {
       if (isSql(part)) continue;
       // A bare path, className or package specifier is not prose.
       if (/^[@\w./-]+$/.test(part.trim())) continue;
-      for (const word of BANNED) {
-        const re = new RegExp(`\\b${word.replace(/ /g, "\\s+")}\\b`, "i");
-        if (re.test(part)) {
-          failures.push(`${where}  banned word "${word}": ${part.trim().slice(0, 80)}`);
+      for (const [label, list] of GROUPS) {
+        for (const word of list) {
+          const re = new RegExp(`\\b${word.replace(/ /g, "\\s+")}\\b`, "i");
+          if (re.test(part)) {
+            failures.push(
+              `${where}  ${label} "${word}": ${part.trim().slice(0, 80)}`,
+            );
+          }
         }
       }
     }

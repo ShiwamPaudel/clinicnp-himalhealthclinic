@@ -29,6 +29,19 @@ export const MAX_BYTES = 220_000;
 
 export const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
+/**
+ * A problem with the chosen image that is worth repeating to the person who
+ * chose it. Everything thrown from here carries a sentence they can act on;
+ * anything else that escapes (a browser quirk, a decoder fault) is not their
+ * fault to read, so the screen shows its own wording for those instead.
+ */
+export class ImageProblem extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ImageProblem";
+  }
+}
+
 /** What a data URL costs as characters, which is what actually gets stored. */
 export function dataUrlBytes(dataUrl: string): number {
   return dataUrl.length;
@@ -51,7 +64,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("That file could not be read as an image."));
+      reject(new ImageProblem("That file could not be read as an image."));
     };
     img.src = url;
   });
@@ -66,17 +79,17 @@ function loadImage(file: File): Promise<HTMLImageElement> {
  */
 export async function downscaleToDataUrl(file: File): Promise<DownscaleResult> {
   if (!ACCEPTED_TYPES.includes(file.type)) {
-    throw new Error("Use a PNG, JPG or WEBP image.");
+    throw new ImageProblem("Use a PNG, JPG or WEBP image.");
   }
 
   const img = await loadImage(file);
   if (!img.naturalWidth || !img.naturalHeight) {
-    throw new Error("That image has no size.");
+    throw new ImageProblem("That image has no size.");
   }
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("This browser cannot resize images.");
+  if (!ctx) throw new ImageProblem("This browser cannot resize images.");
 
   let width = Math.min(MAX_WIDTH, img.naturalWidth);
 
@@ -101,7 +114,7 @@ export async function downscaleToDataUrl(file: File): Promise<DownscaleResult> {
     if (width < 320) break;
   }
 
-  throw new Error(
+  throw new ImageProblem(
     "That image is too detailed to fit. Crop it to just the header band and try again.",
   );
 }

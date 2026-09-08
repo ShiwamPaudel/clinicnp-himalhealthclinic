@@ -21,53 +21,79 @@
 
 ## CURRENT STATE  *(edit in place — the only mutable section)*
 
-**Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic Pvt. Ltd.** (both modules on).
+*Last rewritten 2083-05-25 (C-013). Everything below is verified against production, not remembered.*
+
+**Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic & Pharmacy**, Sallaghari, Bhaktapur (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
-**Phase:** **All five phases complete.** The product is built, tested and documented. What remains is not development: deploying it to Vercel with the owner's environment variables, and walking `Go-live-checklist.md` at the clinic with their own data.
-**Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic` — git initialised 2083-05-12. Imported from `D:\IBN\Products Codebase\AushadhiPOS` (the v1 tree, which had no git history). The old tree is untouched and is the fallback.
-**Inherited v1 state:** all 5 v1 phases complete; `pnpm build` clean; **68 tests green** (one known flaky test-isolation failure in the phase-4 file — different test each run, always green on re-run, caused by the shared `db()` singleton across test files). Not yet deployed to Vercel.
-**Deployed URL:** — (none yet). **New hosted Turso** (`healthclinic-…`) provisioned 2083-05-13, migrated to `0007` and seeded. The old `fa…` database is abandoned — do not point at it again.
-**Live data note:** the new Turso holds seeded sample data only (2 sample medicines, 3 batches, 1 sample supplier, admin + bikash). One real stock-out (SO-2083/84-000001) was recorded against it while verifying Phase 1. No patient or clinical data exists yet. **Once the clinic enters real data, go back to capturing against a throwaway local file DB.**
+**Phase:** all five phases complete and deployed. The work since has been what a real shop asks for once it starts using the thing. **The software is ready to trade.** What is left is the clinic's own data entry, plus one blocking security item (below).
+**Repo:** `D:\IBN\Installations\clinicnp-himalhealthclinic`, branch `main`, pushed to `github.com/ShiwamPaudel/clinicnp-himalhealthclinic`.
+**Deployed:** Vercel, against hosted Turso `healthclinic-himalhealthclinic.aws-ap-south-1.turso.io`. **This is live production with real settings in it — never point a test script at it without backing up first.**
 
-**Schema state (inherited):** `0001_init.sql`, `0002_auth_security.sql` (`login_throttle`), `0003_bill_line_short.sql`, `0004_compliance.sql` (`company.cbms_enabled`), `0005_item_shape.sql`. Extra columns vs the original spec: `items.preferred_supplier_id`, `company.min_rate_is_cost`, `items.shape`. **All five are applied on the hosted Turso** (verified 2083-05-12, `0005` at 2026-07-16T02:35Z) — the old "may still need 0005" note was stale.
+### 🔴 The one blocking item
+
+**`admin` / `admin123` still signs in as Owner on the public URL.** Flagged in C-008, C-009, C-010, C-012 and again here. The owner has said repeatedly they will change it themselves and asked not to be reminded further — so do not re-raise it unprompted, but never describe the install as secure while it is true, and never write it into a document as though it were fixed.
+
+### What is actually in production (verified 2083-05-25)
+
+- **17 migrations** applied; `db:check` clean.
+- **478 items / 907 item_units**, every one still unpriced (`selling_rate_paisa = 0`) — by design, see D-092 and D-105.
+- **5 pieces of furniture** on the shop floor plan, placed by the owner.
+- **2 services, 2 service groups, 1 laboratory partner** (Proton Preventive Lab).
+- **2 users.** Company row: name and address set, letterhead image uploaded, **`pan_no` empty**, `invoice_footer` reads `Billed with ClincNP (Infobytes Nepal)` — the product's own name is missing an `i`, and it prints on every bill. Told to the owner; theirs to change.
+- Fiscal year **2083/84** open. **No bills, patients or visits** — cleared for go-live with `db:reset --keep-setup` (D-104), patient numbering restarted at 1.
+
+### Schema
+
+`0001` … `0017`, append-only, never edit an applied file. The last four: `0014` opening stock · `0015` first-price/pricing groundwork · `0016_lab_workflow.sql` (collected/received/given timestamps on `bill_service_lines`) · `0017_floor_plan.sql` (`racks` rebuilt in centimetres with rotation; `company.floor_width_cm` / `floor_depth_cm`). `_migrations` tracks by column **`name`**, not `filename`.
+
 **Audit facts established 2083-05-12 (do not re-derive):**
-- `stock_moves.reason` **has** a CHECK → `0007` must rebuild the table. `users.role` **has** a CHECK `('admin','staff')` → Accountant needs a rebuild too.
-- Table rebuilds work **only** with `PRAGMA foreign_keys = OFF` issued *outside* the transaction. `PRAGMA defer_foreign_keys = ON` inside the transaction **fails** with `SQLITE_CONSTRAINT_FOREIGNKEY` (tested both ways).
-- Architecture's `0006` as written **fails on real data**: two `fiscal_years` rows both default to `'open'` and the partial unique index dies. Default must be `'closed'` + one explicit `UPDATE`.
-- Hosted DB has **two** fiscal years both `active = 1`; `getActiveFiscalYear()` (`ORDER BY id DESC`) therefore returns **2082/83**, the older year, which holds 4 of the 5 bills. `ensureFiscalYear` never deactivates the prior year. Must be reconciled when `status` lands.
-- All business tables use **TEXT ULID** primary keys; only `fiscal_years` is INTEGER. Architecture's `closed_by INTEGER` / `patient_id INTEGER` are type errors.
-- v1 `/billing` bundle measured **140 kB** First Load (Rules §5 says "~130 kB"); after milestone 1 it is **135 kB**.
-**Schema applied (v2):** `0006_modules_fy.sql` · `0007_stock_out.sql` · `0008_clinic_core.sql` · `0009_services.sql` · `0010_consultation_groups.sql` — all on the hosted Turso. Append-only; never edit an applied migration.
+- `stock_moves.reason` and `users.role` have CHECK constraints → changing either needs a table rebuild.
+- Table rebuilds work **only** with `PRAGMA foreign_keys = OFF` issued *outside* the transaction. `PRAGMA defer_foreign_keys = ON` inside it fails with `SQLITE_CONSTRAINT_FOREIGNKEY` (tested both ways).
+- libSQL **does** support `ALTER TABLE … DROP COLUMN`, so not every column removal needs a rebuild.
+- All business tables use **TEXT ULID** primary keys; only `fiscal_years` is INTEGER.
 
-**Environment quick-reference:**
-- pnpm 11.13 (installed via npm; corepack blocked by Program Files permissions) · vitest · Vercel
-- pnpm settings in `pnpm-workspace.yaml` (`verifyDepsBeforeRun: false`, `onlyBuiltDependencies`)
-- Local dev needs `TURSO_DATABASE_URL=file:./local.db` + `AUTH_SECRET`. v2 adds `BLOB_READ_WRITE_TOKEN`.
-- Seeded logins: admin/admin123 (PIN 1234), bikash/staff123 (PIN 5678)
-- Commands: `pnpm db:migrate`, `pnpm db:seed`, `pnpm dev`, `pnpm build`, `pnpm test`
-- **Windows notes:** libsql `file:` paths need a Windows-style path with a drive letter (a Git Bash `$(pwd)` unix path gives SQLITE_CANTOPEN 14). `next start` can leave a process holding the port — free it with `Get-NetTCPConnection -LocalPort N -State Listen | Stop-Process`.
+### Environment quick-reference
+
+- pnpm 11.13 · vitest · Playwright · Vercel. Settings in `pnpm-workspace.yaml`.
+- Local dev needs `TURSO_DATABASE_URL=file:./local.db` + `AUTH_SECRET`; `BLOB_READ_WRITE_TOKEN` for files. `db/*.ts` scripts read `.env.local` then `.env` via `process.loadEnvFile`. **A shell variable beats `.env.local` under Next** — that is how a script ends up writing to the wrong database.
+- Commands: `pnpm db:migrate` · `db:check` · `db:seed` · `db:bootstrap` · `db:reset [--keep-access|--keep-setup]` · `db:import-items` · `pnpm dev` · `build` · `test` · `sweep` · `run audit` · `a11y <url>` · `node scripts/make-icons.mjs`.
+- **`pnpm run audit`, never `pnpm audit`** — pnpm's builtin shadows it.
+- **Never run `pnpm build` while `pnpm dev` is running.** They share `.next` and the build dies mid-prerender with `TypeError: Cannot read properties of undefined (reading 'call')`, naming an innocent page. Stop dev, `rm -rf .next`, rebuild.
+- **Windows notes:** libsql `file:` paths need a drive letter (a Git Bash `$(pwd)` path gives SQLITE_CANTOPEN 14). Free a held port with `Get-NetTCPConnection -LocalPort N -State Listen | Stop-Process`. Bash heredocs mangle backslashes and quotes here — use the Write tool or a scratchpad `.mjs`/`.py` file for anything with escapes in it.
 - **Testing note:** integration tests import repos with the vitest `@` alias plus a `server-only` stub (`tests/stubs/server-only.ts`); point `TURSO_DATABASE_URL` at a temp file DB before importing repos; `fileParallelism: false`; `__resetDbForTests()` between files.
+- Bundles at 2083-05-25: `/billing` **145 kB**, `/login` **128 kB** First Load.
+
+### Working practices that were earned the hard way
+
+- **Verify against the thing you changed, not a copy of it.** C-012: the item import was run against a scratch database, reported as done, and production had nothing in it. Every claim about production is now read back from production.
+- **Back up before every destructive or schema-changing operation**, and dry-run every table rebuild against a replica built from that backup. Where production is empty, seed the replica with representative rows first — an empty rebuild proves nothing.
+- **Migrations are mine to run.** The owner's standing instruction (D-088): *"Always Fix the Migrate Please."* A schema change is not finished until production has run it and the screens have been opened.
 
 **In progress:** —
 
-**Next up:** the install itself. **Two things are needed from the owner and cannot be worked around:**
-1. A Vercel Blob store created with **private** access. The supplied token is valid but its store is public, and a public store hands out permanent world-readable URLs — the app refuses to put patient files there (D-055). The access mode is fixed when a store is created, so this needs a new store, not a setting.
-2. Real ClinicNP icon art for `public/icons/*.png`, which the owner said they would supply at the end.
+**Next up** *(all of it needs the clinic in the room; none of it is code)*
+1. Replace `admin` / `admin123`; create real accounts, roles and PINs.
+2. Services, rates, doctors and follow-up rules, as the clinic supplies them.
+3. Prices for the 478 medicines — **Items → Set prices**, or let the counter set each one on its first sale (D-105).
+4. Opening stock with batch numbers and expiry dates — **Stock → Opening stock**.
+5. `company.pan_no`, and the `ClincNP` typo in the invoice footer.
 
-Then: `pnpm db:migrate`, `pnpm db:bootstrap` (**not** `db:seed`), deploy, and walk `Go-live-checklist.md`.
+### Known issues / risks
 
-**Known issues / risks (inherited):**
 - `nepali-date-converter.toJsDate()` returns non-midnight times → `lib/bs.ts toAD()` normalises to local midnight; keep all date maths on `toAD()` output (D-006).
-- Stock valuation "salable value" uses the base-unit selling rate — a conservative proxy (D-010).
+- Stock valuation "salable value" uses the base-unit selling rate — a conservative proxy (D-010). With 478 items unpriced it currently understates badly; it corrects itself as prices arrive.
 - Offline bills print a provisional slip number; the final SI number appears on reprint after sync (D-003).
-- CSP still allows inline script (nonce CSP deferred); the login throttle is per-identity, not per-IP (API rate limiting is now per-user/IP in our own DB — D-045).
-- `public/icons/*.png` (favicon, 192, 512, maskable) are still **Faarma artwork**. Raster files cannot be redrawn here and Rules §10 forbids inventing brand assets. **The owner must supply real ClinicNP icons before go-live.**
-- The dashboard still shows pharmacy panels when the pharmacy module is off; Phases.md schedules "layout adapts when only one module is on" for Phase 4.
-- Reports are year-aware via `?fy=` (the range clamps to the chosen year). Per-report recomputation beyond the range — and the "refund a closed-year bill into the open year" path — remain Phase 4.
+- CSP still allows inline script (nonce CSP deferred); the login throttle is per-identity, not per-IP.
+- `company.print_format` is still stored and validated but **nothing reads it** — there has been one bill format since D-102/D-103. Harmless; do not wire it back up.
+- `storageDescription()` in `lib/file-store.ts` and `NOT_BACKED_UP` in `lib/repos/backup.ts` are exported and **called from nowhere**. Wording was made user-safe in C-013 in case they are ever wired up.
+- The dashboard still shows pharmacy panels when the pharmacy module is off.
+- Per-report recomputation beyond the `?fy=` range, and "refund a closed-year bill into the open year", remain unbuilt.
 
 **Requested but deliberately NOT built** *(keep this list; it is the scope fence)*
 - Lab result entry / report generation / reference ranges — belongs to Nidanyo, not ClinicNP (Rules.md §2.2).
 - EMR features, prescription printing, appointments, SMS, patient portal.
+- A print-format setting. One bill, on A4, letterhead across the top (D-102, D-103).
+- Any maker's badge, version string or support number on a screen behind the login. The sign-in screen is the only place ClinicNP or Infobytes Nepal is named (D-108).
 
 ---
 
@@ -185,6 +211,16 @@ Then: `pnpm db:migrate`, `pnpm db:bootstrap` (**not** `db:seed`), deploy, and wa
 | D-103 | **Nothing after the total but the shop's own footer line, left aligned.** No signature blocks, no "billed by" | Nobody signs a pharmacy counter bill. Two ruled lines at the foot of every sheet are a form asking to be filled in that never is, and they push a short bill down the page for nothing |
 | D-104 | **`--keep-setup` is the go-live reset.** It deletes bills, patients, visits and the audit trail, and keeps the item catalogue, shelves, shop layout, services, doctors, laboratories, suppliers, logins and company details | A catalogue of five hundred medicines is not sample data. `--keep-access` was written for a shop that had typed its own name into Settings; by the time a shop is ready to trade it has also typed its catalogue, drawn its room and listed its tests, and none of that is a transaction |
 | D-105 | **The first price a medicine is sold at becomes its price — once.** A unit whose `selling_rate_paisa` is still 0 takes the rate typed on the bill; every later bill prices that line for itself and leaves the shop's price list alone | 478 medicines arrived unpriced, and making somebody stop and open Items the first time each one is asked for is how a counter ends up not being used. The "once" is enforced as `UPDATE ... WHERE selling_rate_paisa = 0`, not by reading first: the second sale's update matches no row, and two tills selling the same new medicine in the same second cannot both win. Only the unit actually sold is priced — a strip at Rs 18 does not make a tablet Rs 1.80, because shops round loose sales up, and a derived price is a made-up price. The counter refuses to save a line still at zero, since a zero would otherwise become the price for good. It is the selling rate, never cost, and it is written to the audit log with the name of whoever set it |
+
+| D-106 | **The settings preview of the bill is drawn by hand, and is therefore a liability.** It lives in `components/app/company-form.tsx` and must be changed by hand whenever `components/print/invoice-a4.tsx` changes | Rendering the real bill there would need a whole saved bill — lines, batches, totals, a fiscal year — which the settings screen does not have and should not fetch. So it is a picture of the bill rather than the bill. It fell out of date the same day the bill lost its PAN band, and sat there showing `PAN: —` on the one screen whose entire job is to say what will come out of the printer. There is now a comment on it saying so. If it drifts a second time, the answer is to delete it rather than to keep two things in step by memory |
+| D-107 | **Never repeat back what an error object said.** Only text written for a screen may reach one; recognise your own errors by type and use your own wording for everything else | The offline queues wrote `HTTP ${status}` and `err.message` into `lastError`, which `components/pos/stuck-queue.tsx` prints verbatim on a counter screen — so a dropped connection showed a shopkeeper `TypeError: Failed to fetch`, and a server fault showed `HTTP 500`. Both now say what happened in a sentence. `ImageProblem` in `lib/logo-image.ts` is the pattern to copy: a named error class for messages authored for a user, and a fallback sentence for anything the browser threw on its own |
+| D-108 | **The sign-in screen is the only place the maker is named.** `lib/vendor.ts` holds the company name and the support numbers, and nothing behind the login imports it | Everything past the login belongs to the clinic — their name on the bill, their letterhead, their stock. A maker's badge in the corner of a counter screen is the maker talking over the shopkeeper all day. The sign-in screen is the honest exception: nobody is working yet, and it is the screen somebody is looking at when they cannot get in, which is exactly when a support number stored anywhere else is no use |
+| D-109 | **What the sign-in screen advertises is filtered by the modules that are switched on**, and it never lists more than five things | It is the only screen in the product that makes a claim, which makes it the only one that can lie. A pharmacy-only install must not be told about patients and laboratory samples: those pages 404 for it (D-030), so the first thing a new user would learn is that the software describes itself wrongly. Everything is claimed in the present tense because everything listed is already built. Pinned by `tests/login-screen.test.ts` |
+| D-110 | **"Keeps working offline" outranks "Nepali dates" for the last of the five slots** | A clinic with a pharmacy fills four slots before either of them, so the ordering has to earn the last place rather than let one fall off the end. Bikram Sambat dates are table stakes for anything sold in Nepal; billing through a power cut is the claim nothing else on the shelf makes. Caught by the test, not by looking — the first version silently dropped the offline line on exactly the install this was written for |
+| D-111 | **The installed-app icons are derived from `favicon.png` by `scripts/make-icons.mjs`, never hand-cropped** | Four sizes kept in step by hand drift, and the drift is invisible until somebody installs the app. There is no image library in this project and adding one for a job that runs about once a year is not worth it, so it resizes in the Playwright browser that is already here for the accessibility gate. Two of the four are not obvious: the maskable icon gets a solid navy tile with the mark inset 12%, because Android may crop everything outside the middle 80%; and `apple-touch-icon.png` is opaque, because iOS composites a transparent home-screen icon onto black and would put black corners around the disc |
+| D-112 | **Vendor names and build vocabulary are banned on screen, and `pnpm sweep` enforces it** — Turso, Vercel, IndexedDB, the service worker, and migration, schema, deploy, JSON, timestamp | "Could not reach the database" and "Turso is unavailable" are the same unhelpful sentence, and the second is worse, because it sounds like the shopkeeper's fault for not knowing what a Turso is. The sweep now reports which kind of word it found. `sweep-ok` stays the escape hatch for a genuine non-screen use — a file extension, a URL pattern |
+| D-113 | **Help text says what to do, never why the screen was built that way** | Rules §1b, and the reason it exists: the owner read "There is one bill format — the header image is the only thing that changes how it looks" on their settings screen and asked what it was doing there. It is a note to another programmer wearing a user's clothes. If a sentence would only make sense to somebody who had considered the alternative, it belongs in a code comment. This cannot be grepped for; it is review's job, and the whole product was read through once in C-013 looking for it |
+| D-114 | **The sign-in form comes first on a phone, above the brand panel** (`order-1 lg:order-2`) | Somebody opening this on the shop's tablet wants the password box, not the sales pitch. The first version stacked the panel on top and put five features and a support block between the top of the page and the username field. The pitch is still there, underneath, where somebody idly waiting will find it |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -385,3 +421,34 @@ Schema changes: none.
 Broke/fixed: `db/seed.ts` still wrote `racks.pos_x` / `pos_y`, which 0017 removed — so `pnpm db:seed` threw on any fresh install. Found only because the bill demo needed a seeded database. Fixed to write centimetres.
 Verified: 325 tests, typecheck, audit, sweep, build, accessibility clean across 14 screens; the importer re-run as a no-op; the printed bill inspected as an image.
 Still live: **`admin` / `admin123`.** The owner has said they will change it themselves.
+
+### C-013  ·  2083-05-25  ·  The front door, the vocabulary, and the handover
+
+The owner's last session before handing the project to a new conversation, so this entry is written to be read cold.
+
+**It started with one screenshot.** The settings screen still showed `PAN: —` above the invoice preview, days after the bill stopped printing PAN. The bill was right; the preview was not, because the preview is drawn by hand rather than by rendering `invoice-a4.tsx` — which needs a whole saved bill to render at all. Fixed, and the reason it drifted is now a comment on it and D-106. The same drift had reached `Go-live-checklist.md`, which still told the installer to check the PAN on the invoice and to watch the edge of 80 mm paper.
+
+**Then the wider version of that complaint.** The owner asked, in effect, for the whole product to be read for sentences that talk like a programmer — naming "Stored in Turso's database" and the bill-preview caption as the kind of thing they never want to see. Every string and every JSX paragraph in `src/` was extracted and read (a first pass missed multi-line JSX, which is exactly where the caption they objected to was living). The voice was already good; four things were genuinely wrong:
+
+- the bill-preview caption (D-113),
+- the pricing screen explaining why it exists rather than what to do,
+- `storageDescription()` describing a storage misconfiguration to a shopkeeper,
+- and the real one: **`stuck-queue.tsx` printed `lastError` verbatim**, so a dropped connection put `TypeError: Failed to fetch` on a counter screen and a server fault put `HTTP 500` there (D-107).
+
+`pnpm sweep` now also refuses vendor names and build vocabulary and says which kind it found (D-112); Rules §1 gained 1a, 1b and 1c.
+
+**The sign-in screen was rebuilt** (D-108 to D-110, D-114). Two halves: the software on the left in sage with the white mark, a headline, five features with icons, and — the only place in the product that says it — `by Infobytes Nepal Pvt. Ltd.` with both support numbers. The clinic's own letterhead sits above the fields on the right, so somebody at a shared machine sees whose system this is before typing into it. Only `company.name` and `company.logoUrl` cross to the browser; both are printed on every bill that leaves the shop. `lib/vendor.ts` is the one home for the maker's name and numbers. Documented as Design.md §9.
+
+**The icons are finally real.** The owner supplied `logo-main.png`, `logo-white.png` and a new `favicon.png`; `public/icons/*.png` had been placeholder Faarma artwork since the rename, listed as a go-live blocker in three previous sessions. `scripts/make-icons.mjs` now derives the 192, 512, maskable and Apple touch icons from the favicon (D-111). That blocker is closed.
+
+Decisions/assumptions: D-106 to D-114.
+Schema changes: none. Production untouched all session — read once to confirm the company row, never written.
+Broke/fixed: `tests/first-price.integration.test.ts` did not typecheck (a libSQL `execute({ sql })` with no `args`) — it was committed that way last session and my "typecheck clean" claim for C-012 was wrong. The new login test caught a real defect before anyone saw it: at five features the both-modules install silently dropped "Keeps working offline", the most distinctive claim on the screen (D-110). A `pnpm build` run while `pnpm dev` was live failed mid-prerender on `/stock/opening` with a webpack-runtime error naming an innocent page — they share `.next`; now written into Deploy.md.
+Verified: 343 tests across 30 files, typecheck, `run audit`, sweep, and a clean `pnpm build` (`/billing` 145 kB, `/login` 128 kB) with no dev server running. Accessibility clean across **15** screens — the sign-in screen is now audited too, before signing in, which it never was. The login screen was screenshotted at 1440, 900 and 390 px wide and read back for the vendor name and both numbers.
+Docs: `Memory.md` CURRENT STATE rewritten from production rather than from memory · Rules §1a/1b/1c · Design §9 · Architecture file tree · Deploy (brand artwork, the dev/build clash, the extended sweep) · Go-live-checklist (a standing "where Himal actually stands" table, §6 rewritten around the admin login, a new §6a for the sign-in screen, print-format line deleted).
+
+**The User Guide had two things in it that should not have been.** It published `admin / admin123` and `bikash / staff123` to the owner in print — twice, once on the welcome card and once in the login section — and its cover was still ruled in the retired Faarma orange `#e87e28`, which Design.md has said never returns since the rename. Both fixed, the accent is now magenta-600, the cover carries the real `logo-main.png` (the `.cover img` CSS rule had been sitting there unused since the guide was written), the welcome card no longer describes ClinicNP as pharmacy-only, and `01-login.png` was re-captured. Rebuilt: 6.5 MB, `node scripts/build-guide.mjs`. **Only that one screenshot was re-captured** — the rest were taken against seeded demo data and re-running the whole capture against production, which now has no bills or patients, would replace a guide full of worked examples with a guide full of empty screens.
+
+**For whoever picks this up next.** The software is ready to trade; everything left needs the clinic in the room. In order: replace `admin`/`admin123` and create real accounts; services, rates and doctors; prices for the 478 medicines (or let the counter set them as they sell, D-105); opening stock with batches and expiry. Two small ones the owner owns: `company.pan_no` is empty, and the invoice footer says `ClincNP` — missing an `i` — on every bill.
+
+Still live: **`admin` / `admin123`.** The owner has said, more than once, that they will change it themselves and that it is not mine to chase. Do not re-raise it unprompted. Do not write it down anywhere as though it were fixed.

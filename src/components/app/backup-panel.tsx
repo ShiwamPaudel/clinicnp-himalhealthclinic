@@ -10,6 +10,9 @@ import type { BackupRecord } from "@/lib/repos/backup";
 import { adFromIso, toBS, formatBS } from "@/lib/bs";
 import { strings } from "@/lib/strings";
 
+/** What the file picker will offer. A file extension, not words. */
+const BACKUP_FILE_TYPES = "application/json,.json"; // sweep-ok: not prose
+
 export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
   const router = useRouter();
   const toast = useToast();
@@ -113,7 +116,7 @@ export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
           <input
             ref={fileRef}
             type="file"
-            accept="application/json,.json"
+            accept={BACKUP_FILE_TYPES}
             onChange={onFile}
             className="text-[13px] text-sage-700 file:mr-3 file:rounded-[8px] file:border file:border-line file:bg-cream-100 file:px-3 file:py-1.5 file:text-sage-900"
           />

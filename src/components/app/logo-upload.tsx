@@ -16,7 +16,11 @@ import { useRef, useState } from "react";
 import { ImagePlus, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { downscaleToDataUrl, ACCEPTED_TYPES } from "@/lib/logo-image";
+import {
+  downscaleToDataUrl,
+  ACCEPTED_TYPES,
+  ImageProblem,
+} from "@/lib/logo-image";
 
 export function LogoUpload({
   value,
@@ -35,12 +39,14 @@ export function LogoUpload({
     try {
       const res = await downscaleToDataUrl(file);
       onChange(res.dataUrl);
-      toast.success(
-        `Header set — ${res.width}×${res.height}, ${Math.round(res.bytes / 1024)} KB.`,
-      );
+      toast.success("Bill header set. Save your details to keep it.");
     } catch (err) {
+      // Only wording written for this screen is repeated back; anything the
+      // browser threw on its own is not something to put in front of anybody.
       toast.error(
-        err instanceof Error ? err.message : "That image could not be used.",
+        err instanceof ImageProblem
+          ? err.message
+          : "That image could not be used. Try a PNG or JPG of the header band.",
       );
     } finally {
       setBusy(false);

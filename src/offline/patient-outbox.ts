@@ -117,20 +117,24 @@ async function syncOne(p: QueuedPatient): Promise<SyncPatientResult> {
     // A definite refusal — bad details, or the module switched off — will
     // never succeed on a retry. It stays in the queue with the reason on it so
     // the Admin can see what happened, rather than looping forever.
-    let msg = `Couldn't send (${res.status})`;
+    // Shown on the Stuck queue, so it is a sentence and never a status code.
+    let msg =
+      res.status >= 500
+        ? "Something went wrong at the other end. It will keep trying."
+        : "It was refused. Show this to the owner.";
     try {
       const body = await res.json();
       if (body?.userMessage) msg = body.userMessage as string;
     } catch {
-      // the answer wasn't readable — keep the generic wording
+      // the answer wasn't readable — keep the plain wording
     }
     p.attempts += 1;
     p.lastError = msg;
     await updatePatient(p);
     return { ok: false };
-  } catch (err) {
+  } catch {
     p.attempts += 1;
-    p.lastError = err instanceof Error ? err.message : "no connection";
+    p.lastError = "The connection dropped while sending.";
     await updatePatient(p);
     return { ok: false };
   }

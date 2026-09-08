@@ -51,6 +51,12 @@ const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
 const page = await ctx.newPage();
 
 await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+
+// The sign-in screen is checked before signing in, because it is the one
+// screen everybody meets and the only one they meet before anyone has had a
+// chance to show them how the software works.
+await auditPage("the sign-in screen");
+
 await page.fill("#username", USER);
 await page.fill("#password", PASS);
 await Promise.all([
@@ -58,10 +64,8 @@ await Promise.all([
   page.click('button[type="submit"]'),
 ]);
 
-for (const [path, screen] of SCREENS) {
-  await page.goto(BASE + path, { waitUntil: "networkidle" });
-  await page.waitForTimeout(1200);
-
+/** Every check, against whatever page is currently open. */
+async function auditPage(screen) {
   const problems = await page.evaluate(() => {
     const out = [];
 
@@ -156,6 +160,12 @@ for (const [path, screen] of SCREENS) {
   else if (!focused.visible) note(screen, "the first Tab lands on something invisible");
 }
 
+for (const [path, screen] of SCREENS) {
+  await page.goto(BASE + path, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1200);
+  await auditPage(screen);
+}
+
 await browser.close();
 
 if (findings.length > 0) {
@@ -163,4 +173,6 @@ if (findings.length > 0) {
   for (const f of findings) console.error("  " + f);
   process.exit(1);
 }
-console.log(`\nAccessibility check clean across ${SCREENS.length} screens.`);
+console.log(
+  `\nAccessibility check clean across ${SCREENS.length + 1} screens.`,
+);

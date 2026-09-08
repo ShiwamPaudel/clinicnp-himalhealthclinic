@@ -176,7 +176,7 @@ export async function closeYearAction(
     const archive = await exportAll();
     const size = JSON.stringify(archive).length;
     await recordBackup("manual", size);
-    const backupName = `clinicnp-backup-${archive.createdAt.slice(0, 10)}.json`;
+    const backupName = `clinicnp-backup-${archive.createdAt.slice(0, 10)}.json`; // sweep-ok: a downloaded file's extension, not prose
 
     const { closedLabel, openedLabel } = await closeYearAndOpenNext(user.id);
 
