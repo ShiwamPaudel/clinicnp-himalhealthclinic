@@ -44,17 +44,6 @@ export function InvoiceA4({ bill }: { bill: PrintBill }) {
         </div>
       )}
 
-      {/* Printed only when there is no letterhead image. A shop's header
-          already carries its PAN and DDA, and repeating them underneath is a
-          second answer to a question that had one. Without an image they have
-          to appear somewhere, because they are what make it a tax invoice. */}
-      {!c.logoUrl && (
-        <div className="a4-regline">
-          <span>PAN: {c.panNo || "—"}</span>
-          {c.ddaNo && <span>DDA: {c.ddaNo}</span>}
-        </div>
-      )}
-
       <div className="a4-title">
         {c.vatRegistered ? "TAX INVOICE" : "INVOICE"}
       </div>
