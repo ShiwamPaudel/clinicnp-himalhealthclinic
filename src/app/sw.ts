@@ -56,3 +56,75 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+/**
+ * Alerts on a doctor's phone.
+ *
+ * A doctor is not sitting at the counter. They are in a car, or at another
+ * hospital, and the only way they find out somebody has been booked in with
+ * them at four o'clock is if their phone says so. That is what these two
+ * listeners are for, and they are the whole of it: show what the server sent,
+ * and when it is tapped, open the list.
+ */
+interface AlertPayload {
+  title?: string;
+  body?: string;
+  url?: string;
+  tag?: string;
+}
+
+self.addEventListener("push", (event) => {
+  let data: AlertPayload = {};
+  try {
+    data = (event.data?.json() as AlertPayload) ?? {};
+  } catch {
+    // Not something we sent, or it arrived mangled. Still show something —
+    // a silent alert is worse than a vague one, because the doctor never
+    // learns there was anything to look at.
+    data = {};
+  }
+
+  const title = data.title || "Something new for you";
+  const body = data.body || "Open the app to see what changed.";
+  const url = data.url || "/my/schedule";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      // The same booking alerting twice replaces itself rather than stacking.
+      tag: data.tag,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url },
+      // A booking is worth a buzz; the phone still honours its own quiet hours.
+      requireInteraction: false,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target =
+    (event.notification.data as { url?: string } | undefined)?.url ??
+    "/my/schedule";
+
+  event.waitUntil(
+    (async () => {
+      const open = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      // Already open somewhere? Bring that window forward rather than piling
+      // up a new one every time an alert is tapped.
+      for (const client of open) {
+        const url = new URL(client.url);
+        if (url.pathname.startsWith("/my")) {
+          await client.focus();
+          if ("navigate" in client) await client.navigate(target);
+          return;
+        }
+      }
+      await self.clients.openWindow(target);
+    })(),
+  );
+});

@@ -16,7 +16,7 @@ export const pinSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, "PIN must be 4 digits"),
 });
 
-export const roleSchema = z.enum(["admin", "staff", "accountant"]);
+export const roleSchema = z.enum(["admin", "staff", "accountant", "doctor"]);
 
 export const newUserSchema = z.object({
   name: z.string().min(1, "Enter a name"),
@@ -322,18 +322,84 @@ export const shareBasisSchema = z.enum([
   "pct_services",
 ]);
 
+/** Blank is allowed everywhere an address is optional; anything else must look like one. */
+export const optionalEmail = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v), {
+    message: "That doesn't look like an email address",
+  });
+
 export const doctorSchema = z.object({
   name: z.string().min(1, "Enter the doctor's name"),
   qualification: z.string(),
   specialty: z.string(),
   nmcNo: z.string(),
   phone: z.string(),
+  email: optionalEmail,
+  /** The sign-in that belongs to this doctor, or empty for none. */
+  userId: z.string(),
+  notifyPush: z.boolean(),
+  notifyEmail: z.boolean(),
   shareBasis: shareBasisSchema,
   /** basis points for the percentage bases, paisa for a fixed amount */
   shareValue: z.number().int().min(0),
   active: z.boolean(),
 });
 export type DoctorFormInput = z.infer<typeof doctorSchema>;
+
+/** What a doctor may change about themselves, from their own phone. */
+export const doctorProfileSchema = z.object({
+  name: z.string().min(1, "Enter your name"),
+  qualification: z.string(),
+  specialty: z.string(),
+  nmcNo: z.string(),
+  phone: z.string(),
+  email: optionalEmail,
+  notifyPush: z.boolean(),
+  notifyEmail: z.boolean(),
+});
+export type DoctorProfileInput = z.infer<typeof doctorProfileSchema>;
+
+// ---- Booked consultations ----
+
+const bsDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date");
+const clockTime = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time");
+
+export const bookConsultationSchema = z.object({
+  /** Minted by the browser, so a retry books one consultation and not two. */
+  id: z.string().optional(),
+  doctorId: z.string().min(1, "Choose a doctor"),
+  patientId: z.string().min(1, "Choose the patient"),
+  dateBs: bsDate,
+  timeHhmm: clockTime,
+  durationMin: z.number().int().min(5).max(240),
+  reason: z.string().max(300),
+});
+export type BookConsultationInput = z.infer<typeof bookConsultationSchema>;
+
+export const rescheduleConsultationSchema = z.object({
+  id: z.string().min(1),
+  dateBs: bsDate,
+  timeHhmm: clockTime,
+  durationMin: z.number().int().min(5).max(240),
+});
+
+export const consultationStatusSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(["booked", "arrived", "seen", "cancelled", "missed"]),
+  cancelReason: z.string().max(300).default(""),
+});
+
+/** What a browser hands over when somebody turns alerts on. */
+export const pushDeviceSchema = z.object({
+  endpoint: z.string().url().max(1000),
+  p256dh: z.string().min(1).max(400),
+  auth: z.string().min(1).max(200),
+  label: z.string().max(120).default(""),
+});
 
 export const labPartnerSchema = z.object({
   name: z.string().min(1, "Enter the laboratory's name"),

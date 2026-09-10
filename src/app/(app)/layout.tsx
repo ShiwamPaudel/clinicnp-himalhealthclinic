@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { requireBackOfficeUser } from "@/lib/session";
 import { getModules } from "@/lib/modules";
 import { appNameFor } from "@/lib/app-name";
 import { listUsers } from "@/lib/repos/users";
@@ -9,11 +9,13 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireUser();
+  const user = await requireBackOfficeUser();
   const modules = await getModules();
   const all = await listUsers();
   const switchable = all
-    .filter((u) => u.active && u.hasPin && u.id !== user.id)
+    // A doctor's sign-in never appears in quick-switch: it belongs to one
+    // person on their own phone, not to the shared counter machine.
+    .filter((u) => u.active && u.hasPin && u.role !== "doctor" && u.id !== user.id)
     .map((u) => ({ id: u.id, name: u.name, role: u.role }));
 
   return (

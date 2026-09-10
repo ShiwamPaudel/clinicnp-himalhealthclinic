@@ -2,7 +2,7 @@
   "name": "ClinicNP — Clinic & pharmacy management",
   "short_name": "ClinicNP",
   "description": "Clinic and pharmacy billing, patients and stock",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#faf6eb",
   "theme_color": "#20342a",

@@ -24,8 +24,10 @@ import {
   createDoctor,
   updateDoctor,
   getDoctor,
+  userIdTaken,
   type DoctorInput,
 } from "@/lib/repos/doctors";
+import { getUserById } from "@/lib/repos/users";
 import {
   createLabPartner,
   updateLabPartner,
@@ -213,12 +215,29 @@ export async function saveDoctorAction(
       return fail("A share cannot be more than 100%.");
     }
 
+    // A sign-in belongs to one doctor. Attaching one that is already spoken
+    // for would show two doctors the same list, so it is refused.
+    const userId = data.userId.trim() || null;
+    if (userId) {
+      const login = await getUserById(userId);
+      if (!login || login.role !== "doctor") {
+        return fail("That sign-in can't be used for a doctor. Make one with the Doctor role under Users.");
+      }
+      if (await userIdTaken(userId, id)) {
+        return fail("That sign-in already belongs to another doctor.");
+      }
+    }
+
     const payload: DoctorInput = {
       name: data.name,
       qualification: data.qualification,
       specialty: data.specialty,
       nmcNo: data.nmcNo,
       phone: data.phone,
+      email: data.email,
+      userId,
+      notifyPush: data.notifyPush,
+      notifyEmail: data.notifyEmail,
       shareBasis: data.shareBasis,
       shareValue: data.shareBasis === "none" ? 0 : data.shareValue,
       active: data.active,

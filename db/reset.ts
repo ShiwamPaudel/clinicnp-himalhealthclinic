@@ -83,6 +83,8 @@ const TABLES_CHILD_FIRST = [
   "purchases",
 
   // clinic records
+  "alerts_sent",
+  "appointments",
   "attachments",
   "visits",
   "patients",
@@ -101,6 +103,7 @@ const TABLES_CHILD_FIRST = [
   // housekeeping and settings
   "audit_log",
   "backups",
+  "push_devices",
   "rate_limits",
   "fiscal_years",
   "users",

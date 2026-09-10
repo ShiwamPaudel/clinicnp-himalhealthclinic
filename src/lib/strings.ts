@@ -65,6 +65,7 @@ export const strings = {
   roleAdmin: "Admin (Owner)",
   roleStaff: "Staff (Counter)",
   roleAccountant: "Accountant (read-only)",
+  roleDoctor: "Doctor (own consultations only)",
   canEditRate: "Can edit rate on bill",
   active: "Active",
 
@@ -96,6 +97,32 @@ export const strings = {
   testsRequested: "Tests requested",
   sampleCollectedBy: "Sample collected by",
   notABill: "This slip is not a bill.",
+
+  // booked consultations
+  consultations: "Consultations",
+  bookConsultation: "Book a consultation",
+  bookedConsultations: "Booked consultations",
+  whenIsIt: "When is it?",
+  atWhatTime: "At what time?",
+  howLong: "How long is it expected to take?",
+  reasonGiven: "Reason given",
+  nobodyBookedToday: "Nobody is booked in today.",
+  consultationBooked: "Consultation booked",
+  consultationMoved: "Consultation moved",
+  consultationCancelled: "Consultation cancelled",
+  whyCancelled: "Why is it being cancelled?",
+
+  // alerts on a phone
+  alertsOnThisPhone: "Alerts on this phone",
+  turnAlertsOn: "Turn alerts on",
+  turnAlertsOff: "Turn alerts off",
+  sendTestAlert: "Send a test alert",
+  alertsOn: "Alerts are on for this phone",
+  alertsOff: "This phone is not being alerted",
+  alertsBlocked:
+    "This phone has been told not to show alerts from here. Allow them in the browser settings, then try again.",
+  alertsUnsupported: "This phone cannot show alerts from here.",
+  testAlertSent: "Test alert sent. It should appear in a moment.",
 } as const;
 
 /** Nepali labels for the core POS actions (toggleable later). */

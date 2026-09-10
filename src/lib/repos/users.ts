@@ -7,8 +7,12 @@ import { db } from "@/lib/db";
 import { hashPassword, hashPin, verifyPassword, verifyPin } from "@/lib/crypto";
 import type { Row } from "@/lib/db";
 
-/** Accountant is read-only: all reports, all years, no billing (PRD §4B.8). */
-export type Role = "admin" | "staff" | "accountant";
+/**
+ * Accountant is read-only: all reports, all years, no billing (PRD §4B.8).
+ * Doctor is narrower still: their own booked consultations and their own
+ * details, on their own phone, and nothing else in the back office.
+ */
+export type Role = "admin" | "staff" | "accountant" | "doctor";
 
 export interface User {
   id: string;

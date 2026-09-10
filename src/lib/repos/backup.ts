@@ -56,6 +56,7 @@ const TABLES = [
   // clinic records
   "patients",
   "visits",
+  "appointments",
 
   // money
   "bills",
@@ -75,6 +76,9 @@ const TABLES = [
   // files (metadata; the bytes are listed separately in the manifest)
   "attachments",
 
+  // what was sent to a doctor when somebody was booked in with them
+  "alerts_sent",
+
   "audit_log",
 ] as const;
 
@@ -84,6 +88,9 @@ export const NOT_BACKED_UP: Record<string, string> = {
   backups: "a list of backups does not belong inside one",
   rate_limits: "short-lived counters, meaningless after a restore",
   login_throttle: "short-lived counters, meaningless after a restore",
+  push_devices:
+    "the address of one browser on one phone, minted by that browser and " +
+    "meaningless anywhere else; a doctor turns alerts on again after a restore",
   cbms_queue:
     "left over from a feature the owner dropped; the table stays because 0004 " +
     "is applied and migrations are append-only, but nothing reads or writes it", // sweep-ok: never rendered

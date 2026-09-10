@@ -19,7 +19,8 @@
     "sweep": "node scripts/sweep.mjs",
     "audit": "node scripts/audit.mjs",
     "a11y": "node scripts/a11y.mjs",
-    "db:import-items": "tsx db/import-items.ts"
+    "db:import-items": "tsx db/import-items.ts",
+    "alert-keys": "node scripts/alert-keys.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",
@@ -38,6 +39,7 @@
     "recharts": "^2.13.0",
     "serwist": "^9.5.11",
     "ulid": "^2.3.0",
+    "web-push": "^3.6.7",
     "zod": "^3.23.8",
     "zustand": "^5.0.0"
   },
@@ -48,6 +50,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/web-push": "^3.6.4",
     "exceljs": "^4.4.0",
     "jsdom": "^25.0.0",
     "playwright": "^1.61.1",

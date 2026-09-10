@@ -62,7 +62,9 @@ export function LoginForm({
       }
       return;
     }
-    router.push("/dashboard");
+    // "/" decides where this person belongs — the counter for most, their own
+    // list for a doctor. The browser cannot know which, so it does not guess.
+    router.push("/");
     router.refresh();
   }
 

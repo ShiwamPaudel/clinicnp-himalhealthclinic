@@ -106,7 +106,9 @@ export function UsersManager({ initial }: { initial: User[] }) {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-[14px] text-sage-500">
-          Owners and counter staff who can sign in.
+          Everyone who can sign in. A doctor signs in to their own booked
+          consultations and nothing else — attach the sign-in to them under
+          Doctors once it is made.
         </p>
         <Button
           onClick={() => {
@@ -144,6 +146,8 @@ export function UsersManager({ initial }: { initial: User[] }) {
                     <Badge tone="neutral">Admin</Badge>
                   ) : u.role === "accountant" ? (
                     <Badge tone="info">Accountant</Badge>
+                  ) : u.role === "doctor" ? (
+                    <Badge tone="info">Doctor</Badge>
                   ) : (
                     <Badge tone="info">Staff</Badge>
                   )}
@@ -267,6 +271,7 @@ function UserFields({
           >
             <option value="staff">{strings.roleStaff}</option>
             <option value="accountant">{strings.roleAccountant}</option>
+            <option value="doctor">{strings.roleDoctor}</option>
             <option value="admin">{strings.roleAdmin}</option>
           </Select>
         </Field>
