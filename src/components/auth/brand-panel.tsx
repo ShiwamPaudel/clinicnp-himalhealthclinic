@@ -97,7 +97,7 @@ export function BrandPanel({
 }) {
   const features = featuresFor(modules);
   // The artwork spells "ClinicNP". A pharmacy-only install is called something
-  // else, so it gets the wordmark set in type instead of the wrong logo.
+  // else, so it gets the wordmark set in type instead of the wrong logo. Comment to redeploy
   const useArtwork = appName === CLINIC_APP_NAME;
 
   return (
