@@ -49,10 +49,6 @@ import { ShortcutSheet } from "@/components/pos/shortcut-sheet";
 import { Wordmark } from "@/components/ui/wordmark";
 import { StatusChip } from "@/components/pos/status-chip";
 import { StuckQueue } from "@/components/pos/stuck-queue";
-import {
-  LabDispatchSlip,
-  type DispatchSlipData,
-} from "@/components/print/lab-dispatch-slip";
 import { InvoiceA4 } from "@/components/print/invoice-a4";
 import { useToast } from "@/components/ui/toast";
 import { strings, npLabels } from "@/lib/strings";
@@ -73,8 +69,6 @@ export function PosScreen({ config }: { config: PosConfig }) {
   const [showHeld, setShowHeld] = useState(false);
   const [saving, setSaving] = useState(false);
   const [printBill, setPrintBill] = useState<PrintBill | null>(null);
-  // One slip per laboratory: each goes in a different bag.
-  const [dispatchSlips, setDispatchSlips] = useState<DispatchSlipData[]>([]);
   const [stamp, setStamp] = useState(false);
   const [lang, setLang] = useState<"en" | "np">("en");
 
@@ -373,39 +367,6 @@ export function PosScreen({ config }: { config: PosConfig }) {
       userName: config.userName,
     });
 
-    // A sample going to an outside laboratory travels with a slip naming the
-    // laboratory, the patient and the tests (PRD §4B.5). One per laboratory.
-    const slipsByPartner = new Map<string, DispatchSlipData>();
-    for (const line of s.serviceLines) {
-      if (!line.labPartnerId) continue;
-      const partnerName =
-        partners.find((p) => p.id === line.labPartnerId)?.name ?? "Laboratory";
-      let slip = slipsByPartner.get(line.labPartnerId);
-      if (!slip) {
-        slip = {
-          company: config.company,
-          partnerName,
-          invoiceLabel: `Slip ${id.slice(-6).toUpperCase()}`,
-          dateBsLong: config.todayBsLong,
-          timeStr: new Date().toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          patientNo: s.patient?.patientNo ?? null,
-          patientName: s.patient?.name ?? s.patientName,
-          patientAgeSex: s.patient
-            ? `${s.patient.ageShort} · ${s.patient.sex.toUpperCase()}`
-            : "",
-          referringDoctor:
-            doctors.find((d) => d.id === line.doctorId)?.name ?? "",
-          tests: [],
-        };
-        slipsByPartner.set(line.labPartnerId, slip);
-      }
-      slip.tests.push({ name: line.name, qty: line.qty });
-    }
-    setDispatchSlips([...slipsByPartner.values()]);
-
     // print on the next frame, then reset for the next customer
     requestAnimationFrame(() => {
       window.print();
@@ -421,7 +382,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
 
     // try to sync right away (no-op when offline; retries in the loop)
     void flushOutbox();
-  }, [config, store, toast, refreshItems, services, doctors, partners]);
+  }, [config, store, toast, refreshItems, services, doctors]);
 
   const doHold = useCallback(async () => {
     const s = useBillStore.getState();
@@ -661,11 +622,6 @@ export function PosScreen({ config }: { config: PosConfig }) {
       {/* print area (hidden on screen) */}
       <div className="print-area">
         {printBill && <InvoiceA4 bill={printBill} />}
-        {dispatchSlips.map((slip, i) => (
-          <div key={i} style={{ pageBreakBefore: "always" }}>
-            <LabDispatchSlip slip={slip} />
-          </div>
-        ))}
       </div>
     </div>
   );
