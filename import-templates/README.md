@@ -14,7 +14,7 @@ a made-up number on it, so those rows must never reach the software.
 
 ## Already done for you: `pharmacy-items.STARTER.csv`
 
-**211 real products** a clinic pharmacy in Nepal actually dispenses — brand and
+**932 real products** a clinic pharmacy in Nepal actually dispenses — brand and
 generic names, category, manufacturer where it is known, pack structure and
 the narcotics flagged. It is loaded with:
 
