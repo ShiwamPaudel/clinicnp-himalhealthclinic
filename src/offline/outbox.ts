@@ -92,6 +92,8 @@ export function billRequestBody(bill: OutboxBill): Record<string, unknown> {
     patientName: bill.patientName,
     paymentMethod: bill.paymentMethod,
     tenderedPaisa: bill.tenderedPaisa,
+    paidNowPaisa: bill.paidNowPaisa,
+    paidNowMethod: bill.paidNowMethod,
     billDiscountPaisa: bill.billDiscountPaisa,
     lines: bill.lines,
     serviceLines: bill.serviceLines ?? [],

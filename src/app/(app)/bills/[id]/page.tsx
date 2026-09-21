@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/session";
+import { requireUser, canBill } from "@/lib/session";
 import { getBillDetail } from "@/lib/repos/bills";
+import { getBillDues } from "@/lib/repos/dues";
 import { getCompany } from "@/lib/repos/company";
+import { SALE_METHOD_LABEL, MONEY_METHOD_LABEL, type SaleMethod } from "@/lib/dues";
+import { formatPatientNo } from "@/lib/patient-no";
 import { adFromIso, toBS, formatBS, bsFromDbText } from "@/lib/bs";
 import { formatPaisa } from "@/lib/money";
 import { formatDocNo } from "@/lib/invoice-number";
@@ -10,10 +13,9 @@ import { PageShell } from "@/components/app/page-shell";
 import { Table, THead, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { BillActions } from "@/components/app/bill-actions";
+import { BillDuesPanel } from "@/components/app/bill-dues-panel";
 import { ClosedYearBanner } from "@/components/app/closed-year-banner";
 import type { PrintBill } from "@/lib/print-types";
-
-const METHOD: Record<string, string> = { cash: "Cash", qr: "QR / wallet", credit: "Credit" };
 
 function bsShort(iso: string): string {
   return formatBS(toBS(adFromIso(iso)));
@@ -29,6 +31,11 @@ export default async function BillDetailPage({
   const bill = await getBillDetail(id);
   if (!bill) notFound();
   const company = await getCompany();
+  const dues = bill.paymentMethod === "credit" ? await getBillDues(id) : null;
+  const who = {
+    name: bill.registeredName || bill.patientName,
+    patientNo: bill.patientNo,
+  };
 
   const invoiceLabel =
     bill.invoiceNo != null
@@ -93,6 +100,11 @@ export default async function BillDetailPage({
     paymentMethod: bill.paymentMethod as "cash" | "qr" | "credit",
     tenderedPaisa: bill.tenderedPaisa,
     changePaisa: Math.max(0, bill.tenderedPaisa - bill.totalPaisa),
+    // A reprint says what the bill said the day it was made: what was paid
+    // then and what was left owing. What is owed now is on the screen.
+    paidNowPaisa: dues?.paidAtSalePaisa,
+    paidNowMethod: dues?.paidNowMethod ?? undefined,
+    duePaisa: dues?.duePaisa,
     userName: bill.userName,
   };
 
@@ -104,9 +116,13 @@ export default async function BillDetailPage({
           <div className="flex items-center gap-3">
             <span className="text-[14px] text-sage-500">{bill.dateBs}</span>
             {bill.status === "cancelled" && <Badge tone="danger">Cancelled</Badge>}
-            {bill.paymentMethod === "credit" && !bill.creditSettledAt && (
-              <Badge tone="warn">Credit — unpaid</Badge>
-            )}
+            {bill.status !== "cancelled" &&
+              dues &&
+              (dues.balancePaisa > 0 ? (
+                <Badge tone="warn">Owes {formatPaisa(dues.balancePaisa)}</Badge>
+              ) : (
+                <Badge tone="ok">Dues cleared</Badge>
+              ))}
           </div>
           <BillActions
             billId={bill.id}
@@ -114,8 +130,7 @@ export default async function BillDetailPage({
             isAdmin={user.role === "admin"}
             canCancel={bill.status !== "cancelled" && !bill.yearClosed}
             yearClosed={bill.yearClosed}
-            isCredit={bill.paymentMethod === "credit"}
-            creditSettled={bill.creditSettledAt != null}
+            paidBackPaisa={dues ? dues.receivedPaisa : 0}
           />
         </div>
 
@@ -134,7 +149,7 @@ export default async function BillDetailPage({
             )}
             {bill.patientNo != null && (
               <span className="ml-2 font-mono text-[12px] text-clinic-700">
-                P-{String(bill.patientNo).padStart(6, "0")}
+                {formatPatientNo(bill.patientNo)}
               </span>
             )}
           </div>
@@ -253,21 +268,84 @@ export default async function BillDetailPage({
             <div className="mt-2 border-t border-line pt-2 text-[16px] font-semibold">
               <Row label="Total" value={formatPaisa(bill.totalPaisa)} />
             </div>
+            {dues && (
+              <div className="mt-2 border-t border-line pt-2">
+                <Row
+                  label={
+                    dues.paidNowMethod && dues.paidAtSalePaisa > 0
+                      ? `Paid at billing (${MONEY_METHOD_LABEL[dues.paidNowMethod]})`
+                      : "Paid at billing"
+                  }
+                  value={formatPaisa(dues.paidAtSalePaisa)}
+                />
+                {dues.receivedPaisa > 0 && (
+                  <Row label="Paid back since" value={formatPaisa(dues.receivedPaisa)} />
+                )}
+                {dues.returnedAgainstDuePaisa > 0 && (
+                  <Row
+                    label="Taken off by returns"
+                    value={formatPaisa(dues.returnedAgainstDuePaisa)}
+                  />
+                )}
+                {dues.settledInFull && (
+                  <Row
+                    label="Marked paid in full"
+                    value={formatPaisa(
+                      Math.max(
+                        0,
+                        dues.duePaisa -
+                          dues.receivedPaisa -
+                          dues.returnedAgainstDuePaisa,
+                      ),
+                    )}
+                  />
+                )}
+                <div className="mt-1 text-[15px] font-semibold">
+                  <Row
+                    label="Still owed"
+                    value={formatPaisa(dues.balancePaisa)}
+                    tone={dues.balancePaisa > 0 ? "warn" : "plain"}
+                  />
+                </div>
+              </div>
+            )}
             <div className="mt-2 text-[13px] text-sage-500">
-              {METHOD[bill.paymentMethod]} · by {bill.userName}
+              {SALE_METHOD_LABEL[bill.paymentMethod as SaleMethod] ?? bill.paymentMethod} · by {bill.userName}
             </div>
           </div>
         </div>
+
+        {dues && bill.status !== "cancelled" && (
+          <BillDuesPanel
+            billId={bill.id}
+            invoiceLabel={invoiceLabel}
+            dateBs={bill.dateBs}
+            who={who}
+            balancePaisa={dues.balancePaisa}
+            payments={dues.payments}
+            canReceive={canBill(user.role)}
+          />
+        )}
       </div>
     </PageShell>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  tone = "plain",
+}: {
+  label: string;
+  value: string;
+  tone?: "plain" | "warn";
+}) {
   return (
-    <div className="flex justify-between py-0.5 text-[14px]">
+    <div className="flex justify-between gap-3 py-0.5 text-[14px]">
       <span className="text-sage-600">{label}</span>
-      <span className="tnum text-sage-900">{value}</span>
+      <span className={tone === "warn" ? "tnum text-warn-600" : "tnum text-sage-900"}>
+        {value}
+      </span>
     </div>
   );
 }

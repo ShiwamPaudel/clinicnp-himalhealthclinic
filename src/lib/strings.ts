@@ -123,6 +123,14 @@ export const strings = {
     "This phone has been told not to show alerts from here. Allow them in the browser settings, then try again.",
   alertsUnsupported: "This phone cannot show alerts from here.",
   testAlertSent: "Test alert sent. It should appear in a moment.",
+
+  // dues: sold now, paid for later
+  dues: "Dues",
+  owed: "Owed",
+  leftOnDues: "Left on dues",
+  receivePayment: "Receive payment",
+  nothingOwed: "Nobody owes anything. Every bill is paid up.",
+  noPaymentsYet: "No dues have been paid back yet.",
 } as const;
 
 /** Nepali labels for the core POS actions (toggleable later). */

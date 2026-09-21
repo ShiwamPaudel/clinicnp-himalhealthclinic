@@ -5,6 +5,7 @@ import {
   ingestBill,
   InsufficientStockError,
   ServiceLineError,
+  DueBillError,
 } from "@/lib/repos/bills";
 import { getModules } from "@/lib/modules";
 import { recordAudit } from "@/lib/repos/audit";
@@ -85,6 +86,26 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
+  // With patients switched on, money owed belongs to a registered patient, as
+  // a service does, so it can be found again by name, phone or number. Only a
+  // bill from a counter that knows about part payments is held to this; one
+  // queued before then lands as it always would have (see ingestBill).
+  if (
+    modules.clinic &&
+    parsed.data.paymentMethod === "credit" &&
+    parsed.data.paidNowPaisa !== undefined &&
+    !parsed.data.patientId &&
+    !parsed.data.patient
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "dues_patient",
+        userMessage: "A bill on dues needs a patient on it.",
+      },
+      { status: 409 },
+    );
+  }
 
   try {
     const result = await ingestBill({
@@ -121,6 +142,12 @@ export async function POST(req: Request) {
     if (err instanceof ServiceLineError) {
       return NextResponse.json(
         { ok: false, code: "service_line", userMessage: err.userMessage },
+        { status: 409 },
+      );
+    }
+    if (err instanceof DueBillError) {
+      return NextResponse.json(
+        { ok: false, code: "dues_patient", userMessage: err.userMessage },
         { status: 409 },
       );
     }

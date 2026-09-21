@@ -14,6 +14,9 @@ export interface ReturnNoteData {
    * recorded in the year that is open now.
    */
   intoOpenYearNote?: string;
+  /** on a bill still on dues: what came off the debt, and what was handed back */
+  againstDuePaisa?: number;
+  handBackPaisa?: number;
 }
 
 /** Sales-return note (thermal-style). */
@@ -49,6 +52,18 @@ export function ReturnNote({ data }: { data: ReturnNoteData }) {
         <span>Refund</span>
         <span>{formatPaisa(data.totalPaisa, false)}</span>
       </div>
+      {(data.againstDuePaisa ?? 0) > 0 && (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Off dues</span>
+            <span>{formatPaisa(data.againstDuePaisa ?? 0, false)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>Handed back</span>
+            <span>{formatPaisa(data.handBackPaisa ?? 0, false)}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

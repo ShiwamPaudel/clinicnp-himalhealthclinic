@@ -27,8 +27,10 @@ const fullBill: Required<
   patientName: "Anita Shrestha",
   patientId: "01PATIENT",
   visitId: "01VISIT",
-  paymentMethod: "cash",
+  paymentMethod: "credit",
   tenderedPaisa: 20_000,
+  paidNowPaisa: 10_000,
+  paidNowMethod: "qr",
   billDiscountPaisa: 500,
   lines: [
     {
@@ -75,6 +77,13 @@ describe("the outbox payload", () => {
     expect(body.serviceLines).toHaveLength(1);
     expect(body.patientId).toBe("01PATIENT");
     expect(body.visitId).toBe("01VISIT");
+  });
+
+  it("carries what was paid now on a bill on dues", () => {
+    const body = billRequestBody(fullBill);
+    expect(body.paymentMethod).toBe("credit");
+    expect(body.paidNowPaisa).toBe(10_000);
+    expect(body.paidNowMethod).toBe("qr");
   });
 
   it("never posts the queue's own bookkeeping", () => {

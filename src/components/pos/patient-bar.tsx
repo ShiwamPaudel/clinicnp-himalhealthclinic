@@ -38,13 +38,17 @@ interface Found {
 export function PatientBar({
   patient,
   required,
+  requiredFor = "service",
   onAttach,
   onClear,
   openSignal,
 }: {
   patient: AttachedPatient | null;
-  /** true once a service line exists: the bill cannot be saved without someone */
+  /** true once a service line exists, or the bill is going on dues: the bill
+   *  cannot be saved without someone */
   required: boolean;
+  /** why it is required, so the prompt can say so */
+  requiredFor?: "service" | "dues";
   onAttach: (p: AttachedPatient) => void;
   onClear: () => void;
   /** incremented by the counter when `P` is pressed */
@@ -306,9 +310,11 @@ export function PatientBar({
                 required ? "font-medium text-clinic-700" : "text-sage-500",
               )}
             >
-              {required
-                ? "This bill has a service on it — say who it is for"
-                : "No patient on this bill"}
+              {!required
+                ? "No patient on this bill"
+                : requiredFor === "dues"
+                  ? "This bill is going on dues — say who owes it"
+                  : "This bill has a service on it — say who it is for"}
             </span>
             <button
               onClick={() => setOpen(true)}

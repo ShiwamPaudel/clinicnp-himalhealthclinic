@@ -9,7 +9,7 @@ import {
   Wallet,
   Percent,
   Users,
-  CreditCard,
+  HandCoins,
   Stethoscope,
   FlaskConical,
   ClipboardList,
@@ -54,7 +54,7 @@ const REPORTS: ReportCard[] = [
   { href: "/reports/shelf", label: "Shelf list", desc: "The shop in the order you walk it", icon: MapPin, adminOnly: true, pharmacyOnly: true },
   { href: "/reports/vat", label: "VAT report", desc: "Sales and purchase VAT summary", icon: Percent, adminOnly: true, vatOnly: true },
   { href: "/suppliers", label: "Party ledgers", desc: "Per-supplier statements", icon: Users, adminOnly: true, pharmacyOnly: true },
-  { href: "/bills/credit", label: "Credit aging", desc: "Outstanding credit bills", icon: CreditCard },
+  { href: "/dues", label: "Dues", desc: "Who owes what, and for how long", icon: HandCoins },
 ];
 
 export default async function ReportsHubPage() {

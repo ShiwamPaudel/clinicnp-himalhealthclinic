@@ -6,6 +6,7 @@ import {
   refundedQtyByServiceLine,
 } from "@/lib/repos/sale-returns";
 import { getCompany } from "@/lib/repos/company";
+import { getBillDues } from "@/lib/repos/dues";
 import { bsFromDbText, formatBS } from "@/lib/bs";
 import { formatDocNo } from "@/lib/invoice-number";
 import { PageShell } from "@/components/app/page-shell";
@@ -27,6 +28,7 @@ export default async function SaleReturnPage({
   const company = await getCompany();
   const returnedBase = await returnedBaseByLine(id);
   const refundedQty = await refundedQtyByServiceLine(id);
+  const dues = bill.paymentMethod === "credit" ? await getBillDues(id) : null;
 
   const invoiceLabel =
     bill.invoiceNo != null
@@ -83,6 +85,7 @@ export default async function SaleReturnPage({
         lines={lines}
         serviceLines={serviceLines}
         yearClosedNote={bill.yearClosed ? bill.fiscalLabel : ""}
+        owedPaisa={dues?.balancePaisa ?? 0}
       />
     </PageShell>
   );

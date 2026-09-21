@@ -17,7 +17,7 @@ function label(b: BillListRow): string {
     : "Pending";
 }
 
-const METHOD: Record<string, string> = { cash: "Cash", qr: "QR", credit: "Credit" };
+const METHOD: Record<string, string> = { cash: "Cash", qr: "QR", credit: "Dues" };
 
 const KIND_LABEL: Record<string, string> = {
   pharmacy: "Medicine",
@@ -149,8 +149,12 @@ export function BillRegister({
                 <TD>
                   {b.status === "cancelled" ? (
                     <Badge tone="danger">Cancelled</Badge>
+                  ) : b.balancePaisa > 0 ? (
+                    <Badge tone="warn">
+                      Owes {formatPaisa(b.balancePaisa, false)}
+                    </Badge>
                   ) : b.paymentMethod === "credit" ? (
-                    <Badge tone="warn">Credit</Badge>
+                    <Badge tone="ok">Dues cleared</Badge>
                   ) : (
                     <Badge tone="ok">Saved</Badge>
                   )}

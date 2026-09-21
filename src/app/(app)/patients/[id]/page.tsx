@@ -7,6 +7,8 @@ import { getPatient } from "@/lib/repos/patients";
 import { visitsForPatient } from "@/lib/repos/visits";
 import { attachmentsForPatient } from "@/lib/repos/attachments";
 import { listBillsForPatient } from "@/lib/repos/bills";
+import { owedByPatient } from "@/lib/repos/dues";
+import { formatPaisa } from "@/lib/money";
 import { formatDocNo } from "@/lib/invoice-number";
 import { adToIso, toBS, adFromIso, formatBS, today, bsToDbText } from "@/lib/bs";
 import { PageShell } from "@/components/app/page-shell";
@@ -30,10 +32,11 @@ export default async function PatientCardPage({
   const patient = await getPatient(id);
   if (!patient) notFound();
 
-  const [visits, attachments, bills] = await Promise.all([
+  const [visits, attachments, bills, owed] = await Promise.all([
     visitsForPatient(patient.id),
     attachmentsForPatient(patient.id),
     listBillsForPatient(patient.id),
+    owedByPatient(patient.id),
   ]);
 
   const todayAd = adToIso(new Date());
@@ -75,6 +78,20 @@ export default async function PatientCardPage({
     >
       <div className="flex flex-col gap-6">
         <PatientHeader patient={patient} todayAd={todayAd} sinceBs={sinceBs} />
+
+        {owed.owedPaisa > 0 && (
+          <Link
+            href={`/dues?patient=${patient.id}`}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-warn-600/30 bg-warn-100 px-4 py-3 text-warn-600 hover:bg-warn-100/70"
+          >
+            <span className="text-[14px]">
+              Owes{" "}
+              <span className="font-semibold tnum">{formatPaisa(owed.owedPaisa)}</span>{" "}
+              on {owed.billCount} {owed.billCount === 1 ? "bill" : "bills"}
+            </span>
+            <span className="text-[13px] font-medium">See dues →</span>
+          </Link>
+        )}
 
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-[15px] font-semibold text-sage-900">

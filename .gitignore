@@ -18,3 +18,5 @@ public/sw.js.map
 public/swe-worker*.js
 tsconfig.tsbuildinfo
 .filestore/
+# full copies of the live database: patient details, never committed
+backups/prod-*.json

@@ -122,6 +122,9 @@ export interface OutboxBill {
   visitId?: string;
   paymentMethod: "cash" | "qr" | "credit";
   tenderedPaisa: number;
+  /** on a bill on dues: what was paid at the counter, and how */
+  paidNowPaisa?: number;
+  paidNowMethod?: "cash" | "qr";
   billDiscountPaisa: number;
   lines: {
     id: string;

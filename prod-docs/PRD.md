@@ -245,7 +245,7 @@ Clinic billing runs on the same counter, the same bill and the same invoice seri
 
 Every report: BS date range with presets, **fiscal-year filter including closed years**, mobile-readable, printable, Excel export.
 
-1. **Day close (extended)** — collection by payment method across both modules, split: medicines / consultation / diagnostics / laboratory; refunds; expected cash in drawer.
+1. **Day close (extended)** — collection by payment method across both modules, split: medicines / consultation / diagnostics / laboratory; refunds; what was left on dues and what dues were paid back (§4C); expected cash in drawer.
 2. **Service revenue** — by group and by service: count, gross, discount, net. *"What did the ultrasound machine earn this month?"*
 3. **Doctor-wise** — consultations and services per doctor, revenue, and the calculated share/payout per the doctor's share basis; export is the payout sheet.
 4. **Laboratory partner statement** — tests sent per partner, patient billing value, partner cost, margin, payments made, closing balance. Per-partner and consolidated.
@@ -270,8 +270,41 @@ Pharmacy reports from v1 all remain, plus the new **Stock-out register** (§4A.2
 | Financial reports | ✔ | Day close only | ✔ (all, read-only, all fiscal years) |
 | Company details, users, modules, fiscal years, backup/restore | ✔ | ✖ | ✖ |
 | Cancel a bill | ✔ | ✖ | ✖ |
+| Put a bill on dues; receive a dues payment *(§4C)* | ✔ | ✔ | ✖ (sees the Dues list, read-only) |
+| Undo a dues payment entered by mistake | ✔ | ✖ | ✖ |
 
 Login by username + password; 4-digit PIN quick-switch on the shared counter device; brute-force lockout as built in v1. Every bill, visit, registration, file and stock-out records who did it.
+
+---
+
+## 4C — DUES *(both modules, added 2083-06-05)*
+
+Himal sometimes hands over medicine, or does a test, and is paid later — all of it, or the part the patient could not pay today. The owner asked for three things: bills sold on dues or part payment, for medicine and services alike; the patient's details on such a bill, exactly as a service bill has them; and a place to track who owes what by name and clear it when the money comes in.
+
+### 4C.1 At the counter
+- The payment methods are **Cash · QR · Dues**. Dues replaces the old "Credit" button and covers both cases: nothing paid now, or part paid now.
+- Choosing Dues shows **Paying now** (default 0), **Paid by** Cash/QR for that part, and **Left on dues**. Paying the whole total is refused with *"That pays the whole bill. Choose Cash or QR instead."*
+- **A bill on dues needs a patient**, attached in the navy patient bar exactly as for a service line (search or register on the spot; `P` opens it). A pharmacy-only install, which has no patients, requires the name typed on the bill instead.
+- The printed bill says **Payment: Dues**, then **Paid** and **Balance due** under the total.
+- Offline: a bill on dues queues and prints like any other bill.
+
+### 4C.2 Dues (sidebar, beside Bills)
+- **Owed**: everyone who owes, grouped by person (registered patient; else the typed name; a bill with no name stands alone), biggest debt first. Each person shows number, phone, bill count, amount owed and the age of the oldest bill; opens to list the bills behind it. Search by name, phone or patient number.
+- **Receive payment**: the amount starts at everything owed; a smaller amount clears the **oldest bill first**, and the split is shown before saving. More than is owed is refused. Cash or QR, with an optional note.
+- **Paid back**: every payment, newest first, shown once however many bills it cleared. The owner can **Undo** a payment entered by mistake; it stays listed, marked Undone, and the amount is owed again.
+- Money is recorded on the day it arrives, in the year that is open — a debt from a closed year can still be collected, and the closed year does not move (the rule D-060 already set for refunds).
+
+### 4C.3 Elsewhere
+- **Bill page**: *Owes Rs X* or *Dues cleared*; paid at billing, paid back since, taken off by returns, still owed; the payments against the bill; Receive payment for that bill alone.
+- **Bills register**: status reads *Owes X* or *Dues cleared*.
+- **Patient card**: *Owes Rs X on N bills*, linking to their dues.
+- **Dashboard**: *Owed to you* when anybody owes anything.
+- **Returns** on a bill still owing come off the debt first; only what is left after the debt is cleared is handed back. The return screen says which before saving and the return note prints both.
+- **Day close**: Cash and QR count only money actually taken; **Left on dues**; **Dues paid back** in cash and by QR; expected cash = cash taken + dues paid back in cash − money handed back for returns.
+- **Cancelling** a bill on dues takes it off the list; if money was already paid back against it, the cancel dialog says to hand it back.
+
+### 4C.4 Not built
+No interest, no due dates or reminders, no SMS, no credit limits, no advance/deposit balance (a patient who hands over more is given change), no separate customer accounts on the pharmacy side (§6).
 
 ---
 

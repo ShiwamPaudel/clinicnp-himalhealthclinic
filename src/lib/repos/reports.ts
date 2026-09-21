@@ -5,6 +5,7 @@
  */
 import "server-only";
 import { db } from "@/lib/db";
+import { OWED_AT_SALE_SQL } from "@/lib/repos/dues";
 
 const NOT_CANCELLED = "b.status = 'saved'";
 
@@ -94,7 +95,16 @@ export interface DaySummary {
   billDiscountPaisa: number;
   returnsPaisa: number;
   netSalesPaisa: number;
+  /**
+   * How today's bills were paid for. `cash` and `qr` are money actually taken
+   * at the counter — on a bill on dues, only the part paid then. `credit` is
+   * what was left owing. The three add up to gross sales.
+   */
   byMethod: { cash: number; qr: number; credit: number };
+  /** money that came in today against dues from any day */
+  duesReceived: { cash: number; qr: number };
+  /** the part of today's returns that came off what somebody owed */
+  returnsAgainstDuePaisa: number;
   expectedCashPaisa: number;
   /**
    * Where the day's takings came from, net of refunds. Present on every day
@@ -115,24 +125,58 @@ export async function daySummary(dayIso: string): Promise<DaySummary> {
           FROM bills b WHERE ${NOT_CANCELLED} AND b.date_ad = ?`,
     args: [dayIso],
   });
+  // A bill on dues puts only its paid part in the drawer, in the way it was
+  // paid; the rest is owed. Every bill lands wholly in the three columns, so
+  // they still add up to gross sales.
   const method = await db().execute({
-    sql: `SELECT payment_method, IFNULL(SUM(total_paisa),0) AS s
-          FROM bills b WHERE ${NOT_CANCELLED} AND b.date_ad = ?
-          GROUP BY payment_method`,
+    sql: `SELECT
+            IFNULL(SUM(CASE
+              WHEN b.payment_method = 'cash' THEN b.total_paisa
+              WHEN b.payment_method = 'credit'
+               AND COALESCE(b.paid_now_method, 'cash') = 'cash'
+                THEN b.total_paisa - ${OWED_AT_SALE_SQL}
+              ELSE 0 END), 0) AS cash,
+            IFNULL(SUM(CASE
+              WHEN b.payment_method = 'qr' THEN b.total_paisa
+              WHEN b.payment_method = 'credit' AND b.paid_now_method = 'qr'
+                THEN b.total_paisa - ${OWED_AT_SALE_SQL}
+              ELSE 0 END), 0) AS qr,
+            IFNULL(SUM(${OWED_AT_SALE_SQL}), 0) AS on_dues
+          FROM bills b WHERE ${NOT_CANCELLED} AND b.date_ad = ?`,
     args: [dayIso],
   });
   const returns = await db().execute({
-    sql: "SELECT IFNULL(SUM(total_paisa),0) AS s FROM sale_returns WHERE date_ad = ?",
+    sql: `SELECT IFNULL(SUM(total_paisa),0) AS s,
+                 IFNULL(SUM(against_due_paisa),0) AS against_due
+            FROM sale_returns WHERE date_ad = ?`,
+    args: [dayIso],
+  });
+  // Money received today against dues — from today's bills or anyone else's.
+  // A cancelled bill takes its money out of the day, as it always has, and
+  // that includes anything paid back against it.
+  const received = await db().execute({
+    sql: `SELECT dp.method, IFNULL(SUM(dp.amount_paisa),0) AS s
+            FROM due_payments dp
+            JOIN bills b ON b.id = dp.bill_id
+           WHERE dp.date_ad = ? AND dp.voided_at IS NULL AND ${NOT_CANCELLED}
+           GROUP BY dp.method`,
     args: [dayIso],
   });
 
-  const byMethod = { cash: 0, qr: 0, credit: 0 };
-  for (const r of method.rows) {
-    const m = r.payment_method as "cash" | "qr" | "credit";
-    byMethod[m] = Number(r.s);
+  const m0 = method.rows[0]!;
+  const byMethod = {
+    cash: Number(m0.cash),
+    qr: Number(m0.qr),
+    credit: Number(m0.on_dues),
+  };
+  const duesReceived = { cash: 0, qr: 0 };
+  for (const r of received.rows) {
+    if (r.method === "qr") duesReceived.qr += Number(r.s);
+    else duesReceived.cash += Number(r.s);
   }
   const gross = Number(agg.rows[0]!.gross);
   const ret = Number(returns.rows[0]!.s);
+  const retAgainstDue = Number(returns.rows[0]!.against_due);
 
   // The four-way split. Medicines net their own returns; each clinic group
   // nets its own refunds, so the four add up to the net sales figure above.
@@ -201,7 +245,11 @@ export async function daySummary(dayIso: string): Promise<DaySummary> {
     returnsPaisa: ret,
     netSalesPaisa: gross - ret,
     byMethod,
-    expectedCashPaisa: byMethod.cash - ret,
+    duesReceived,
+    returnsAgainstDuePaisa: retAgainstDue,
+    // A return that only came off somebody's dues took no money out of the
+    // drawer, so only the part handed back is taken off.
+    expectedCashPaisa: byMethod.cash + duesReceived.cash - (ret - retAgainstDue),
   };
 }
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CreditCard } from "lucide-react";
+import { HandCoins } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { listBills } from "@/lib/repos/bills";
 import { getModules } from "@/lib/modules";
@@ -32,14 +32,13 @@ export default async function BillsPage({
       actions={
         <div className="flex items-center gap-2">
           <FiscalYearBar role={user.role} current={year.label} />
-          {!year.isClosed && (
-            <Link href="/bills/credit">
-              <Button variant="secondary">
-                <CreditCard className="h-4 w-4" />
-                Credit bills
-              </Button>
-            </Link>
-          )}
+          {/* Dues are collected whatever year the bill was made in. */}
+          <Link href="/dues">
+            <Button variant="secondary">
+              <HandCoins className="h-4 w-4" />
+              Dues
+            </Button>
+          </Link>
         </div>
       }
     >

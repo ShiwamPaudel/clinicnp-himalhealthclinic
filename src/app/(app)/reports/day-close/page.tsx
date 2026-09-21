@@ -43,7 +43,33 @@ export default async function DayClosePage({
           </h2>
           <Line label="Cash" value={formatPaisa(summary.byMethod.cash)} />
           <Line label="QR / wallet" value={formatPaisa(summary.byMethod.qr)} />
-          <Line label="Credit" value={formatPaisa(summary.byMethod.credit)} />
+          <Line label="Left on dues" value={formatPaisa(summary.byMethod.credit)} />
+          {(summary.duesReceived.cash > 0 || summary.duesReceived.qr > 0) && (
+            <div className="mt-2 border-t border-line pt-2">
+              <Line
+                label="Dues paid back in cash"
+                value={formatPaisa(summary.duesReceived.cash)}
+              />
+              <Line
+                label="Dues paid back by QR / wallet"
+                value={formatPaisa(summary.duesReceived.qr)}
+              />
+            </div>
+          )}
+          {summary.returnsPaisa > 0 && (
+            <div className="mt-2 border-t border-line pt-2">
+              <Line
+                label="Handed back for returns"
+                value={`− ${formatPaisa(summary.returnsPaisa - summary.returnsAgainstDuePaisa, false)}`}
+              />
+              {summary.returnsAgainstDuePaisa > 0 && (
+                <Line
+                  label="Returns taken off dues"
+                  value={formatPaisa(summary.returnsAgainstDuePaisa)}
+                />
+              )}
+            </div>
+          )}
           <div className="mt-3 rounded-[8px] bg-sage-75 p-3">
             <Line
               label="Expected cash in drawer"
@@ -51,6 +77,10 @@ export default async function DayClosePage({
               bold
             />
           </div>
+          <p className="mt-2 text-[12px] text-sage-500">
+            Cash from today&apos;s bills and dues paid back in cash, less what
+            was handed back for returns.
+          </p>
         </div>
 
         {modules.clinic && (

@@ -24,6 +24,8 @@ import { createPatient } from "@/lib/repos/patients";
 import { getServiceForBilling, lastConsultationAd } from "@/lib/repos/services";
 import { getDoctor } from "@/lib/repos/doctors";
 import { resolveFollowup, doctorSharePaisa } from "@/lib/clinic-calc";
+import { splitAtSale, type MoneyMethod } from "@/lib/dues";
+import { DUE_FACTS_SQL, balanceOfRow } from "@/lib/repos/dues";
 
 export interface IngestLine {
   id: string;
@@ -57,6 +59,14 @@ export interface IngestBillInput {
   patientName: string;
   paymentMethod: "cash" | "qr" | "credit";
   tenderedPaisa: number;
+  /**
+   * On a bill on dues ('credit'), what was paid at the counter; the rest is
+   * owed. Absent on a bill queued before dues could be part-paid, which is
+   * read as nothing paid — exactly what 'credit' meant then.
+   */
+  paidNowPaisa?: number;
+  /** how the part paid at the counter was paid */
+  paidNowMethod?: MoneyMethod;
   billDiscountPaisa: number;
   lines: IngestLine[];
   serviceLines?: IngestServiceLine[];
@@ -89,6 +99,16 @@ export class ServiceLineError extends Error {
   constructor(userMessage: string) {
     super(userMessage);
     this.name = "ServiceLineError";
+    this.userMessage = userMessage;
+  }
+}
+
+/** Raised when a bill on dues does not say who owes it. */
+export class DueBillError extends Error {
+  readonly userMessage: string;
+  constructor(userMessage: string) {
+    super(userMessage);
+    this.name = "DueBillError";
     this.userMessage = userMessage;
   }
 }
@@ -227,6 +247,22 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
   if ((input.serviceLines?.length ?? 0) > 0 && !patientId) {
     throw new ServiceLineError(
       "This bill has a service on it, so it needs a patient.",
+    );
+  }
+
+  // Money owed has to be owed by somebody. Checked only on a bill that carries
+  // `paidNowPaisa`, which every counter since dues could be part-paid sends: a
+  // credit bill queued on a counter before that, with no name on it, must still
+  // land rather than sit stuck in a queue nobody can edit. The Dues screen lists
+  // such a bill as having no name, so it is never lost.
+  if (
+    input.paymentMethod === "credit" &&
+    input.paidNowPaisa !== undefined &&
+    !patientId &&
+    input.patientName.trim() === ""
+  ) {
+    throw new DueBillError(
+      "A bill on dues needs the name of whoever owes it.",
     );
   }
 
@@ -487,6 +523,15 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
     let total = afterBillDiscount + vatPaisa;
     if (company.roundingOn) total = roundToRupee(total);
 
+    // What was paid now and what is left owing, against the total worked out
+    // here rather than the counter's preview of it.
+    const sale = splitAtSale(
+      total,
+      input.paymentMethod,
+      input.paidNowPaisa ?? 0,
+      input.paidNowMethod ?? "cash",
+    );
+
     // What kind of bill this is, decided here and stored so reports never have
     // to join two tables to find out (Architecture §3.4).
     const kind =
@@ -548,8 +593,8 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
               (id, invoice_no, fiscal_year_id, date_ad, date_bs, patient_name,
                subtotal_paisa, discount_paisa, vat_paisa, total_paisa,
                payment_method, tendered_paisa, status, user_id, client_created_at,
-               synced_at, patient_id, visit_id, kind)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'saved', ?, ?, ?, ?, ?, ?)`,
+               synced_at, patient_id, visit_id, kind, due_paisa, paid_now_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'saved', ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         input.id,
         invoiceNo,
@@ -561,7 +606,7 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
         input.billDiscountPaisa,
         vatPaisa,
         total,
-        input.paymentMethod,
+        sale.method,
         input.tenderedPaisa,
         input.userId,
         input.clientCreatedAt,
@@ -569,6 +614,8 @@ export async function ingestBill(input: IngestBillInput): Promise<IngestResult> 
         patientId,
         visitId,
         kind,
+        sale.duePaisa,
+        sale.paidNowMethod,
       ],
     });
 
@@ -685,8 +732,11 @@ export interface BillListRow {
   kind: string;
   patientNo: number | null;
   registeredName: string;
+  /** what this bill still owes today; 0 for anything not on dues */
+  balancePaisa: number;
 }
 
+/** Read with `DUE_FACTS_SQL` in the select, or the balance reads as zero. */
 function mapBillRow(r: Row): BillListRow {
   return {
     id: r.id as string,
@@ -700,6 +750,7 @@ function mapBillRow(r: Row): BillListRow {
     kind: (r.kind as string) ?? "pharmacy",
     patientNo: r.patient_no == null ? null : Number(r.patient_no),
     registeredName: (r.registered_name as string | null) ?? "",
+    balancePaisa: balanceOfRow(r),
   };
 }
 
@@ -763,7 +814,8 @@ export async function listBills(
   args.push(limit);
 
   const res = await db().execute({
-    sql: `SELECT b.*, f.bs_label, p.patient_no, p.name AS registered_name
+    sql: `SELECT b.*, f.bs_label, p.patient_no, p.name AS registered_name,
+                 ${DUE_FACTS_SQL}
             FROM bills b
             LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
             LEFT JOIN patients p ON p.id = b.patient_id
@@ -829,10 +881,13 @@ export interface BillDetail extends BillListRow {
 
 export async function getBillDetail(id: string): Promise<BillDetail | null> {
   const head = await db().execute({
-    sql: `SELECT b.*, f.bs_label, f.status AS fy_status, u.name AS user_name
+    sql: `SELECT b.*, f.bs_label, f.status AS fy_status, u.name AS user_name,
+                 p.patient_no, p.name AS registered_name,
+                 ${DUE_FACTS_SQL}
           FROM bills b
           LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
           LEFT JOIN users u ON u.id = b.user_id
+          LEFT JOIN patients p ON p.id = b.patient_id
           WHERE b.id = ?`,
     args: [id],
   });
@@ -975,36 +1030,9 @@ export async function cancelBill(id: string, userId: string): Promise<void> {
   }
 }
 
-export interface CreditBillRow extends BillListRow {
-  ageDays: number;
-}
-
-export async function listCreditBills(todayIso: string): Promise<CreditBillRow[]> {
-  const res = await db().execute(
-    `SELECT b.*, f.bs_label FROM bills b
-     LEFT JOIN fiscal_years f ON f.id = b.fiscal_year_id
-     WHERE b.payment_method = 'credit' AND b.status = 'saved' AND b.credit_settled_at IS NULL
-     ORDER BY b.date_ad ASC`,
-  );
-  return res.rows.map((r) => {
-    const row = mapBillRow(r);
-    const days = Math.max(
-      0,
-      Math.round(
-        (Date.parse(todayIso) - Date.parse(r.date_ad as string)) / 86400000,
-      ),
-    );
-    return { ...row, ageDays: days };
-  });
-}
-
-export async function settleCreditBill(id: string): Promise<void> {
-  await assertBillYearOpen(id);
-  await db().execute({
-    sql: "UPDATE bills SET credit_settled_at = ? WHERE id = ? AND payment_method = 'credit'",
-    args: [new Date().toISOString(), id],
-  });
-}
+// Bills on dues are listed, and paid off, in `lib/repos/dues.ts`. The old
+// whole-bill "Mark paid" (`credit_settled_at`) is no longer written; a bill it
+// already cleared still reads as cleared.
 
 export interface PatientBillRow {
   id: string;

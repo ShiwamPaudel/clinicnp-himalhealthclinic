@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useBillStore } from "@/stores/bill-store";
 import { billTotals } from "@/lib/bill-calc";
 import { toPaisa, paisaToRupees, formatPaisa, change } from "@/lib/money";
@@ -12,10 +12,15 @@ export interface PaymentPaneHandle {
   focusTendered: () => void;
 }
 
+/**
+ * 'credit' is what a bill on dues is stored as. On screen it is Dues, the
+ * word the counter uses: the patient pays part of it now, or none of it, and
+ * owes the rest.
+ */
 const METHODS: { key: "cash" | "qr" | "credit"; label: string }[] = [
   { key: "cash", label: "Cash" },
   { key: "qr", label: "QR" },
-  { key: "credit", label: "Credit" },
+  { key: "credit", label: "Dues" },
 ];
 
 export const PaymentPane = forwardRef<
@@ -25,20 +30,36 @@ export const PaymentPane = forwardRef<
   const {
     lines,
     serviceLines,
+    patient,
     patientName,
     paymentMethod,
     tenderedPaisa,
+    paidNowPaisa,
+    paidNowMethod,
     billDiscountPaisa,
     setPatientName,
     setPaymentMethod,
     setTendered,
+    setPaidNow,
+    setPaidNowMethod,
     setBillDiscount,
   } = useBillStore();
 
   const tenderRef = useRef<HTMLInputElement>(null);
+  const paidNowRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({
-    focusTendered: () => tenderRef.current?.focus(),
+    focusTendered: () =>
+      (paymentMethod === "credit" ? paidNowRef : tenderRef).current?.focus(),
   }));
+
+  // What was typed, kept as typed so "12." is not turned into "12" under the
+  // cursor. Cleared when the bill is (the store goes back to nothing paid).
+  const [paidNowText, setPaidNowText] = useState("");
+  useEffect(() => {
+    if (paidNowPaisa === 0 && toPaisa(Number(paidNowText) || 0) !== 0) {
+      setPaidNowText("");
+    }
+  }, [paidNowPaisa, paidNowText]);
 
   // Services count towards the total exactly as medicines do. Leaving them out
   // is not a rounding difference: a consultation-only bill totalled zero, the
@@ -55,18 +76,36 @@ export const PaymentPane = forwardRef<
   );
   const changeDue = change(tenderedPaisa, totals.totalPaisa);
   const hasControlled = lines.some((l) => l.item.controlledFlag);
-  const needsPatient = hasControlled && patientName.trim() === "";
+  const onDues = paymentMethod === "credit";
+  // With patients switched on, whoever owes is attached in the patient bar.
+  // Without them, the name typed here is the only record of who owes it.
+  const duesNeedsName = onDues && !config.clinicOn;
+  const needsPatient =
+    (hasControlled || duesNeedsName) && patientName.trim() === "";
+  const leftOnDues = Math.max(0, totals.totalPaisa - paidNowPaisa);
+  const paysItAll = onDues && totals.totalPaisa > 0 && paidNowPaisa >= totals.totalPaisa;
 
   return (
     <div className="flex h-full w-full flex-col gap-4 bg-sage-900 p-5 text-cream-50">
       <div>
-        <label className="mb-1 block text-[12px] text-cream-50/70">
-          Patient name {hasControlled && <span className="text-magenta-100">(required)</span>}
+        <label
+          htmlFor="pos-patient-name"
+          className="mb-1 block text-[12px] text-cream-50/70"
+        >
+          Patient name{" "}
+          {(hasControlled || duesNeedsName) && (
+            <span className="text-magenta-100">(required)</span>
+          )}
         </label>
         <input
+          id="pos-patient-name"
           value={patientName}
           onChange={(e) => setPatientName(e.target.value)}
-          placeholder="Optional — printed on the bill"
+          placeholder={
+            duesNeedsName
+              ? "Who owes this bill"
+              : "Optional — printed on the bill"
+          }
           className={cn(
             "h-10 w-full rounded-[8px] border bg-sage-950/40 px-3 text-[14px] text-cream-50 placeholder:text-cream-50/40 focus:outline-none",
             needsPatient ? "border-magenta-600" : "border-sage-700",
@@ -80,6 +119,7 @@ export const PaymentPane = forwardRef<
           <span className="text-cream-50/70">Bill discount</span>
           <input
             inputMode="decimal"
+            aria-label="Bill discount"
             defaultValue={billDiscountPaisa ? String(paisaToRupees(billDiscountPaisa)) : ""}
             onChange={(e) => setBillDiscount(toPaisa(Number(e.target.value) || 0))}
             placeholder="0"
@@ -103,6 +143,7 @@ export const PaymentPane = forwardRef<
           <button
             key={m.key}
             onClick={() => setPaymentMethod(m.key)}
+            aria-pressed={paymentMethod === m.key}
             className={cn(
               "flex-1 rounded-[8px] py-2 text-[14px] font-medium transition-colors",
               paymentMethod === m.key
@@ -118,8 +159,11 @@ export const PaymentPane = forwardRef<
       {paymentMethod === "cash" && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[14px] text-cream-50/70">Tendered</span>
+            <label htmlFor="pos-tendered" className="text-[14px] text-cream-50/70">
+              Tendered
+            </label>
             <input
+              id="pos-tendered"
               ref={tenderRef}
               inputMode="decimal"
               onChange={(e) => setTendered(toPaisa(Number(e.target.value) || 0))}
@@ -136,6 +180,72 @@ export const PaymentPane = forwardRef<
               {formatPaisa(changeDue)}
             </span>
           </div>
+        </div>
+      )}
+
+      {onDues && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="pos-paid-now" className="text-[14px] text-cream-50/70">
+              Paying now
+            </label>
+            <input
+              id="pos-paid-now"
+              ref={paidNowRef}
+              inputMode="decimal"
+              value={paidNowText}
+              onChange={(e) => {
+                setPaidNowText(e.target.value);
+                setPaidNow(toPaisa(Number(e.target.value) || 0));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSave();
+              }}
+              placeholder="0"
+              className="h-10 w-32 rounded-[8px] border border-sage-700 bg-sage-950/40 px-3 text-right text-[16px] tnum text-cream-50 focus:outline-none"
+            />
+          </div>
+          {paidNowPaisa > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[14px] text-cream-50/70">Paid by</span>
+              <div className="flex gap-1" role="group" aria-label="How it is being paid now">
+                {(["cash", "qr"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setPaidNowMethod(m)}
+                    aria-pressed={paidNowMethod === m}
+                    className={cn(
+                      "rounded-[8px] px-3 py-1 text-[13px] font-medium transition-colors",
+                      paidNowMethod === m
+                        ? "bg-cream-50 text-sage-900"
+                        : "bg-sage-700/50 text-cream-50 hover:bg-sage-700",
+                    )}
+                  >
+                    {m === "cash" ? "Cash" : "QR"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <span className="text-[14px] text-cream-50/70">Left on dues</span>
+            <span className="text-[18px] font-semibold tnum text-warn-100">
+              {formatPaisa(leftOnDues)}
+            </span>
+          </div>
+          {paysItAll ? (
+            <p className="text-[12px] text-warn-100">
+              That pays the whole bill. Choose Cash or QR instead.
+            </p>
+          ) : (
+            config.clinicOn &&
+            !patient && (
+              <p className="text-[12px] text-cream-50/70">
+                Attach the patient who owes this — press{" "}
+                <kbd className="rounded-[4px] bg-sage-700 px-1 text-[11px]">P</kbd>.
+              </p>
+            )
+          )}
         </div>
       )}
 
@@ -156,7 +266,9 @@ export const PaymentPane = forwardRef<
       </button>
       {needsPatient && (
         <p className="text-[12px] text-magenta-100">
-          Enter the patient name for the prescription item before saving.
+          {hasControlled
+            ? "Enter the patient name for the prescription item before saving."
+            : "Enter the name of whoever owes this bill before saving."}
         </p>
       )}
     </div>

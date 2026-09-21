@@ -4,7 +4,7 @@ import type { PrintBill } from "@/lib/print-types";
 const METHOD_LABEL: Record<string, string> = {
   cash: "Cash",
   qr: "QR / digital wallet",
-  credit: "Credit",
+  credit: "Dues",
 };
 
 /**
@@ -194,6 +194,26 @@ export function InvoiceA4({ bill }: { bill: PrintBill }) {
                 <tr>
                   <td>Change</td>
                   <td className="a4-r">{formatPaisa(bill.changePaisa)}</td>
+                </tr>
+              </>
+            )}
+            {/* A bill on dues says what was paid and what is still owed, so
+                the patient's copy is the record of their debt. As at the
+                bill's own date: later payments are not printed back onto it. */}
+            {bill.paymentMethod === "credit" && bill.duePaisa != null && (
+              <>
+                <tr>
+                  <td>
+                    Paid
+                    {bill.paidNowMethod && (bill.paidNowPaisa ?? 0) > 0
+                      ? ` (${bill.paidNowMethod === "qr" ? "QR" : "Cash"})`
+                      : ""}
+                  </td>
+                  <td className="a4-r">{formatPaisa(bill.paidNowPaisa ?? 0)}</td>
+                </tr>
+                <tr className="a4-grand">
+                  <td>Balance due</td>
+                  <td className="a4-r">{formatPaisa(bill.duePaisa)}</td>
                 </tr>
               </>
             )}

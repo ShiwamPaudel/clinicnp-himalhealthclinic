@@ -8,6 +8,7 @@ import {
 import { dashboardMetrics, trendByKind } from "@/lib/repos/reports";
 import { clinicToday, topServices } from "@/lib/repos/clinic-reports";
 import { stockCounts } from "@/lib/repos/batches";
+import { duesTotals } from "@/lib/repos/dues";
 import { getModules } from "@/lib/modules";
 import {
   today,
@@ -50,7 +51,7 @@ export default async function DashboardPage() {
 
   // Only ask for what this install actually shows. A pharmacy-only shop never
   // queries the clinic tables at all.
-  const [metrics, counts, clinic, services, splitTrend] = await Promise.all([
+  const [metrics, counts, clinic, services, splitTrend, dues] = await Promise.all([
     dashboardMetrics({
       todayIso,
       monthFromIso: monthRange.fromIso,
@@ -65,6 +66,7 @@ export default async function DashboardPage() {
     modules.clinic ? clinicToday(todayIso) : Promise.resolve(null),
     modules.clinic ? topServices(monthRange) : Promise.resolve([]),
     trendByKind(daysAheadIso(-29), todayIso),
+    duesTotals(),
   ]);
 
   const bothModules = modules.pharmacy && modules.clinic;
@@ -91,6 +93,25 @@ export default async function DashboardPage() {
           <Stat label={`Fiscal year ${fy.bsLabel}`} value={formatPaisa(metrics.fySalesPaisa)} />
           <Stat label="Bills today" value={String(metrics.billCountToday)} />
         </div>
+
+        {dues.owedPaisa > 0 && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Link
+              href="/dues"
+              className="flex items-center justify-between gap-3 rounded-[10px] border border-line bg-cream-50 p-4 hover:bg-cream-200"
+            >
+              <span className="text-[14px] font-medium text-sage-900">
+                Owed to you
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="text-[12px] text-sage-500">
+                  {dues.people} {dues.people === 1 ? "person" : "people"}
+                </span>
+                <Badge tone="warn">{formatPaisa(dues.owedPaisa)}</Badge>
+              </span>
+            </Link>
+          </div>
+        )}
 
         {clinic && (
           <>

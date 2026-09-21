@@ -17,6 +17,7 @@ import {
   Users,
   Stethoscope,
   FlaskConical,
+  HandCoins,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/lib/repos/users";
@@ -76,6 +77,9 @@ const GROUPS: NavGroup[] = [
     module: null,
     items: [
       { href: "/bills", label: "Bills", icon: ReceiptText },
+      // Medicine and services both go on dues, so it sits with Bills rather
+      // than inside either module's group.
+      { href: "/dues", label: "Dues", icon: HandCoins },
       { href: "/reports", label: "Reports", icon: BarChart3 },
       { href: "/settings/company", label: "Settings", icon: Settings, adminOnly: true },
     ],

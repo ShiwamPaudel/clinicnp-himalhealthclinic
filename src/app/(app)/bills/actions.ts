@@ -6,7 +6,7 @@ import {
   requireUser,
   NotAuthorizedError,
 } from "@/lib/session";
-import { cancelBill, settleCreditBill } from "@/lib/repos/bills";
+import { cancelBill } from "@/lib/repos/bills";
 import { createSaleReturn } from "@/lib/repos/sale-returns";
 import { adToIso, toAD, bsFromDbText, bsToDbText, today } from "@/lib/bs";
 import { z } from "zod";
@@ -17,6 +17,9 @@ export interface ActionResult {
   returnNo?: number;
   /** Set when the original bill's year was closed and this went into the open one. */
   intoOpenYearNote?: string;
+  /** of a return: what came off the patient's dues, and what was handed back */
+  againstDuePaisa?: number;
+  handBackPaisa?: number;
 }
 
 function fail(userMessage: string): ActionResult {
@@ -35,18 +38,8 @@ export async function cancelBillAction(id: string): Promise<ActionResult> {
     await cancelBill(id, admin.id);
     revalidatePath(`/bills/${id}`);
     revalidatePath("/bills");
-    return { ok: true };
-  } catch (err) {
-    return handle(err);
-  }
-}
-
-export async function settleCreditAction(id: string): Promise<ActionResult> {
-  try {
-    await assertAdmin();
-    await settleCreditBill(id);
-    revalidatePath("/bills/credit");
-    revalidatePath(`/bills/${id}`);
+    // a cancelled bill owes nothing, so it leaves the dues list
+    revalidatePath("/dues");
     return { ok: true };
   } catch (err) {
     return handle(err);
@@ -102,10 +95,13 @@ export async function createSaleReturnAction(
     revalidatePath(`/bills/${parsed.data.billId}`);
     revalidatePath("/bills");
     revalidatePath("/reports/service-revenue");
+    if (res.againstDuePaisa > 0) revalidatePath("/dues");
     return {
       ok: true,
       returnNo: res.returnNo,
       intoOpenYearNote: res.intoOpenYearNote,
+      againstDuePaisa: res.againstDuePaisa,
+      handBackPaisa: res.handBackPaisa,
     };
   } catch (err) {
     return handle(err);

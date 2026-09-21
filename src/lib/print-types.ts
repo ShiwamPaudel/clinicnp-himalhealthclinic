@@ -71,5 +71,9 @@ export interface PrintBill {
   paymentMethod: "cash" | "qr" | "credit";
   tenderedPaisa: number;
   changePaisa: number;
+  /** on a bill on dues: what was paid at the counter, how, and what was left owing */
+  paidNowPaisa?: number;
+  paidNowMethod?: "cash" | "qr";
+  duePaisa?: number;
   userName: string;
 }

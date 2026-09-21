@@ -50,6 +50,9 @@ interface BillState {
   patientName: string;
   paymentMethod: PaymentMethod;
   tenderedPaisa: number;
+  /** on a bill on dues: what the patient is paying now; the rest is owed */
+  paidNowPaisa: number;
+  paidNowMethod: "cash" | "qr";
   billDiscountPaisa: number;
   activeLineId: string | null;
 
@@ -79,6 +82,8 @@ interface BillState {
   setPatientName: (name: string) => void;
   setPaymentMethod: (m: PaymentMethod) => void;
   setTendered: (paisa: number) => void;
+  setPaidNow: (paisa: number) => void;
+  setPaidNowMethod: (m: "cash" | "qr") => void;
   setBillDiscount: (paisa: number) => void;
   reset: () => void;
   loadLines: (lines: BillLine[], patientName: string) => void;
@@ -123,6 +128,8 @@ export const useBillStore = create<BillState>((set) => ({
   patientName: "",
   paymentMethod: "cash",
   tenderedPaisa: 0,
+  paidNowPaisa: 0,
+  paidNowMethod: "cash",
   billDiscountPaisa: 0,
   activeLineId: null,
 
@@ -282,6 +289,8 @@ export const useBillStore = create<BillState>((set) => ({
   setPatientName: (name) => set({ patientName: name }),
   setPaymentMethod: (m) => set({ paymentMethod: m }),
   setTendered: (paisa) => set({ tenderedPaisa: Math.max(0, paisa) }),
+  setPaidNow: (paisa) => set({ paidNowPaisa: Math.max(0, paisa) }),
+  setPaidNowMethod: (m) => set({ paidNowMethod: m }),
   setBillDiscount: (paisa) => set({ billDiscountPaisa: Math.max(0, paisa) }),
 
   reset: () =>
@@ -293,6 +302,8 @@ export const useBillStore = create<BillState>((set) => ({
       patientName: "",
       paymentMethod: "cash",
       tenderedPaisa: 0,
+      paidNowPaisa: 0,
+      paidNowMethod: "cash",
       billDiscountPaisa: 0,
       activeLineId: null,
     }),
@@ -303,6 +314,8 @@ export const useBillStore = create<BillState>((set) => ({
       patientName,
       paymentMethod: "cash",
       tenderedPaisa: 0,
+      paidNowPaisa: 0,
+      paidNowMethod: "cash",
       billDiscountPaisa: 0,
       activeLineId: lines[lines.length - 1]?.lineId ?? null,
     }),

@@ -16,6 +16,8 @@ import {
 } from "@/lib/repos/fiscal";
 import { ulid } from "ulid";
 import { db } from "@/lib/db";
+import { splitReturn } from "@/lib/dues";
+import { balanceInTx } from "@/lib/repos/dues";
 
 export interface SaleReturnLineInput {
   billLineId: string;
@@ -82,6 +84,10 @@ export async function createSaleReturn(input: SaleReturnInput): Promise<{
   id: string;
   returnNo: number;
   totalPaisa: number;
+  /** taken off what the patient still owed on this bill */
+  againstDuePaisa: number;
+  /** handed back to the patient as money */
+  handBackPaisa: number;
   intoOpenYearNote: string;
 }> {
   // A closed year's figures must never change after closing (D-029). But a
@@ -135,10 +141,19 @@ export async function createSaleReturn(input: SaleReturnInput): Promise<{
       });
     }
 
+    // A bill still on dues has the return taken off what is owed first:
+    // nobody is handed money for something they have not finished paying for.
+    // Read inside the transaction, so a payment landing at the same moment
+    // cannot be counted twice.
+    const { againstDuePaisa, handBackPaisa } = splitReturn(
+      total,
+      await balanceInTx(tx, input.billId),
+    );
+
     await tx.execute({
-      sql: `INSERT INTO sale_returns (id, return_no, bill_id, date_ad, date_bs, total_paisa, user_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [returnId, returnNo || null, input.billId, input.dateAd, input.dateBs, total, input.userId, now],
+      sql: `INSERT INTO sale_returns (id, return_no, bill_id, date_ad, date_bs, total_paisa, user_id, created_at, against_due_paisa)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [returnId, returnNo || null, input.billId, input.dateAd, input.dateBs, total, input.userId, now, againstDuePaisa],
     });
 
     // Services: money back, nothing back to stock.
@@ -192,6 +207,8 @@ export async function createSaleReturn(input: SaleReturnInput): Promise<{
       id: returnId,
       returnNo,
       totalPaisa: total,
+      againstDuePaisa,
+      handBackPaisa,
       /** set when the original bill's year was closed and this went into the open one */
       intoOpenYearNote,
     };

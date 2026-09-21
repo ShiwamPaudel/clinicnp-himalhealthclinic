@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { createSaleReturnAction } from "@/app/(app)/bills/actions";
 import { ReturnNote, type ReturnNoteData } from "@/components/print/return-note";
 import { formatPaisa } from "@/lib/money";
+import { splitReturn } from "@/lib/dues";
 import type { PrintCompany } from "@/lib/print-types";
 import { strings } from "@/lib/strings";
 
@@ -45,6 +46,7 @@ export function SaleReturnForm({
   lines,
   serviceLines = [],
   yearClosedNote = "",
+  owedPaisa = 0,
 }: {
   billId: string;
   invoiceLabel: string;
@@ -54,6 +56,8 @@ export function SaleReturnForm({
   serviceLines?: RefundServiceLineData[];
   /** Set when the original bill sits in a year that has since been closed. */
   yearClosedNote?: string;
+  /** what the patient still owes on this bill; a return comes off it first */
+  owedPaisa?: number;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -137,6 +141,8 @@ export function SaleReturnForm({
       ],
       totalPaisa: total,
       intoOpenYearNote: res.intoOpenYearNote ?? "",
+      againstDuePaisa: res.againstDuePaisa ?? 0,
+      handBackPaisa: res.handBackPaisa ?? total,
     });
     requestAnimationFrame(() => window.print());
     toast.success(
@@ -260,6 +266,19 @@ export function SaleReturnForm({
         </tbody>
       </Table>
       </>
+      )}
+
+      {owedPaisa > 0 && (
+        <div className="rounded-[10px] bg-warn-100 px-4 py-3 text-[14px] text-warn-600">
+          {formatPaisa(owedPaisa)} is still owed on this bill.
+          {total > 0 &&
+            (() => {
+              const split = splitReturn(total, owedPaisa);
+              return split.handBackPaisa > 0
+                ? ` ${formatPaisa(split.againstDuePaisa)} of this comes off what they owe, and ${formatPaisa(split.handBackPaisa)} is handed back.`
+                : ` This comes off what they owe — nothing is handed back.`;
+            })()}
+        </div>
       )}
 
       <div className="flex items-center justify-end gap-4">

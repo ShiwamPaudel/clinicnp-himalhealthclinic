@@ -123,6 +123,8 @@ One sales series across both modules is deliberate: IRD expects one unbroken seq
 }
 ```
 
+*(As built the payload is flat — `paymentMethod`, `tenderedPaisa`, and since 0019 `paidNowPaisa` / `paidNowMethod` for a bill on dues. See §5.7.)*
+
 Server transaction order (one interactive transaction, all-or-nothing):
 1. Idempotency check on `bills.id` → if present, return `alreadyExisted` with the stored invoice number.
 2. Resolve fiscal year (must be open) and resolve patient: `id` → verify; `ulid` → look up, and if the patient outbox hasn't landed yet, **create the patient from the embedded snapshot in the same transaction** (the bill carries a minimal patient payload precisely for this ordering race).
@@ -130,7 +132,8 @@ Server transaction order (one interactive transaction, all-or-nothing):
 4. Item lines: authoritative FEFO allocation, guarded decrements, `bill_line_batches`, `stock_moves`.
 5. Service lines: insert, snapshotting `partner_cost_paisa` and the doctor's share basis **at the time of billing** (later rate changes must not rewrite history).
 6. Assign invoice number from the open fiscal year.
-7. Enqueue CBMS row.
+7. Enqueue CBMS row. *(Removed — D-041.)*
+8. *(0019)* A bill on dues (`paymentMethod = 'credit'`) is split by `splitAtSale` against the **server's** total into what was paid now and `due_paisa` left owing. A bill that carries `paidNowPaisa` must name who owes it: a patient when the Clinic module is on (route, 409 `dues_patient`), else a typed name (`DueBillError`). A credit bill queued by a counter from before 0019 carries no `paidNowPaisa` and is accepted as it always was, so nothing queued is ever stranded.
 
 If any step fails, nothing is written and the outbox keeps the bill with a plain-language reason on it.
 
@@ -174,6 +177,15 @@ ALTER TABLE users ADD COLUMN role_accountant INTEGER NOT NULL DEFAULT 0;  -- or 
 ```
 
 > **Note on `users.role`:** if `role` carries a CHECK of `('admin','staff')`, adding `'accountant'` requires a table rebuild. Prefer the rebuild (clean three-value role) over a boolean side-column; decide by reading `0001_init.sql` first and record the choice in Memory.md.
+
+```sql
+-- 0019_dues.sql  (additive only; bills.payment_method keeps its CHECK — 'credit' IS "on dues")
+ALTER TABLE bills ADD COLUMN due_paisa INTEGER NOT NULL DEFAULT 0;   -- left owing at the sale
+ALTER TABLE bills ADD COLUMN paid_now_method TEXT;                   -- 'cash'|'qr' for the part paid then
+UPDATE bills SET due_paisa = total_paisa WHERE payment_method = 'credit';
+ALTER TABLE sale_returns ADD COLUMN against_due_paisa INTEGER NOT NULL DEFAULT 0; -- came off the debt, not the drawer
+-- + backfill of against_due_paisa for returns on unsettled credit bills, oldest first, capped at the debt
+```
 
 ### 3.3 New tables
 
@@ -234,6 +246,14 @@ lab_partner_payments(id, lab_partner_id, date_ad, date_bs, amount_paisa, method,
 attachments(id, ulid UNIQUE, patient_id, visit_id NULL, bill_service_line_id NULL,
             kind 'report'|'image'|'scan'|'other', title, file_name, mime, size_bytes,
             blob_key, uploaded_by, created_at, deleted_at NULL, deleted_by NULL)
+
+-- 0019: money paid back against a bill on dues. One row per bill a payment
+-- touches; rows of one payment share receipt_id (minted by the screen — the
+-- idempotency key; UNIQUE (receipt_id, bill_id)). fiscal_year_id is the year the
+-- money came IN. Voided, never deleted.
+due_payments(id, receipt_id, bill_id, amount_paisa, method 'cash'|'qr', note,
+             date_ad, date_bs, fiscal_year_id, user_id, created_at,
+             voided_at NULL, voided_by NULL)
 ```
 
 **Indexes to add:**
@@ -272,7 +292,9 @@ clinicnp/
 │   │   │   ├── items/ · purchases/ · suppliers/
 │   │   │   ├── stock/               # current, low, near-expiry, expired
 │   │   │   │   └── out/             # ★ new stock-out + register
-│   │   │   ├── bills/               # register (kind + FY filters), [id], returns, credit
+│   │   │   ├── bills/               # register (kind + FY filters), [id], returns;
+│   │   │   │                        #   credit/ now only redirects to /dues
+│   │   │   ├── dues/                # ★ who owes what, receive / undo a payment (0019)
 │   │   │   ├── reports/             # + ★ service-revenue, doctor-wise, lab-partner,
 │   │   │   │                        #   visit-register, patients-new-returning,
 │   │   │   │                        #   diagnostics-utilisation, stock-out
@@ -306,10 +328,12 @@ clinicnp/
 │   │   ├── clinic-calc.ts           # ★ service line totals, follow-up rule, doctor share
 │   │   ├── files.ts                 # ★ MIME/size validation, blob key builder
 │   │   ├── age.ts                   # ★ age entry ⇄ display, "as on" handling
+│   │   ├── dues.ts                  # ★ what is owed: split at sale, balance, return
+│   │   │                            #   split, oldest-first allocation, by-person grouping
 │   │   ├── strings.ts               # + derived appName (ClinicNP / Faarma)
 │   │   ├── repos/                   # + ★ patients, visits, services, doctors,
-│   │   │                            #   lab-partners, attachments, adjustments;
-│   │   │                            #   extended: bills, reports, fiscal
+│   │   │                            #   lab-partners, attachments, adjustments, dues;
+│   │   │                            #   extended: bills, reports, fiscal, sale-returns
 │   │   └── validators/
 │   ├── offline/
 │   │   ├── catalog-cache.ts         # + services, patients slice
@@ -317,7 +341,7 @@ clinicnp/
 │   │   ├── patient-outbox.ts        # ★
 │   │   └── sw.ts
 │   └── stores/bill-store.ts         # + service lines, patient ref
-├── db/migrations/0006 … 0010
+├── db/migrations/0006 … 0019
 └── tests/                           # + clinic-calc, age, patient-no, modules, phases
 ```
 
@@ -359,6 +383,21 @@ Integer paisa throughout; rounding is floor-to-paisa with the remainder retained
 
 ### 5.6 Patient number (`lib/patient-no.ts`)
 `UPDATE counters SET next_value = next_value + 1 WHERE name='patient_no' RETURNING next_value` inside the same transaction that inserts the patient. Lifetime, never reset by year close, never reused after a merge (the merged-away number is retired, not recycled).
+
+### 5.7 Dues (`lib/dues.ts` + `lib/repos/dues.ts`) — added 0019
+
+What a bill owes is **never stored**; it is worked out in one place so no two screens can disagree:
+
+```
+owed now = max(0, owed at sale − paid back since (not voided) − returns taken off the debt)
+         = 0 for a paid bill, a cancelled bill, or one cleared by the old "Mark paid"
+```
+
+- **Owed at sale** is `bills.due_paisa`, read through `OWED_AT_SALE_SQL`: a credit bill whose `due_paisa` is 0 is read as owing its **whole total**. New code can never write that combination (`splitAtSale` turns a fully paid dues bill into a cash/QR bill), so it only arises from a counter still running pre-0019 code between the migration and the deploy, or from a pre-0019 backup — both from when credit meant nothing was paid. This is what stops such a bill quietly reading as paid.
+- **Paying back** (`receiveDuePayment`): one person's bills only; the amount may not exceed what they owe; oldest bill first (`allocateOldestFirst`); balances re-read inside the write transaction; idempotent on the screen-minted `receipt_id` (UNIQUE with `bill_id`, so even a racing double press lands once). Recorded on the server's today, in the open fiscal year — a closed year's dues are still collectable and the closed year never moves (D-060's rule).
+- **Returns** (`createSaleReturn`): `splitReturn(return, owed now)` — the debt is cleared first; only the rest is handed back. The split is stored as `sale_returns.against_due_paisa`.
+- **Day close**: cash/QR count only money taken (on a dues bill, `total − owed at sale`, by `paid_now_method`); `credit` is what was left owing; dues paid back today (cancelled bills excluded) are added; expected cash = cash taken + dues paid back in cash − (returns − returns taken off dues).
+- **Grouping by person** (`groupByPerson`): a registered patient by id; otherwise the typed name, folded; a bill with no name stands alone.
 
 ---
 

@@ -62,6 +62,7 @@ for (const f of [".env.local", ".env"]) {
  */
 const TABLES_CHILD_FIRST = [
   // money, deepest first
+  "due_payments",
   "sale_return_service_lines",
   "sale_return_lines",
   "sale_returns",

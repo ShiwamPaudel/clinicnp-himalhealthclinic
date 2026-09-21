@@ -66,6 +66,7 @@ const TABLES = [
   "sale_returns",
   "sale_return_lines",
   "sale_return_service_lines",
+  "due_payments",
   "lab_partner_payments",
 
   // stock movement and adjustments

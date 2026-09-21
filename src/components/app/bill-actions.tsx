@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Printer, Ban, CheckCircle2, RotateCcw } from "lucide-react";
+import { Printer, Ban, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { cancelBillAction, settleCreditAction } from "@/app/(app)/bills/actions";
+import { cancelBillAction } from "@/app/(app)/bills/actions";
 import { InvoiceA4 } from "@/components/print/invoice-a4";
 import type { PrintBill } from "@/lib/print-types";
+import { formatPaisa } from "@/lib/money";
 import { strings } from "@/lib/strings";
 
 export function BillActions({
@@ -17,18 +18,17 @@ export function BillActions({
   printBill,
   isAdmin,
   canCancel,
-  isCredit,
-  creditSettled,
   yearClosed = false,
+  paidBackPaisa = 0,
 }: {
   billId: string;
   printBill: PrintBill;
   isAdmin: boolean;
   canCancel: boolean;
-  isCredit: boolean;
   /** A closed year is readable and printable, never changeable (D-029). */
   yearClosed?: boolean;
-  creditSettled: boolean;
+  /** on a bill on dues: money already paid back against it since */
+  paidBackPaisa?: number;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -42,16 +42,6 @@ export function BillActions({
     setConfirmCancel(false);
     if (res.ok) {
       toast.success("Bill cancelled");
-      router.refresh();
-    } else toast.error(res.userMessage ?? strings.somethingWentWrong);
-  }
-
-  async function doSettle() {
-    setBusy(true);
-    const res = await settleCreditAction(billId);
-    setBusy(false);
-    if (res.ok) {
-      toast.success("Marked as paid");
       router.refresh();
     } else toast.error(res.userMessage ?? strings.somethingWentWrong);
   }
@@ -72,12 +62,6 @@ export function BillActions({
           {yearClosed ? "Refund" : "Sales return"}
         </Button>
       </Link>
-      {!yearClosed && isCredit && !creditSettled && (
-        <Button variant="secondary" onClick={doSettle} disabled={busy}>
-          <CheckCircle2 className="h-4 w-4" />
-          Mark paid
-        </Button>
-      )}
       {isAdmin && canCancel && (
         <Button variant="destructive" onClick={() => setConfirmCancel(true)}>
           <Ban className="h-4 w-4" />
@@ -104,6 +88,13 @@ export function BillActions({
           The bill stays in the register marked <b>Cancelled</b> and keeps its
           number. The stock goes back to the shelf.
         </p>
+        {paidBackPaisa > 0 && (
+          <p className="mt-3 rounded-[8px] bg-warn-100 px-3 py-2 text-[14px] text-warn-600">
+            {formatPaisa(paidBackPaisa)} was paid back against this bill after
+            it was made. Cancelling it does not give that money back — hand it
+            back to them yourself.
+          </p>
+        )}
       </Dialog>
 
       {/* hidden print area for reprint */}

@@ -180,6 +180,9 @@ export const ingestBillSchema = z.object({
   patientName: z.string(),
   paymentMethod: z.enum(["cash", "qr", "credit"]),
   tenderedPaisa: z.number().int().min(0),
+  /** on a bill on dues, what was paid at the counter (absent from older queues) */
+  paidNowPaisa: z.number().int().min(0).optional(),
+  paidNowMethod: z.enum(["cash", "qr"]).optional(),
   billDiscountPaisa: z.number().int().min(0),
   lines: z.array(ingestLineSchema),
   serviceLines: z.array(ingestServiceLineSchema).optional(),

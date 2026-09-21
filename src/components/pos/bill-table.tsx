@@ -24,6 +24,8 @@ export interface PosConfig {
   /** whether the counter says where a medicine is kept, and how loudly */
   rackDisplay: RackDisplay;
   minRateIsCost: boolean;
+  /** patients exist: a bill on dues is attached to one, like a service */
+  clinicOn: boolean;
   canEditRate: boolean;
   /** only an Admin may take something out of the queue unsent */
   isAdmin: boolean;

@@ -38,6 +38,7 @@ const SCREENS = [
   ["/lab", "the laboratory queue"],
   ["/lab/reports", "reports waiting to be handed over"],
   ["/items/pricing", "setting prices"],
+  ["/dues", "who owes money"],
 ];
 
 const findings = [];

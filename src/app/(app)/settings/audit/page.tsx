@@ -12,6 +12,8 @@ const ACTION_LABEL: Record<string, string> = {
   // money and stock
   bill_cancelled: "Bill cancelled",
   rate_override: "Rate edited",
+  "dues.received": "Dues paid back",
+  "dues.voided": "Dues payment undone",
   "stock_out.recorded": "Stock taken out",
   restore: "Everything restored from a backup",
   "fiscal_year.closed": "Year closed",

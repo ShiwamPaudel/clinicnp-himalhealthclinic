@@ -184,6 +184,40 @@ export function PosScreen({ config }: { config: PosConfig }) {
       setPatientOpenSignal((n) => n + 1);
       return;
     }
+
+    const totals = billTotals(
+      s.lines,
+      s.billDiscountPaisa,
+      {
+        vatRegistered: config.vatRegistered,
+        roundingOn: config.roundingOn,
+      },
+      s.serviceLines,
+    );
+
+    // Money owed has to be owed by somebody who can be found again. With
+    // patients switched on that is a registered patient, exactly as for a
+    // service; without them, the name typed on the bill.
+    const onDues = s.paymentMethod === "credit";
+    if (onDues) {
+      if (config.clinicOn && !s.patient) {
+        toast.error("Say who owes this bill — attach the patient.");
+        setPatientOpenSignal((n) => n + 1);
+        return;
+      }
+      if (!config.clinicOn && s.patientName.trim() === "") {
+        toast.error("Enter the name of whoever owes this bill.");
+        return;
+      }
+      if (totals.totalPaisa > 0 && s.paidNowPaisa >= totals.totalPaisa) {
+        toast.error("That pays the whole bill. Choose Cash or QR instead.");
+        return;
+      }
+    }
+    const paidNowPaisa = onDues
+      ? Math.min(s.paidNowPaisa, totals.totalPaisa)
+      : totals.totalPaisa;
+    const duePaisa = onDues ? totals.totalPaisa - paidNowPaisa : 0;
     // A service that needs a doctor, or goes to an outside laboratory, cannot
     // be saved half-answered.
     const svcById = new Map(services.map((x) => [x.id, x]));
@@ -276,16 +310,6 @@ export function PosScreen({ config }: { config: PosConfig }) {
       await applyLocalAllocation(line.item.id, preview.allocations);
     }
 
-    const totals = billTotals(
-      s.lines,
-      s.billDiscountPaisa,
-      {
-        vatRegistered: config.vatRegistered,
-        roundingOn: config.roundingOn,
-      },
-      s.serviceLines,
-    );
-
     const outbox: OutboxBill = {
       id,
       dateBs: config.todayBsText,
@@ -293,6 +317,10 @@ export function PosScreen({ config }: { config: PosConfig }) {
       patientName: s.patientName,
       paymentMethod: s.paymentMethod,
       tenderedPaisa: s.tenderedPaisa,
+      // Always sent on a bill on dues, 0 included: its presence is how the
+      // server knows this counter asked who owes it (see ingestBill).
+      paidNowPaisa: onDues ? paidNowPaisa : undefined,
+      paidNowMethod: onDues ? s.paidNowMethod : undefined,
       billDiscountPaisa: s.billDiscountPaisa,
       lines: outboxLines,
       serviceLines: s.serviceLines.map((l) => ({
@@ -364,6 +392,9 @@ export function PosScreen({ config }: { config: PosConfig }) {
       paymentMethod: s.paymentMethod,
       tenderedPaisa: s.tenderedPaisa,
       changePaisa: change(s.tenderedPaisa, totals.totalPaisa),
+      paidNowPaisa: onDues ? paidNowPaisa : undefined,
+      paidNowMethod: onDues && paidNowPaisa > 0 ? s.paidNowMethod : undefined,
+      duePaisa: onDues ? duePaisa : undefined,
       userName: config.userName,
     });
 
@@ -550,11 +581,17 @@ export function PosScreen({ config }: { config: PosConfig }) {
             onPickService={(svc) => void addService(svc)}
             onEmptyEnter={() => paymentRef.current?.focusTendered()}
           />
-          {services.length > 0 && (
+          {(services.length > 0 || config.clinicOn) && (
             <div className="mt-4">
               <PatientBar
                 patient={store.patient}
-                required={store.serviceLines.length > 0}
+                required={
+                  store.serviceLines.length > 0 ||
+                  (store.paymentMethod === "credit" && config.clinicOn)
+                }
+                requiredFor={
+                  store.serviceLines.length > 0 ? "service" : "dues"
+                }
                 onAttach={(p) => store.setPatient(p)}
                 onClear={() => {
                   store.setPatient(null);
