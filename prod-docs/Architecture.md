@@ -141,13 +141,16 @@ If any step fails, nothing is written and the outbox keeps the bill with a plain
 
 - Upload goes **client → `/api/files/upload` (server) → Vercel Blob**, never client → Blob directly. The route checks session, role, module, size (15 MB) and MIME allow-list (`application/pdf`, `image/jpeg`, `image/png`, `image/webp`, `image/heic`), then stores with `access: 'private'` under `patients/<patientId>/<ulid>.<ext>`.
 - Serving goes through `/api/files/[id]` which re-checks session, role and module, then streams the blob. **No public blob URLs and no signed URLs pasted into HTML.** A file URL that works when logged out is a defect.
-- Metadata lives in `attachments`; the blob holds bytes only. Backup exports metadata plus a manifest of blob keys; a "full backup" job copies blobs to a dated prefix (Phase 5).
+- Metadata lives in `attachments`; the blob holds bytes only. Backup exports metadata plus a manifest of blob keys, not the bytes (D-069); no job copies the bytes.
+- *(As built, C-016)* `lib/file-store.ts` uses the store when `BLOB_STORE_ID` (Vercel-connected private store, OIDC) or `BLOB_READ_WRITE_TOKEN` is set, probes it once with a private write, and refuses a public store (D-055). `storageMode()` reports `cloud` / `local` / `refused`.
 - Deletion is a soft delete (`deleted_at`, `deleted_by`) plus a blob delete after 30 days by the nightly cron, so a mistaken delete is recoverable for a month.
 
 ### 2.7 CBMS, backup, restore
 
 - CBMS queue unchanged; service-only bills are transmitted the same way as medicine bills. Payload builder gains the service block. Nothing about the IRD payload format is invented — the builder is fed from one mapping file and is inert until Admin enables it with real credentials.
 - Backup gains the new tables and the blob manifest; restore replays them in FK-safe order with `PRAGMA defer_foreign_keys=ON` (D-012). **Restoring a backup taken before a fiscal-year close must not silently reopen a closed year** — restore is a whole-database point-in-time return, and the confirmation text says so.
+- *(C-016, D-138)* **Backups are kept in the private store** (§5.9). Before this, the nightly cron and the close-year wizard recorded a size in `backups` and discarded the archive. The `backups` table is unchanged: `blob_url` holds the kept copy's key (`backups/…json.gz`) or `'download'` when nothing was kept. Downloads (`/api/backup/download`, `/api/backup/kept/[id]`) are streamed, because an ordinary Vercel function response stops at 4.5 MB and a backup outgrows that.
+- **Still open:** Restore posts the whole archive as one request body, and a Vercel function's request body also stops at 4.5 MB. Production's archive was 0.9 MB on 2083-06-06. Before it nears the limit, Restore needs to read a kept copy on the server (or upload to the store first) instead of receiving the file.
 
 ---
 
@@ -185,6 +188,10 @@ ALTER TABLE bills ADD COLUMN paid_now_method TEXT;                   -- 'cash'|'
 UPDATE bills SET due_paisa = total_paisa WHERE payment_method = 'credit';
 ALTER TABLE sale_returns ADD COLUMN against_due_paisa INTEGER NOT NULL DEFAULT 0; -- came off the debt, not the drawer
 -- + backfill of against_due_paisa for returns on unsettled credit bills, oldest first, capped at the debt
+
+-- 0020_date_calendar.sql  (one column; only the date picker reads it — D-137)
+ALTER TABLE company ADD COLUMN date_calendar TEXT NOT NULL DEFAULT 'bs'
+  CHECK (date_calendar IN ('bs', 'ad'));
 ```
 
 ### 3.3 New tables
@@ -330,6 +337,10 @@ clinicnp/
 │   │   ├── age.ts                   # ★ age entry ⇄ display, "as on" handling
 │   │   ├── dues.ts                  # ★ what is owed: split at sale, balance, return
 │   │   │                            #   split, oldest-first allocation, by-person grouping
+│   │   ├── calendar-view.ts         # ★ the date box's Nepali/English grids (0020)
+│   │   ├── backups.ts · backup-keys.ts  # ★ keeping backups in the private store (C-016)
+│   │   ├── file-store.ts            # private store, or .filestore in development
+│   │   ├── stream-body.ts           # large responses in pieces (4.5 MB limit)
 │   │   ├── strings.ts               # + derived appName (ClinicNP / Faarma)
 │   │   ├── repos/                   # + ★ patients, visits, services, doctors,
 │   │   │                            #   lab-partners, attachments, adjustments, dues;
@@ -341,7 +352,7 @@ clinicnp/
 │   │   ├── patient-outbox.ts        # ★
 │   │   └── sw.ts
 │   └── stores/bill-store.ts         # + service lines, patient ref
-├── db/migrations/0006 … 0019
+├── db/migrations/0006 … 0020
 └── tests/                           # + clinic-calc, age, patient-no, modules, phases
 ```
 
@@ -398,6 +409,21 @@ owed now = max(0, owed at sale − paid back since (not voided) − returns take
 - **Returns** (`createSaleReturn`): `splitReturn(return, owed now)` — the debt is cleared first; only the rest is handed back. The split is stored as `sale_returns.against_due_paisa`.
 - **Day close**: cash/QR count only money taken (on a dues bill, `total − owed at sale`, by `paid_now_method`); `credit` is what was left owing; dues paid back today (cancelled bills excluded) are added; expected cash = cash taken + dues paid back in cash − (returns − returns taken off dues).
 - **Grouping by person** (`groupByPerson`): a registered patient by id; otherwise the typed name, folded; a bill with no name stands alone.
+
+### 5.8 Date boxes in either calendar (`lib/calendar-view.ts`) — added 0020
+
+Every date box is `DatePickerBS`, and its contract did not change: **BS text in, BS text out** (`"2083-06-06"`). Nothing behind a box knows which calendar was used to pick (D-137).
+
+- `company.date_calendar` (`bs` | `ad`) is read on its own narrow query (`getDateCalendar`, the company row carries the letterhead image) in the `(app)` layout and handed down by `DateCalendarProvider`. Outside the provider a box is Nepali, which is what every box was before.
+- Each open starts from the setting on the chosen date's month; the in-box switch (`switchCalendar`) keeps your place. The English grid converts each day with `toBS` as it is laid out, so a pick emits the BS text of the very day touched; `tests/calendar-view.test.ts` walks every day from 2020 to the end of the range.
+- The converter covers BS 2000/01/01 – 2090/12/30. The last BS month cannot be laid out (a month's length comes from the month after it), so both grids stop at the end of 2090/11 (about March 2034) and disable anything past it instead of throwing.
+
+### 5.9 Kept backups (`lib/backups.ts` + `lib/backup-keys.ts`) — C-016
+
+- `backupStorage()` → `cloud` (private store) · `local` (development and tests: `.filestore`) · `refused` (public store or failing credentials) · `none` (a production server with nothing connected — its own disk is read-only on Vercel).
+- `keepBackup(archive, purpose)` gzips the JSON (about 5×), writes it under `backups/clinicnp-backup-<utc stamp>-<nightly|manual|year-end>.json.gz`, **then** inserts the row — a row never points at nothing. `kind` stays `daily`/`manual` (the table's CHECK); the purpose is in the key.
+- `letGoOfOldBackups()` keeps the newest 30 nightly and 20 manual copies and every year-end copy; it deletes the file first and the row after, so a failure leaves a row the next run retries. Rows with `blob_url = 'download'` are never touched.
+- Callers: the nightly cron (keeps nothing and records nothing without storage), `/api/backup/download` (keeps a copy as a bonus; the download goes ahead if that fails), and `closeYearAction` (must keep one, or with no storage requires a `manual` row from the last 24 hours — D-140).
 
 ---
 

@@ -5,13 +5,16 @@
  * useless without authentication (Rules §1.13). Reading and writing both go
  * through this module; the client never touches storage and never sees a key.
  *
- * When BLOB_READ_WRITE_TOKEN is absent — local development and the test suite —
- * the bytes go to a folder under .filestore instead. That folder is gitignored
- * and is never used when a token is present. It exists so the upload/serve path
- * can be exercised end to end without provisioning a store; it is NOT a second
- * storage backend for production.
+ * Two ways in, both read by the SDK itself: a private store connected to the
+ * Vercel project (BLOB_STORE_ID, signed in with the project's own short-lived
+ * token — preferred, and what Vercel sets up when a store is connected), or a
+ * static BLOB_READ_WRITE_TOKEN. With neither — local development and the test
+ * suite — the bytes go to a folder under .filestore instead. That folder is
+ * gitignored and is never used when credentials are present. It exists so the
+ * upload/serve path can be exercised end to end without provisioning a store;
+ * it is NOT a second storage backend for production.
  *
- * A token pointing at a *public* store is refused outright — see
+ * Credentials for a *public* store are refused outright — see
  * `privateStoreAvailable` below.
  */
 import "server-only";
@@ -24,8 +27,8 @@ export interface StoredFile {
   size: number;
 }
 
-function hasBlobToken(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+function hasBlobCredentials(): boolean {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
 /**
@@ -42,7 +45,7 @@ let storeIsPrivate: boolean | null = null;
 let probe: Promise<boolean> | null = null;
 
 async function privateStoreAvailable(): Promise<boolean> {
-  if (!hasBlobToken()) return false;
+  if (!hasBlobCredentials()) return false;
   if (storeIsPrivate !== null) return storeIsPrivate;
   probe ??= (async () => {
     const { put, del } = await import("@vercel/blob");
@@ -56,12 +59,14 @@ async function privateStoreAvailable(): Promise<boolean> {
       await del(key).catch(() => {});
       storeIsPrivate = true;
     } catch {
-      // The store rejects private writes, so it is a public store.
+      // The store rejects private writes (it is a public store), or the
+      // credentials do not work. Either way it cannot hold patient data.
       storeIsPrivate = false;
       console.error(
-        "[files] The configured storage does not support private files, so it " +
-          "will not be used. Patient files are being kept on this machine " +
-          "instead. Create the store with private access and restart.",
+        "[files] The configured storage cannot keep private files, so it will " +
+          "not be used. Patient files are being kept on this machine instead " +
+          "and backups are not being kept. Connect a store created with " +
+          "private access and redeploy.",
       );
     }
     return storeIsPrivate;
@@ -71,7 +76,17 @@ async function privateStoreAvailable(): Promise<boolean> {
 
 /** True when the configured token points at a store that is unusable as-is. */
 export async function storageMisconfigured(): Promise<boolean> {
-  return hasBlobToken() && !(await privateStoreAvailable());
+  return hasBlobCredentials() && !(await privateStoreAvailable());
+}
+
+/**
+ * Where bytes written now will land: a private cloud store, this machine's
+ * disk (nothing configured), or this machine's disk because the configured
+ * store was refused.
+ */
+export async function storageMode(): Promise<"cloud" | "local" | "refused"> {
+  if (await privateStoreAvailable()) return "cloud";
+  return hasBlobCredentials() ? "refused" : "local";
 }
 
 /** Local fallback root. Kept outside `public/` so nothing is ever served statically. */
@@ -154,7 +169,7 @@ export async function storageDescription(): Promise<string> {
   // The cloud store is reachable but would publish every file it holds, so it
   // is refused and files stay here. Saying so is the point: this machine is
   // the only copy, and whoever reads it should be backing the machine up.
-  if (hasBlobToken()) return "this computer only — secure storage is not set up yet";
+  if (hasBlobCredentials()) return "this computer only — secure storage is not set up yet";
   return "this computer only";
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, CalendarRange, CheckCircle2 } from "lucide-react";
+import { Lock, CalendarRange, CheckCircle2, Download } from "lucide-react";
 import { closeYearAction } from "@/app/(app)/settings/actions";
 import { pendingCount } from "@/offline/outbox";
 import { useToast } from "@/components/ui/toast";
@@ -22,10 +22,13 @@ export function FiscalYearsPanel({
   years,
   openLabel,
   nextLabel,
+  backupsKept,
 }: {
   years: FiscalYearView[];
   openLabel: string | null;
   nextLabel: string | null;
+  /** a private store is connected, so the close keeps its own backup */
+  backupsKept: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [typed, setTyped] = useState("");
@@ -129,7 +132,24 @@ export function FiscalYearsPanel({
           <p>Here&apos;s what happens, in order:</p>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sage-500">
             <li>Any bill still waiting to be sent stops this — nothing is lost.</li>
-            <li>A backup is taken automatically and named for you.</li>
+            {backupsKept ? (
+              <li>
+                A backup is saved first, and kept in Settings → Backup. If it
+                can&apos;t be saved, nothing closes.
+              </li>
+            ) : (
+              <li>
+                You need a backup from the last day. Automatic backups are not
+                set up, so download one now and keep the file safe:{" "}
+                <a
+                  href="/api/backup/download"
+                  className="inline-flex items-center gap-1 font-medium text-sage-900 underline"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download a backup
+                </a>
+              </li>
+            )}
             <li>{nextLabel} opens, and invoice numbers restart at 1.</li>
             <li>{openLabel} closes. It stays readable and printable, but nothing in it can change.</li>
           </ol>
@@ -184,10 +204,16 @@ export function FiscalYearsPanel({
             {done?.closed} is closed — you can still read and print it.
             Invoice numbers start again at 1.
           </p>
-          {done?.backup && (
+          {done?.backup ? (
             <p className="text-sage-500">
-              A backup was taken first:{" "}
-              <span className="font-mono text-sage-900">{done.backup}</span>
+              A backup was saved first:{" "}
+              <span className="font-mono text-sage-900">{done.backup}</span>. It
+              is in Settings → Backup.
+            </p>
+          ) : (
+            <p className="text-sage-500">
+              Keep the backup you downloaded. It is the way back to how things
+              were before the year closed.
             </p>
           )}
         </div>

@@ -30,6 +30,7 @@ export function CompanyForm({ initial }: { initial: Company }) {
       expiryAlertDays: Number(data.expiryAlertDays) as 30 | 60 | 90,
       logoUrl: data.logoUrl || null,
       rackDisplay: data.rackDisplay ?? "off",
+      dateCalendar: data.dateCalendar ?? "bs",
     });
     setSaving(false);
     if (res.ok) toast.success(strings.saved);
@@ -75,6 +76,16 @@ export function CompanyForm({ initial }: { initial: Company }) {
               <option value={30}>30 days</option>
               <option value={60}>60 days</option>
               <option value={90}>90 days</option>
+            </Select>
+          </Field>
+          <Field
+            label="Calendar for dates"
+            htmlFor="dateCalendar"
+            hint="Date boxes open in this one. Each box can switch for a single pick. Bills and reports stay in Nepali dates."
+          >
+            <Select id="dateCalendar" {...register("dateCalendar")}>
+              <option value="bs">Nepali (BS)</option>
+              <option value="ad">English (AD)</option>
             </Select>
           </Field>
         </div>

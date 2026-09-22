@@ -212,6 +212,7 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
                   id={`mfg-${i}`}
                   value={l.mfgDateBs}
                   onChange={(v) => setLine(i, { mfgDateBs: v })}
+                  clearable
                 />
               </Field>
 

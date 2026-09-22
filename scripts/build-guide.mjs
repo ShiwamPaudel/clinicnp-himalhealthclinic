@@ -186,6 +186,20 @@ const CHAPTERS = [
           "Every write-off is recorded, so the value that left your shelf is always explainable.",
         ],
       },
+      {
+        img: "54-opening-stock-dates",
+        title: "Picking a date — Nepali or English",
+        blurb:
+          "Every date box opens a small calendar with a <b>नेपाली | English</b> switch at the top, so an expiry printed on a pack as “EXP 09/2027” can be picked straight off the pack, with no converting in your head.",
+        points: [
+          "Which calendar opens first is set once for the shop, in <b>Settings → Company → Calendar for dates</b>. The box also writes the chosen date in that calendar.",
+          "The switch is for one pick. The next time a box opens, it starts from the setting again.",
+          "<b>«</b> and <b>»</b> jump a whole year, which is quicker for an expiry two or three years away.",
+          "Under the calendar the chosen day is written both ways, for example <i>28 Ashwin 2084 = 15 Oct 2027</i>, so you can check it against the pack.",
+          "Only the picking changes. Bills, reports and the day close stay in Nepali dates.",
+          "The screen shown is <b>Stock → Opening stock</b>: what was already on the shelf when ClinicNP arrived. It is not a purchase, so there is no supplier and nothing owed.",
+        ],
+      },
     ],
   },
   {
@@ -238,6 +252,7 @@ const CHAPTERS = [
           "Copy a supplier's invoice into ClinicNP: pick the supplier, add each medicine with its batch number, expiry, cost, and quantity.",
         points: [
           "Enter the <b>batch number</b> and <b>expiry date</b> for each line — this is what powers sell-oldest-first and the expiry warnings.",
+          "The <b>manufacture date</b> is optional. Leave it empty when the pack or the bill does not show one; if you do fill it in, it has to come before the expiry.",
           "Enter the <b>cost</b> you paid; ClinicNP uses it to work out real profit later, batch by batch.",
           "Save, and every line lands on the shelf and in your supplier's ledger.",
         ],
@@ -575,7 +590,8 @@ const CHAPTERS = [
           "Set up your shop once: name, address, PAN, and the choices that shape your bills and warnings. This is Owner-only.",
         points: [
           "Your <b>name, address, PAN/DDA</b> and <b>invoice footer</b> print on every bill.",
-          "Choose your <b>print format</b> (thermal or A5), the <b>near-expiry window</b>, and whether to <b>round</b> the grand total.",
+          "Choose the <b>near-expiry window</b> and whether to <b>round</b> the grand total.",
+          "Choose the <b>calendar for dates</b>: Nepali (BS) or English (AD). Every date box opens in it, and each box can still switch for a single pick.",
           "Turn on a warning if a rate is ever set <b>below what you paid</b>.",
         ],
       },
@@ -596,7 +612,11 @@ const CHAPTERS = [
         blurb:
           "Your shop's whole record can be saved to a file and, if ever needed, put back exactly as it was.",
         points: [
-          "<b>Back up now</b> downloads a file with everything in it. <b>That file is your backup</b> — keep it somewhere other than this computer. Do it at least once a week, and before anything big like closing the year.",
+          "<b>Back up now</b> downloads a file with everything in it. Keep it somewhere other than this computer.",
+          "<b>Automatic backups</b> need private storage, connected once by whoever set up ClinicNP. Then a full copy is saved every night and the last 30 are kept, every Back up now is kept there too, and a green note on this screen says so.",
+          "Until then an orange note says automatic backups are <b>off</b>, and the files you download are the only backups. Back up at least once a week, and before anything big.",
+          "Each kept copy has a <b>Download</b> button. <i>Downloaded only</i> means the only copy is the file that was downloaded. <i>Not kept</i> marks a nightly backup from before copies were kept, when only its size was written down.",
+          "Closing the year saves a copy first. Without private storage it asks you to download one first, and will not close until you have.",
           "<b>Restore</b> replaces everything with a backup file. It asks you to type a confirmation first, and it's all-or-nothing — it can never leave your data half-changed.",
         ],
       },

@@ -1,22 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
-  BS_MONTHS_EN,
-  BS_MONTHS_NP,
-  bsDayOfWeek,
-  bsMonthRange,
-  bsToDbText,
-  formatBS,
-  toAD,
-  today,
-  type BSDate,
-} from "@/lib/bs";
-import { adToIso } from "@/lib/bs";
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Calendar,
+} from "lucide-react";
+import {
+  canStep,
+  formatInCalendar,
+  monthGrid,
+  parseBsValue,
+  stepView,
+  switchCalendar,
+  todayBsText,
+  viewContaining,
+  type DateCalendar,
+  type MonthView,
+} from "@/lib/calendar-view";
+import { useDateCalendar } from "@/components/ui/date-calendar-context";
 import { cn } from "@/lib/cn";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun..Sat
+
+/** The popup's width, and the gap it keeps from the edge of the screen. */
+const POPUP_WIDTH = 288;
+const EDGE_GAP = 8;
 
 export interface DatePickerBSProps {
   /** Selected date as denormalized BS text "YYYY-MM-DD", or empty. */
@@ -24,98 +35,180 @@ export interface DatePickerBSProps {
   onChange: (bsText: string) => void;
   id?: string;
   placeholder?: string;
+  /** Offer "Clear", for a date that may be left empty. Emits "". */
+  clearable?: boolean;
 }
 
-/** BS date picker. Emits the denormalized BS text ("2083-04-01"). */
+/**
+ * The date box. Takes and emits BS text ("2083-04-01") whichever calendar it
+ * shows, so nothing behind it changes (D-137).
+ *
+ * It opens in the shop's calendar from Settings → Company and writes the
+ * chosen date in that calendar too. The Nepali / English switch inside flips
+ * the grid for this one pick, then the next open starts from the setting
+ * again.
+ */
 export function DatePickerBS({
   value,
   onChange,
   id,
   placeholder = "Select date",
+  clearable = false,
 }: DatePickerBSProps) {
-  const selected = useMemo<BSDate | null>(() => {
-    if (!value) return null;
-    const [y, m, d] = value.split("-").map(Number);
-    if (!y || !m || !d) return null;
-    return { year: y, month: m, day: d };
-  }, [value]);
+  const shopCalendar = useDateCalendar();
+  const selected = parseBsValue(value) ? value! : "";
 
-  const now = today();
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<{ year: number; month: number }>(
-    selected ?? { year: now.year, month: now.month },
+  /** How far left the popup moves so it stays on a narrow screen. */
+  const [shift, setShift] = useState(0);
+  const [view, setView] = useState<MonthView>(() =>
+    viewContaining(shopCalendar, selected),
   );
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const daysInMonth = bsMonthRange(view.year, view.month).endBs.day;
-  const firstDow = bsDayOfWeek({ year: view.year, month: view.month, day: 1 });
-
-  function step(delta: number) {
-    let m = view.month + delta;
-    let y = view.year;
-    if (m < 1) {
-      m = 12;
-      y--;
-    } else if (m > 12) {
-      m = 1;
-      y++;
+  // Close on a click anywhere else, or on Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     }
-    setView({ year: y, month: m });
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function toggleOpen() {
+    if (!open) {
+      // Every open starts from the shop's calendar, on the chosen date's month.
+      setView(viewContaining(shopCalendar, selected));
+      // A box near the right of a phone screen would push the popup off it.
+      const rect = buttonRef.current?.getBoundingClientRect();
+      const over = rect ? rect.left + POPUP_WIDTH - (window.innerWidth - EDGE_GAP) : 0;
+      setShift(rect && over > 0 ? -Math.min(over, Math.max(0, rect.left - EDGE_GAP)) : 0);
+    }
+    setOpen((o) => !o);
   }
 
-  function pick(day: number) {
-    const bs: BSDate = { year: view.year, month: view.month, day };
-    onChange(bsToDbText(bs));
+  function showCalendar(calendar: DateCalendar) {
+    if (calendar !== view.calendar) setView(switchCalendar(view, selected));
+  }
+
+  function pick(bsText: string) {
+    onChange(bsText);
     setOpen(false);
   }
 
-  const label = selected
-    ? formatBS(selected, { form: "long", monthScript: "en" })
-    : placeholder;
-
-  const viewAd = adToIso(toAD({ year: view.year, month: view.month, day: 1 }));
+  const grid = monthGrid(view);
+  const todayText = todayBsText();
+  const label = selected ? formatInCalendar(selected, shopCalendar) : placeholder;
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         id={id}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
+        aria-expanded={open}
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-[8px] border border-line bg-cream-50 px-3 text-left text-[14px]",
           selected ? "text-sage-950" : "text-sage-300",
         )}
       >
-        <span>{label}</span>
-        <Calendar className="h-4 w-4 text-sage-500" />
+        <span className="truncate">{label}</span>
+        <Calendar className="h-4 w-4 shrink-0 text-sage-500" />
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-[280px] rounded-[10px] border border-line bg-cream-50 p-3 shadow-[0_1px_2px_rgb(22_36_27_/_6%),0_4px_12px_rgb(22_36_27_/_5%)]">
-          <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => step(-1)}
-              aria-label="Previous month"
-              className="rounded-[8px] p-1 hover:bg-cream-200"
+        <div
+          style={{ width: POPUP_WIDTH, left: shift }}
+          className="absolute z-50 mt-1 rounded-[10px] border border-line bg-cream-50 p-3 shadow-[0_1px_2px_rgb(22_36_27_/_6%),0_4px_12px_rgb(22_36_27_/_5%)]">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div
+              role="group"
+              aria-label="Calendar"
+              className="inline-flex rounded-[999px] border border-line bg-cream-100 p-0.5"
             >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="text-center">
-              <div className="deva text-[15px] font-semibold text-sage-900">
-                {BS_MONTHS_NP[view.month - 1]} {view.year}
-              </div>
-              <div className="text-[11px] text-sage-500">
-                {BS_MONTHS_EN[view.month - 1]} · {viewAd}
-              </div>
+              <CalendarChip
+                active={view.calendar === "bs"}
+                onClick={() => showCalendar("bs")}
+              >
+                <span lang="ne" className="deva">
+                  नेपाली
+                </span>
+              </CalendarChip>
+              <CalendarChip
+                active={view.calendar === "ad"}
+                onClick={() => showCalendar("ad")}
+              >
+                English
+              </CalendarChip>
             </div>
-            <button
-              type="button"
-              onClick={() => step(1)}
-              aria-label="Next month"
-              className="rounded-[8px] p-1 hover:bg-cream-200"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            {clearable && selected && (
+              <button
+                type="button"
+                onClick={() => pick("")}
+                className="rounded-[8px] px-2 py-1 text-[12px] text-sage-500 hover:bg-cream-200 hover:text-sage-900"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex">
+              <StepButton
+                onClick={() => setView(stepView(view, -12))}
+                disabled={!canStep(view, -12)}
+                label="Previous year"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </StepButton>
+              <StepButton
+                onClick={() => setView(stepView(view, -1))}
+                disabled={!canStep(view, -1)}
+                label="Previous month"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </StepButton>
+            </div>
+            <div className="min-w-0 text-center" aria-live="polite">
+              <div
+                className={cn(
+                  "text-[15px] font-semibold text-sage-900",
+                  grid.titleScript === "np" && "deva",
+                )}
+              >
+                {grid.title}
+              </div>
+              <div className="text-[11px] text-sage-500">{grid.subtitle}</div>
+            </div>
+            <div className="flex">
+              <StepButton
+                onClick={() => setView(stepView(view, 1))}
+                disabled={!canStep(view, 1)}
+                label="Next month"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </StepButton>
+              <StepButton
+                onClick={() => setView(stepView(view, 12))}
+                disabled={!canStep(view, 12)}
+                label="Next year"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </StepButton>
+            </div>
           </div>
 
           <div className="grid grid-cols-7 gap-0.5 text-center">
@@ -130,35 +223,32 @@ export function DatePickerBS({
                 {w}
               </div>
             ))}
-            {Array.from({ length: firstDow }).map((_, i) => (
+            {Array.from({ length: grid.leadingBlanks }).map((_, i) => (
               <div key={`blank-${i}`} />
             ))}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day = i + 1;
-              const dow = (firstDow + i) % 7;
-              const isSelected =
-                selected?.year === view.year &&
-                selected?.month === view.month &&
-                selected?.day === day;
-              const isToday =
-                now.year === view.year &&
-                now.month === view.month &&
-                now.day === day;
+            {grid.days.map((d) => {
+              const isSelected = !d.disabled && d.bsText === selected;
+              const isToday = !d.disabled && d.bsText === todayText;
               return (
                 <button
-                  key={day}
+                  key={d.day}
                   type="button"
-                  onClick={() => pick(day)}
+                  disabled={d.disabled}
+                  onClick={() => pick(d.bsText)}
+                  aria-label={d.label}
+                  aria-pressed={isSelected}
                   className={cn(
                     "flex h-8 items-center justify-center rounded-[8px] text-[13px] tnum",
-                    isSelected
-                      ? "bg-sage-700 text-cream-50"
-                      : "hover:bg-cream-200",
-                    !isSelected && dow === 6 && "text-danger-600",
-                    !isSelected && isToday && "ring-1 ring-sage-500",
+                    d.disabled
+                      ? "cursor-not-allowed text-sage-300"
+                      : isSelected
+                        ? "bg-sage-700 text-cream-50"
+                        : "hover:bg-cream-200",
+                    !d.disabled && !isSelected && d.weekday === 6 && "text-danger-600",
+                    !d.disabled && !isSelected && isToday && "ring-1 ring-sage-500",
                   )}
                 >
-                  {day}
+                  {d.day}
                 </button>
               );
             })}
@@ -166,11 +256,61 @@ export function DatePickerBS({
 
           {selected && (
             <div className="mt-2 border-t border-line pt-2 text-[11px] text-sage-500">
-              AD: {adToIso(toAD(selected))}
+              {formatInCalendar(selected, "bs")} = {formatInCalendar(selected, "ad")}
             </div>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+function CalendarChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-[999px] px-2.5 py-0.5 text-[12px] transition-colors",
+        active
+          ? "bg-sage-700 text-cream-50"
+          : "text-sage-600 hover:text-sage-900",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StepButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="rounded-[8px] p-1 hover:bg-cream-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+    >
+      {children}
+    </button>
   );
 }

@@ -96,17 +96,26 @@ export const supplierPaymentSchema = z.object({
   note: z.string(),
 });
 
-export const purchaseLineSchema = z.object({
-  itemId: z.string().min(1),
-  batchNo: z.string().min(1, "Batch number required"),
-  mfgDateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a manufacture date"),
-  expiryDateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick an expiry date"),
-  unitLevel: z.number().int().min(0).max(2),
-  qty: z.number().int().min(1, "Quantity required"),
-  freeQty: z.number().int().min(0),
-  unitCostPaisa: z.number().int().min(0),
-  discountPaisa: z.number().int().min(0),
-});
+export const purchaseLineSchema = z
+  .object({
+    itemId: z.string().min(1),
+    batchNo: z.string().min(1, "Batch number required"),
+    // Optional: plenty of packs and supplier bills do not print one. Empty
+    // string means "not known" and is stored as NULL.
+    mfgDateBs: z
+      .string()
+      .regex(/^(\d{4}-\d{2}-\d{2})?$/, "Pick a manufacture date, or leave it empty"),
+    expiryDateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick an expiry date"),
+    unitLevel: z.number().int().min(0).max(2),
+    qty: z.number().int().min(1, "Quantity required"),
+    freeQty: z.number().int().min(0),
+    unitCostPaisa: z.number().int().min(0),
+    discountPaisa: z.number().int().min(0),
+  })
+  // Both are zero-padded BS text, so comparing the strings compares the dates.
+  .refine((l) => !l.mfgDateBs || l.mfgDateBs <= l.expiryDateBs, {
+    message: "A medicine cannot expire before it was manufactured. Check the dates.",
+  });
 
 export const purchaseSchema = z.object({
   supplierId: z.string().min(1, "Choose a supplier"),
@@ -232,6 +241,7 @@ export const companySchema = z.object({
   expiryAlertDays: z.union([z.literal(30), z.literal(60), z.literal(90)]),
   minRateIsCost: z.boolean(),
   rackDisplay: z.enum(["off", "text", "visual"]),
+  dateCalendar: z.enum(["bs", "ad"]).default("bs"),
 });
 export type CompanyInput = z.infer<typeof companySchema>;
 

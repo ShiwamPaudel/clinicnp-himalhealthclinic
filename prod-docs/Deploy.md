@@ -16,22 +16,40 @@ changes behaviour on the fifth, which is why it is listed with the rest.
 | `TURSO_AUTH_TOKEN` | its token | nothing works |
 | `AUTH_SECRET` | signs the session cookie | nobody can sign in |
 | `CRON_SECRET` | what the nightly jobs present to prove they are the scheduler | the crons are refused |
-| `BLOB_READ_WRITE_TOKEN` | private file storage | **patient files are written to the machine's own disk instead** — they survive nothing, and a second instance cannot see them |
+| `BLOB_STORE_ID` (or `BLOB_READ_WRITE_TOKEN`) | private storage for patient files **and backups** — set by Vercel when a private Blob store is connected to the project | **patient files are written to the machine's own disk instead** (they survive nothing, and a second instance cannot see them) and **no backup is kept anywhere** — Settings → Backup says "Automatic backups are off" |
 
 Generate the two secrets with `openssl rand -base64 32`. Set every one of them
 for Production *and* Preview, or a preview deployment will quietly write to
 whichever database it can reach.
 
-### The storage token needs a private store
+### The storage has to be a private store
 
 A Vercel Blob store is created either public or private and the choice is
 permanent. A public store hands out URLs that work forever for anybody who has
-them, which is not acceptable for a patient's lab report, so the app **probes
-the store once and refuses to use a public one** — files fall back to local
-disk and the go-live checklist reports it.
+them, which is not acceptable for a patient's lab report or a backup holding
+every patient's details, so the app **probes the store once and refuses to use
+a public one** — files fall back to local disk, nothing is backed up, and
+Settings → Backup says so.
 
-If files are landing on disk with a token set, the store is public and a new
-one has to be created.
+The store connected on 2083-06-05 is **public** and is refused. Private Blob
+storage has been generally available since 30 June 2026 and `@vercel/blob`
+2.8 (already installed) supports it. To connect one (C-016, D-138):
+
+1. Vercel → the project → **Storage** → the existing public Blob store →
+   **Projects** → disconnect it from this project. Nothing is stored in it:
+   the app has refused it from the start.
+2. **Storage → Create Database → Blob → Access: Private** → connect it to the
+   project for Production and Preview. Vercel adds `BLOB_STORE_ID`, and
+   functions sign in with the project's own short-lived OIDC token, so there
+   is no long-lived secret to copy anywhere.
+3. Redeploy (or push). Then **Settings → Backup** shows a green "Automatic
+   backups are on", and adding a patient file no longer says it is kept on
+   this computer.
+
+The SDK prefers `BLOB_STORE_ID` over `BLOB_READ_WRITE_TOKEN` on Vercel, so an
+old public token left behind does no harm once the private store is
+connected. For a local run against the private store, `vercel env pull`
+brings the OIDC token down with the other variables.
 
 ---
 
@@ -126,16 +144,19 @@ is safe to run when there is nothing to do.
 - [ ] Sign in as the bootstrapped Admin. If this fails, the password hash and
       `AUTH_SECRET` are the two places to look.
 - [ ] **Settings → Backup**: take one, download it, and confirm the file opens.
+      The note under the button must be the green "Automatic backups are on".
 - [ ] Add a patient file and confirm the app does **not** say files are being
       kept on this computer.
 - [ ] Check both crons appear under the project's Cron Jobs, and confirm the
-      next morning that the nightly backup ran.
+      next morning that a **Nightly** row with a **Download** button is in
+      Settings → Backup. Download it once and restore it into a throwaway
+      database.
 
 ### The crons
 
 | Path | When | What it does |
 |---|---|---|
-| `/api/cron/backup` | 18:00 UTC daily | takes the nightly backup |
+| `/api/cron/backup` | 18:00 UTC daily | keeps a full backup in the private store (gzipped) and lets go of nightly copies past the newest 30; with no private store it keeps nothing and records nothing |
 | `/api/cron/files-gc` | 18:30 UTC daily | permanently removes files deleted more than 30 days ago |
 
 Both refuse anything that does not present `CRON_SECRET`, so they are safe to
@@ -257,6 +278,31 @@ made in the gap still shows as owed, never as paid.
 
 **Deploy first (not possible).** `pnpm build` refuses while production lacks
 0019, which is the point of the guard below.
+
+## 0019 and 0020 together — one run
+
+On 2083-06-06 production was still at 0018: the pushes `dues fix` and
+`discount changes` were refused by the guard, so the live site is still the
+build from before them. **`0020_date_calendar.sql`** is one `ALTER TABLE
+company ADD COLUMN date_calendar TEXT NOT NULL DEFAULT 'bs'` with a CHECK —
+the calendar the date boxes open in (D-137). Nothing is rebuilt.
+
+Both were rehearsed together on a replica built from a full read-only copy of
+production taken that day (42 tables, 3,132 rows, kept at
+`backups/prod-before-0020-2026-09-22T05-11-10Z.json`, gitignored): the guard
+refused, `pnpm db:migrate` applied 0019 (10 statements) and 0020
+(1 statement) with every `@verify` count unchanged, the guard then passed at
+20 migrations, every table's row count and every field of the company row
+matched the copy, and `date_calendar` came out `bs`.
+
+    (Settings -> Backup -> Back up now, and keep the file)
+    pnpm db:migrate          # .env.local points at production; runs 0019 then 0020
+    pnpm db:check            # "schema is up to date (20 migrations)"
+    git push                 # Vercel builds; db:check now lets it through
+
+The same reasoning as 0019 makes the order safe: the code running before the
+deploy never reads `date_calendar`, and the new code is not built until the
+column exists.
 
 ### The build now refuses to get ahead of the schema
 

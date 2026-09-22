@@ -71,6 +71,7 @@ describe("the company profile", () => {
       expiryAlertDays: 90,
       minRateIsCost: true,
       rackDisplay: "off",
+      dateCalendar: "ad",
     });
 
     const saved = await getCompany();
@@ -84,6 +85,7 @@ describe("the company profile", () => {
     expect(saved.roundingOn).toBe(true);
     expect(saved.expiryAlertDays).toBe(90);
     expect(saved.minRateIsCost).toBe(true);
+    expect(saved.dateCalendar).toBe("ad");
   });
 
   it("changing the name a second time updates the same single row", async () => {
@@ -123,6 +125,7 @@ describe("the company profile", () => {
       expiryAlertDays: 30,
       minRateIsCost: true,
       rackDisplay: "off",
+      dateCalendar: "bs",
     });
 
     const c = await getCompany();
@@ -131,5 +134,38 @@ describe("the company profile", () => {
     expect(c.minRateIsCost).toBe(true);
     expect(c.expiryAlertDays).toBe(30);
     expect(c.invoiceFooter).toBe("f");
+    expect(c.dateCalendar).toBe("bs");
+  });
+});
+
+describe("the calendar the date boxes open in (0020)", () => {
+  it("is read on its own for the layout, and follows what was saved", async () => {
+    const { saveCompany, getCompany, getDateCalendar } = await import(
+      "@/lib/repos/company"
+    );
+    const before = await getCompany();
+    await saveCompany({ ...before, dateCalendar: "ad" });
+    expect(await getDateCalendar()).toBe("ad");
+    await saveCompany({ ...before, dateCalendar: "bs" });
+    expect(await getDateCalendar()).toBe("bs");
+  });
+
+  it("is Nepali for a shop that never chose, which is what every box showed before", async () => {
+    const { db } = await import("@/lib/db");
+    const { getDateCalendar } = await import("@/lib/repos/company");
+    // A company row written without the column — an old backup being
+    // restored, or a row that predates 0020 — takes the column default.
+    await db().execute("DELETE FROM company");
+    await db().execute(
+      "INSERT INTO company (id, name, updated_at) VALUES (1, 'Old row', '2026-01-01T00:00:00Z')",
+    );
+    expect(await getDateCalendar()).toBe("bs");
+  });
+
+  it("refuses anything but the two calendars at the database", async () => {
+    const { db } = await import("@/lib/db");
+    await expect(
+      db().execute("UPDATE company SET date_calendar = 'nepali' WHERE id = 1"),
+    ).rejects.toThrow();
   });
 });

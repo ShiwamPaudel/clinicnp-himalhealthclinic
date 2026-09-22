@@ -2,7 +2,9 @@ import { requireBackOfficeUser } from "@/lib/session";
 import { getModules } from "@/lib/modules";
 import { appNameFor } from "@/lib/app-name";
 import { listUsers } from "@/lib/repos/users";
+import { getDateCalendar } from "@/lib/repos/company";
 import { Sidebar } from "@/components/app/sidebar";
+import { DateCalendarProvider } from "@/components/ui/date-calendar-context";
 
 export default async function AppLayout({
   children,
@@ -12,6 +14,7 @@ export default async function AppLayout({
   const user = await requireBackOfficeUser();
   const modules = await getModules();
   const all = await listUsers();
+  const dateCalendar = await getDateCalendar();
   const switchable = all
     // A doctor's sign-in never appears in quick-switch: it belongs to one
     // person on their own phone, not to the shared counter machine.
@@ -27,7 +30,7 @@ export default async function AppLayout({
         modules={modules}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        {children}
+        <DateCalendarProvider calendar={dateCalendar}>{children}</DateCalendarProvider>
       </div>
     </div>
   );

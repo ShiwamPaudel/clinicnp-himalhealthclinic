@@ -109,7 +109,7 @@ Everything in Faarma v1 carries forward unchanged unless listed below: keyboard 
 - Viewing a closed year shows a persistent, calm banner: *"You're looking at 2082/83. This year is closed — you can read and print, but not change anything."* All create/edit/cancel/settle actions are disabled in that context.
 - **Year-end rollover** (Settings → Fiscal years → *Close year and start 2084/85*), Admin only, guided:
   1. Refuses to run while any bill is still waiting to be sent (outbox or CBMS queue) — names the count in plain words.
-  2. Takes a backup automatically and shows its name.
+  2. Makes sure there is a way back first (D-140). With private storage connected it keeps a backup there, shows its name, and does not close if the backup cannot be saved. Without it, it asks for a backup downloaded within the last day (a link is in the dialog) and refuses until there is one.
   3. Creates the next fiscal year, sets it open, resets invoice / return / purchase sequences to 1.
   4. Marks the previous year closed, stamped with who did it and when.
   5. Writes an audit entry. Cannot be undone from the interface.
@@ -308,6 +308,26 @@ No interest, no due dates or reminders, no SMS, no credit limits, no advance/dep
 
 ---
 
+## 4D — DATES, PURCHASE DATES AND BACKUPS *(added 2083-06-06)*
+
+### 4D.1 Date boxes in Nepali or English
+Medicine packs and supplier bills print expiry in English dates ("EXP 06/2027"); every date box offered only the Nepali calendar, so each one was converted in somebody's head.
+- **Settings → Company → Calendar for dates**: Nepali (BS, the default) or English (AD). Every date box in the app opens in that calendar and writes the chosen date in it.
+- Inside every box, a small **नेपाली | English** switch flips the grid for that one pick; the next open starts from the setting again. `«` `»` jump a year; under the grid the chosen day is written both ways ("28 Ashwin 2084 = 15 Oct 2027").
+- **Only the picking changes.** Every date is still stored, sent, printed and reported in BS. Bills, reports, the day close and the header date stay Nepali (D-137).
+- A date of birth on the patient form is not one of these boxes: it is typed, in English, as it always was.
+
+### 4D.2 Manufacture date is optional on a purchase
+Many packs and supplier bills do not print one. The purchase line reads **Mfg date (optional)**; batch number and expiry stay required. A manufacture date that is given must be on or before the expiry (D-139). Opening stock already treated it as optional.
+
+### 4D.3 Backups are kept, not just counted
+Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote a size into a list and kept no file (D-138).
+- Backups are kept only in **private** storage, the same store patient files use. With it connected: a full copy every night (the newest 30 kept), a copy of every **Back up now** (the newest 20), and the close-year copy kept for good. Each has a **Download** button that gives the same file Restore takes.
+- Without it, Settings → Backup says **Automatic backups are off** in plain words, and nothing pretends otherwise.
+- **Back up now** still downloads the file straight away, whatever the storage.
+
+---
+
 ## 5. Non-Functional Requirements
 
 | Area | Requirement |
@@ -357,3 +377,4 @@ No interest, no due dates or reminders, no SMS, no credit limits, no advance/dep
 4. Whether the pharmacy counter at Himal Health Clinic is the same physical device as the clinic front desk (affects default counter mode and the PIN switch list).
 5. Nepali-numeral display default: off. Grand-total rounding: default off. (Carried from v1.)
 6. CBMS activation timing — depends on the clinic's IRD registration.
+7. **Invoice photo → purchase entry** — explored 2083-06-06 (Memory.md C-016), not built. Feasible with a vision model reading the photo into the existing purchase form for the person to check and correct; needs an Anthropic API key and 10–20 real supplier invoices to tune against.

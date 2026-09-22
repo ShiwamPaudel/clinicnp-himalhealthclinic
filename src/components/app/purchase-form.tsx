@@ -96,8 +96,9 @@ export function PurchaseForm({
       toast.error("Choose a supplier.");
       return;
     }
-    // Batch number, manufacture date and expiry date are required on every line
-    // — they drive sell-oldest-first and the expiry warnings.
+    // Batch number and expiry date are required on every line — they drive
+    // sell-oldest-first and the expiry warnings. The manufacture date is
+    // optional: many packs and supplier bills do not print one.
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]!;
       if (!l.itemId) {
@@ -108,12 +109,14 @@ export function PurchaseForm({
         toast.error(`Line ${i + 1}: enter the batch number.`);
         return;
       }
-      if (!l.mfgDateBs) {
-        toast.error(`Line ${i + 1}: enter the manufacture date.`);
-        return;
-      }
       if (!l.expiryDateBs) {
         toast.error(`Line ${i + 1}: enter the expiry date.`);
+        return;
+      }
+      if (l.mfgDateBs && l.mfgDateBs > l.expiryDateBs) {
+        toast.error(
+          `Line ${i + 1}: it cannot expire before it was manufactured. Check the dates.`,
+        );
         return;
       }
     }
@@ -240,10 +243,11 @@ export function PurchaseForm({
                       : "sm:grid-cols-[1fr_1fr_1fr_1fr_auto]")
                   }
                 >
-                  <Field label="Mfg date *">
+                  <Field label="Mfg date (optional)">
                     <DatePickerBS
                       value={l.mfgDateBs}
                       onChange={(v) => setLine(i, { mfgDateBs: v })}
+                      clearable
                     />
                   </Field>
                   <Field label="Expiry date *">

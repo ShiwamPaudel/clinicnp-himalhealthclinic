@@ -32,32 +32,37 @@ patient numbering restarted at 1.
 | 🟡 | `company.pan_no` is empty — only the stock-out and refund slips use it | Settings → Company |
 | 🟡 | Invoice footer reads "ClincNP", missing an `i` | Settings → Company |
 
-**2083-06-05 — dues and the discount switch are built, not yet live.** Production
-is trading (8 bills, 10 patients, all cash so far) and is still at **18
-migrations**. `0019_dues.sql` has been rehearsed on a copy of production's real
-data and must be run on production **before** the code is deployed — the build
-refuses otherwise. See Deploy.md, "0019 dues".
+**2083-06-06 — dues, the discount switch, the Nepali/English date boxes, the
+optional manufacture date and kept backups are built, not yet live.**
+Production is trading (8 bills, 10 patients, all cash so far) and is still at
+**18 migrations**: the pushes since were refused by the build guard, as they
+should be. `0019_dues.sql` and `0020_date_calendar.sql` have been rehearsed
+together on a copy of production's real data and must be run on production
+**before** the code is deployed. See Deploy.md, "0019 and 0020 together".
 
 | | What | Where |
 |---|---|---|
-| 🔴 | **The nightly "Automatic" backups are not kept anywhere** — see §7 | Settings → Backup |
-| 🟠 | Run `pnpm db:migrate` on production, then deploy | Deploy.md |
+| 🔴 | **Connect a private Blob store.** Until then nothing is backed up on its own and patient files have nowhere safe to go — see §0 and §7 | Vercel → Storage; Deploy.md |
+| 🟠 | Run `pnpm db:migrate` on production (0019 + 0020), then push | Deploy.md |
 
 ---
 
 ## 0. Before the day
 
 - [ ] **Turso database created**, and its URL and token in hand.
-- [ ] **Blob store created with _private_ access.** This cannot be changed
-      afterwards — a public store hands out permanent, world-readable links, and
-      the app will refuse to use one for patient files. If the app says files
-      are being kept "on this computer", the store is public and needs
-      recreating.
+- [ ] **Blob store created with _private_ access** and connected to the
+      project. This cannot be changed afterwards — a public store hands out
+      permanent, world-readable links, and the app will refuse to use one for
+      patient files or backups. If the app says files are being kept "on this
+      computer", or Settings → Backup says automatic backups are off, the store
+      is public (or missing) and a private one has to be connected. Steps:
+      Deploy.md, "The storage has to be a private store".
 - [ ] **`AUTH_SECRET`** generated (`openssl rand -base64 32`).
 - [ ] **`CRON_SECRET`** generated the same way.
 - [ ] Environment variables set in Vercel, all four:
       `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `AUTH_SECRET`, `CRON_SECRET`,
-      plus `BLOB_READ_WRITE_TOKEN`.
+      plus `BLOB_STORE_ID`, which Vercel adds when the private store is
+      connected.
 - [ ] `pnpm db:migrate` run against the production database, and it reported
       every migration applied with no errors.
 - [ ] `pnpm db:bootstrap` run with the clinic's real details. **Not `db:seed`** —
@@ -204,16 +209,23 @@ rather than about the clinic.
 
 ## 7. Backups
 
-- [ ] Take a **manual backup** and download it. **The downloaded file is the
-      only copy** — keep it somewhere that is not the counter PC.
+- [ ] **Settings → Backup shows the green "Automatic backups are on".** If it
+      shows the orange "off", no private store is connected and nothing is
+      kept on its own — fix that first (§0).
+- [ ] Take a **manual backup** and download it. Keep the file somewhere that is
+      not the counter PC: it is the copy that survives losing the whole
+      hosting account.
+- [ ] The morning after, a **Nightly** row with a **Download** button is in the
+      list. Download it.
 - [ ] **Restore it into a throwaway database and check it comes back.** A backup
       nobody has ever restored is a hope, not a backup.
-- [ ] ⚠️ **Do not rely on the "Automatic" rows in Recent backups.** Found
-      2083-06-05: the nightly job (`/api/cron/backup`) builds the backup,
-      writes its size into that list, and keeps nothing — there is no file
-      anywhere to restore from. The close-year wizard's "a backup was taken
-      first" is the same: a row, not a file. Until this is fixed, the only
-      backups are the ones somebody downloaded. (Memory.md, C-015.)
+- [ ] Know what the old rows are. Rows marked **Not kept** are the nightly
+      "Automatic" backups from before C-016: the job wrote down a size and kept
+      no file (found 2083-06-05, fixed 2083-06-06, D-138). They stay in the list
+      as the honest record, and nothing can be restored from them.
+- [ ] Closing the year keeps its own copy first when the private store is
+      connected. Without it, the wizard asks for a backup downloaded within the
+      last day and will not close until there is one.
 - [ ] Explain to the owner, in their words, what a restore does: the whole
       system goes back to that moment, and anything since is gone.
 

@@ -2,18 +2,32 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Upload, ShieldAlert } from "lucide-react";
+import { Download, Upload, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import type { BackupRecord } from "@/lib/repos/backup";
+import type { BackupStorage } from "@/lib/backups";
+import { KEEP, isKeptKey, purposeOf, type BackupPurpose } from "@/lib/backup-keys";
 import { adFromIso, toBS, formatBS } from "@/lib/bs";
 import { strings } from "@/lib/strings";
+
+const PURPOSE_LABEL: Record<BackupPurpose, string> = {
+  nightly: "Nightly",
+  manual: "Back up now",
+  "year-end": "Before closing the year",
+};
 
 /** What the file picker will offer. A file extension, not words. */
 const BACKUP_FILE_TYPES = "application/json,.json"; // sweep-ok: not prose
 
-export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
+export function BackupPanel({
+  backups,
+  storage,
+}: {
+  backups: BackupRecord[];
+  storage: BackupStorage;
+}) {
   const router = useRouter();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -91,6 +105,7 @@ export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
             Back up now
           </Button>
         </a>
+        <StorageStatus storage={storage} />
       </div>
 
       <div className="rounded-[10px] border border-danger-600/40 bg-cream-50 p-5">
@@ -148,24 +163,85 @@ export function BackupPanel({ backups }: { backups: BackupRecord[] }) {
             No backups yet. Use “Back up now” to make your first one.
           </p>
         ) : (
-          <ul className="flex flex-col gap-1.5 text-[14px]">
-            {backups.map((b) => (
-              <li key={b.id} className="flex justify-between text-sage-700">
-                <span>
-                  {formatBS(toBS(adFromIso(b.createdAt.slice(0, 10))), {
-                    form: "long",
-                    monthScript: "en",
-                  })}{" "}
-                  · {b.kind === "daily" ? "Automatic" : "Manual"}
-                </span>
-                <span className="tnum text-sage-500">
-                  {(b.size / 1024).toFixed(1)} KB
-                </span>
-              </li>
-            ))}
+          <ul className="flex flex-col divide-y divide-line text-[14px]">
+            {backups.map((b) => {
+              const kept = isKeptKey(b.blobUrl);
+              const date = formatBS(toBS(adFromIso(b.createdAt.slice(0, 10))), {
+                form: "long",
+                monthScript: "en",
+              });
+              return (
+                <li
+                  key={b.id}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sage-700"
+                >
+                  <span className="min-w-0">
+                    {date} · {PURPOSE_LABEL[purposeOf(b.kind, b.blobUrl)]}
+                  </span>
+                  <span className="flex items-center gap-4">
+                    <span className="tnum text-sage-500">
+                      {(b.size / 1024).toFixed(1)} KB
+                    </span>
+                    {kept ? (
+                      <a
+                        href={`/api/backup/kept/${b.id}`}
+                        className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 font-medium text-sage-900 hover:bg-cream-200"
+                        aria-label={`Download the backup from ${date}`}
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </a>
+                    ) : (
+                      <span className="text-[13px] text-sage-500">
+                        {b.kind === "daily" ? "Not kept" : "Downloaded only"}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
+        )}
+        {backups.some((b) => !isKeptKey(b.blobUrl)) && (
+          <p className="mt-3 max-w-xl text-[12px] text-sage-500">
+            “Not kept” and “Downloaded only” mean no copy is stored here. Before
+            backups were kept, the nightly job wrote down a backup&apos;s size
+            and nothing else. A “Back up now” file is wherever it was saved on
+            the computer that downloaded it.
+          </p>
         )}
       </div>
     </div>
+  );
+}
+
+/** Whether anything is being kept on its own, in words the owner can act on. */
+function StorageStatus({ storage }: { storage: BackupStorage }) {
+  if (storage === "cloud" || storage === "local") {
+    return (
+      <p className="mt-3 flex max-w-xl items-start gap-2 rounded-[8px] bg-ok-100 p-3 text-[13px] text-ok-600">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Automatic backups are on. A full copy is saved to private storage
+          every night and the last {KEEP.nightly} are kept. Each “Back up now”
+          keeps a copy there too (the last {KEEP.manual}), and the copy taken
+          before closing a year is kept for good.
+          {storage === "local" && " (Test setup: copies are kept on this computer.)"}
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p className="mt-3 flex max-w-xl items-start gap-2 rounded-[8px] bg-warn-100 p-3 text-[13px] text-warn-600">
+      <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>
+        <b>Automatic backups are off.</b>{" "}
+        {storage === "refused"
+          ? "The storage connected to ClinicNP is public, so it is not used for anything with patient details in it."
+          : "No private storage is connected, so nothing is saved on its own."}{" "}
+        Until it is, press “Back up now” regularly and keep the file somewhere
+        safe, away from this computer.
+      </span>
+    </p>
   );
 }

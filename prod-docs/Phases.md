@@ -167,6 +167,27 @@ Work since the five phases is recorded session by session in Memory.md. Acceptan
 - [x] `रू | %` switch on the bill discount; percent is of the bill as it stands and follows it when lines change; over 100% says so; the choice carries to the next bill.
 - [x] The discount and tendered boxes clear after every save (they used to keep the last bill's figures).
 
+### Date boxes in Nepali or English (C-016, 0020)
+- [x] Settings → Company → *Calendar for dates*: Nepali (default) or English; every date box opens in it and writes the date in it.
+- [x] A **नेपाली | English** switch inside every box, for one pick; the next open starts from the setting again.
+- [x] A pick from the English grid emits the BS text of that exact day (every day 2020 – 2034 checked in `tests/calendar-view.test.ts`); dates are still stored and printed in BS.
+- [x] `«` `»` jump a year; days beyond what the converter covers are disabled instead of failing; Escape and a click elsewhere close the popup.
+- [x] 390 px: the open popup stays whole on screen and the page does not scroll sideways.
+- [ ] **Production has run 0020** (owner, with 0019 — see Deploy.md).
+
+### Manufacture date optional on a purchase (C-016)
+- [x] *Mfg date (optional)*; a purchase saves without one and the batch has no manufacture date.
+- [x] A manufacture date after the expiry is refused, on the screen and on the server.
+- [x] An optional date box has *Clear*.
+
+### Backups kept, not just counted (C-016)
+- [x] Nightly, *Back up now* and close-year backups are kept in the private store, gzipped; each can be downloaded as the file Restore takes.
+- [x] The newest 30 nightly and 20 manual copies are kept, year-end copies for good; the file goes before the row.
+- [x] With no private store: nothing is kept or recorded, and Settings → Backup says *Automatic backups are off*.
+- [x] Closing a year keeps its own backup, or without storage requires a download from the last day.
+- [x] Downloads are streamed, so a backup past 4.5 MB still downloads.
+- [ ] **A private Blob store is connected** and a *Nightly* row with *Download* appears the next morning (owner — see Deploy.md).
+
 ---
 
 ### Cross-phase rules

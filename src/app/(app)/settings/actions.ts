@@ -14,7 +14,9 @@ import {
   getOpenFiscalYear,
   ClosedFiscalYearError,
 } from "@/lib/repos/fiscal";
-import { exportAll, recordBackup } from "@/lib/repos/backup";
+import { exportAll, backupTakenSince } from "@/lib/repos/backup";
+import { backupStorage, keepBackup, keepsBackups } from "@/lib/backups";
+import { downloadName } from "@/lib/backup-keys";
 import {
   getModules,
   isLastModuleOn,
@@ -58,8 +60,9 @@ export async function saveCompanyAction(
     const parsed = companySchema.safeParse(input);
     if (!parsed.success) return fail("Please check the details and try again.");
     await saveCompany(parsed.data);
-    revalidatePath("/settings/company");
-    revalidatePath("/dashboard");
+    // The whole app, not just this page: the app layout hands the calendar
+    // setting to every date box.
+    revalidatePath("/", "layout");
     return OK;
   } catch (err) {
     return handle(err);
@@ -145,16 +148,20 @@ export async function setModulesAction(
 export interface CloseYearActionResult extends ActionResult {
   closedLabel?: string;
   openedLabel?: string;
+  /** the kept copy's file name; empty when the admin's own download is the backup */
   backupName?: string;
 }
+
+/** Without private storage, a backup downloaded this long ago still counts. */
+const DOWNLOADED_BACKUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Close the open year and start the next one. Admin only.
  *
  * `unsentBills` is counted by the browser that runs the wizard, because the
  * queue of bills waiting to be sent lives on the device, not on the server.
- * Order matters: refuse while anything is still waiting, take a backup, then
- * move the year. Cannot be undone from the interface (PRD §4A.1).
+ * Order matters: refuse while anything is still waiting, make sure there is a
+ * backup, then move the year. Cannot be undone from the interface (PRD §4A.1).
  */
 export async function closeYearAction(
   unsentBills: number,
@@ -172,11 +179,29 @@ export async function closeYearAction(
     const open = await getOpenFiscalYear();
     if (!open) return fail("There's no open year to close.");
 
-    // Take a backup first, so there is a point to return to.
-    const archive = await exportAll();
-    const size = JSON.stringify(archive).length;
-    await recordBackup("manual", size);
-    const backupName = `clinicnp-backup-${archive.createdAt.slice(0, 10)}.json`; // sweep-ok: a downloaded file's extension, not prose
+    // A point to return to, before anything moves (D-138). With private
+    // storage the copy is kept there and the year does not close without it.
+    // Without it nothing can be kept on the server, so the admin's own
+    // download from the last day is the backup, and one is required.
+    let backupName = "";
+    if (keepsBackups(await backupStorage())) {
+      try {
+        const kept = await keepBackup(await exportAll(), "year-end");
+        backupName = downloadName(kept.createdAt, "year-end");
+      } catch (err) {
+        console.error("[close year] the backup could not be kept", err);
+        return fail(
+          "The backup could not be saved, so the year was not closed. Please try again.",
+        );
+      }
+    } else {
+      const since = new Date(Date.now() - DOWNLOADED_BACKUP_WINDOW_MS).toISOString();
+      if (!(await backupTakenSince(since))) {
+        return fail(
+          "Download a backup first with “Download a backup”, then close the year. Automatic backups are not set up, so that file is the way back.",
+        );
+      }
+    }
 
     const { closedLabel, openedLabel } = await closeYearAndOpenNext(user.id);
 

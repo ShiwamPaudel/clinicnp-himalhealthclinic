@@ -8,7 +8,7 @@
  */
 import "server-only";
 import { ulid } from "ulid";
-import { db } from "@/lib/db";
+import { db, type Row } from "@/lib/db";
 
 // Parent → child order for inserts; deletes run in reverse.
 /**
@@ -224,25 +224,75 @@ export async function restoreAll(archive: BackupArchive): Promise<void> {
 export interface BackupRecord {
   id: string;
   kind: string;
+  /** the kept copy's storage key, or 'download' when nothing was kept */
+  blobUrl: string;
   size: number;
   createdAt: string;
 }
 
-export async function listBackups(): Promise<BackupRecord[]> {
-  const res = await db().execute(
-    "SELECT * FROM backups ORDER BY created_at DESC LIMIT 50",
-  );
-  return res.rows.map((r) => ({
+function mapBackup(r: Row): BackupRecord {
+  return {
     id: r.id as string,
     kind: r.kind as string,
+    blobUrl: r.blob_url as string,
     size: Number(r.size),
     createdAt: r.created_at as string,
-  }));
+  };
 }
 
-export async function recordBackup(kind: "daily" | "manual", size: number) {
+export async function listBackups(): Promise<BackupRecord[]> {
+  // Enough for thirty nightly copies, twenty of "Back up now" and a year-end
+  // or two, with room left for the rows from before anything was kept.
+  const res = await db().execute(
+    "SELECT * FROM backups ORDER BY created_at DESC LIMIT 80",
+  );
+  return res.rows.map(mapBackup);
+}
+
+/**
+ * One row per backup. `blobUrl` is the storage key of the kept copy, or
+ * 'download' when the only copy is the file somebody downloaded — which, until
+ * C-016, was every backup there was (D-138).
+ */
+export async function recordBackup(
+  kind: "daily" | "manual",
+  size: number,
+  blobUrl = "download",
+  createdAt = new Date().toISOString(),
+): Promise<string> {
+  const id = ulid();
   await db().execute({
     sql: `INSERT INTO backups (id, kind, blob_url, size, created_at) VALUES (?, ?, ?, ?, ?)`,
-    args: [ulid(), kind, "download", size, new Date().toISOString()],
+    args: [id, kind, blobUrl, size, createdAt],
   });
+  return id;
+}
+
+export async function getBackupRecord(id: string): Promise<BackupRecord | null> {
+  const res = await db().execute({
+    sql: "SELECT * FROM backups WHERE id = ?",
+    args: [id],
+  });
+  return res.rows[0] ? mapBackup(res.rows[0]) : null;
+}
+
+/** Every backup that has a kept copy, for deciding which to let go. */
+export async function listKeptBackupRows(): Promise<BackupRecord[]> {
+  const res = await db().execute(
+    "SELECT * FROM backups WHERE blob_url LIKE 'backups/%' ORDER BY created_at",
+  );
+  return res.rows.map(mapBackup);
+}
+
+export async function deleteBackupRecord(id: string): Promise<void> {
+  await db().execute({ sql: "DELETE FROM backups WHERE id = ?", args: [id] });
+}
+
+/** Any backup taken since `sinceIso`, kept or downloaded. */
+export async function backupTakenSince(sinceIso: string): Promise<boolean> {
+  const res = await db().execute({
+    sql: "SELECT 1 FROM backups WHERE kind = 'manual' AND created_at >= ? LIMIT 1",
+    args: [sinceIso],
+  });
+  return res.rows.length > 0;
 }

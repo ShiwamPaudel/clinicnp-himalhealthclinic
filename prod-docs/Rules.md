@@ -37,6 +37,8 @@ Read PRD.md, Architecture.md and Design.md before writing any code. Read Memory.
 11. **Modules are enforced on the server.** Every clinic route handler, server action and page calls `requireModule('clinic')`; pharmacy ones call `requireModule('pharmacy')`. Hiding nav is never the enforcement. A disabled module's URL returns 404, not a 403 that confirms the data exists.
 12. **Closed fiscal years are read-only.** No create, edit, cancel, settle or delete may target a closed year, from any path including the API. Corrections are recorded in the open year referencing the old number.
 13. **Patient files are never public.** Upload goes through the server route; serving goes through an authenticated route. No public blob URLs, no signed URLs in HTML, no client-side blob tokens. A file URL that works logged-out is a defect that blocks the phase.
+14. **A backup holds every patient's details, so it follows rule 13.** It is kept only in the private store, and downloaded only through an admin-checked route. Never a public store, never a production server's own disk, and never a row that claims a backup exists when no file was kept (D-138).
+15. **Dates travel as BS text.** A date box may show either calendar (D-137), but what it emits, what the server receives and what the database stores is BS `YYYY-MM-DD`. On the screen, only `lib/calendar-view.ts` turns an English pick into BS; on the server, BS becomes AD through `lib/bs.ts` exactly as before.
 
 ## 2. Clinic-specific rules
 

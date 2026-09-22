@@ -4,6 +4,11 @@
 import "server-only";
 import { db } from "@/lib/db";
 import type { Row } from "@/lib/db";
+import {
+  DEFAULT_DATE_CALENDAR,
+  isDateCalendar,
+  type DateCalendar,
+} from "@/lib/calendar-view";
 
 /** a4_half is a full A4 sheet with the bill in its top half, so one sheet
  *  carries two bills and is cut once. It is not A5, which is a smaller sheet. */
@@ -27,6 +32,8 @@ export interface Company {
   expiryAlertDays: ExpiryAlertDays;
   minRateIsCost: boolean;
   rackDisplay: RackDisplay;
+  /** Which calendar every date box opens in (0020). Dates are stored in BS either way. */
+  dateCalendar: DateCalendar;
 }
 
 const DEFAULTS: Company = {
@@ -43,6 +50,7 @@ const DEFAULTS: Company = {
   expiryAlertDays: 60,
   minRateIsCost: false,
   rackDisplay: "off",
+  dateCalendar: DEFAULT_DATE_CALENDAR,
 };
 
 function mapCompany(r: Row): Company {
@@ -60,6 +68,9 @@ function mapCompany(r: Row): Company {
     expiryAlertDays: Number(r.expiry_alert_days) as ExpiryAlertDays,
     minRateIsCost: Number(r.min_rate_is_cost) === 1,
     rackDisplay: (r.rack_display as RackDisplay) ?? "off",
+    dateCalendar: isDateCalendar(r.date_calendar)
+      ? r.date_calendar
+      : DEFAULT_DATE_CALENDAR,
   };
 }
 
@@ -73,8 +84,8 @@ export async function saveCompany(c: Company): Promise<void> {
     sql: `INSERT INTO company
             (id, name, address, phone, pan_no, dda_no, vat_registered, invoice_footer,
              logo_url, print_format, rounding_on, expiry_alert_days, min_rate_is_cost,
-             rack_display, updated_at)
-          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             rack_display, date_calendar, updated_at)
+          VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             address = excluded.address,
@@ -89,6 +100,7 @@ export async function saveCompany(c: Company): Promise<void> {
             expiry_alert_days = excluded.expiry_alert_days,
             min_rate_is_cost = excluded.min_rate_is_cost,
             rack_display = excluded.rack_display,
+            date_calendar = excluded.date_calendar,
             updated_at = excluded.updated_at`,
     args: [
       c.name,
@@ -104,9 +116,21 @@ export async function saveCompany(c: Company): Promise<void> {
       c.expiryAlertDays,
       c.minRateIsCost ? 1 : 0,
       c.rackDisplay,
+      c.dateCalendar,
       new Date().toISOString(),
     ],
   });
+}
+
+/**
+ * Just the calendar setting, for the app layout. Read on its own because the
+ * company row carries the letterhead image, which is far too big to fetch for
+ * every page just to learn one word.
+ */
+export async function getDateCalendar(): Promise<DateCalendar> {
+  const res = await db().execute("SELECT date_calendar FROM company WHERE id = 1");
+  const v = res.rows[0]?.date_calendar;
+  return isDateCalendar(v) ? v : DEFAULT_DATE_CALENDAR;
 }
 
 // ============================================================
