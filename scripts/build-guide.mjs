@@ -96,7 +96,7 @@ const CHAPTERS = [
           "Prefer to tap? Hit the <b>grid button</b> next to the quantity (or press <b>G</b>) to pick the amount visually — see the next page.",
           "ClinicNP always sells the <b>nearest-to-expiry stock first</b>, automatically. You never sell an expired batch by accident — those are locked out.",
           "You <b>can't oversell</b> — if a line is short on stock, saving is blocked until you lower the quantity or add the stock (record a purchase).",
-          "On the right: enter any <b>bill discount</b>, choose <b>Cash</b>, <b>QR</b>, or <b>Credit</b>, type what the customer <b>tendered</b>, and ClinicNP shows the <b>change</b>.",
+          "On the right: enter any <b>bill discount</b> (in rupees or as a percentage — see below), choose <b>Cash</b>, <b>QR</b>, or <b>Dues</b>, type what the customer <b>tendered</b>, and ClinicNP shows the <b>change</b>.",
           "Press <b>F9</b> (or <b>Save &amp; print</b>) to finish. The bill prints and stock comes down on its own.",
           "No internet? Keep billing. ClinicNP works offline and quietly sends the bills the moment you're back online — the top of the screen tells you what's waiting.",
           "Not ready to finish a bill? <b>Held</b> (top right) parks it so you can start another and come back.",
@@ -113,6 +113,30 @@ const CHAPTERS = [
           "The <b>packs on the left</b> (Box, Strip, Tablet) are quick-adds — tap <b>Strip</b> to add a whole strip (+10), <b>Box</b> to add a box.",
           "The running total shows both ways — e.g. <b>1 Strip + 4 Tablet</b> and the exact price — with <b>+ / −</b> for fine control.",
           "It sells in the smallest unit at that unit's price; the <b>Box / Strip / Tablet</b> chip on the bill line still switches to bulk pricing.",
+        ],
+      },
+      {
+        img: "53-discount-percent",
+        title: "A discount in rupees or percent",
+        blurb:
+          "Next to <b>Bill discount</b> are two small buttons: <b>रू</b> and <b>%</b>. Choose one, then type the number.",
+        points: [
+          "In <b>रू</b>, the number is taken off the bill as it is.",
+          "In <b>%</b>, it is that share of the bill — the line underneath shows exactly how much, e.g. <i>10% of रू 459.00 … − रू 45.90</i>. Add or remove a line and the discount follows the new total.",
+          "Changed your mind? Switch between रू and % and the number you typed is read the new way.",
+          "Your choice stays for the next bill, so a counter that always discounts in percent only chooses it once.",
+        ],
+      },
+      {
+        img: "49-counter-dues",
+        title: "Selling on dues",
+        blurb:
+          "When a patient cannot pay all of it today, choose <b>Dues</b>. It works for medicines, services, or both on one bill.",
+        points: [
+          "Type what they are <b>paying now</b> (leave it empty if nothing), and choose <b>Cash</b> or <b>QR</b> for that part. <b>Left on dues</b> shows what they will owe.",
+          "A bill on dues needs <b>the patient</b>, just like a service: press <b>P</b> or <b>Attach patient</b> and find them, or register them on the spot. ClinicNP will not save it without somebody attached.",
+          "If they are paying the whole amount after all, choose Cash or QR instead — Dues is only for money still owed.",
+          "The printed bill says <b>Payment: Dues</b> and shows <b>Paid</b> and <b>Balance due</b> under the total, so the patient's copy is a record of what they owe.",
         ],
       },
     ],
@@ -259,7 +283,49 @@ const CHAPTERS = [
           "Open any bill to see its lines and <b>reprint</b> it for a customer.",
           "Made a mistake? <b>Cancel</b> a bill — the stock returns to the shelf and the bill keeps its number so nothing is ever quietly deleted.",
           "Take back part of a sale with a <b>return</b>; the medicine goes back on the shelf and the day's totals adjust.",
-          "<b>Credit</b> bills that haven't been paid are easy to find and settle here.",
+          "A bill somebody still owes on says <b>Owes</b> and how much; once paid off it says <b>Dues cleared</b>. Everything owed is kept together under <b>Dues</b> — the next chapter.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "dues",
+    title: "Dues",
+    sections: [
+      {
+        img: "50-dues",
+        title: "Who owes what",
+        blurb:
+          "<b>Dues</b>, in the menu under Bills, lists everybody who owes money — for medicine, services or both — with the biggest amount first.",
+        points: [
+          "Each person shows their patient number and phone, how many bills they owe on, the total, and how old the oldest one is (it turns orange after 15 days and red after 30).",
+          "Click a person to see the bills behind the amount. <b>Open patient card</b> takes you to their record, which also says what they owe.",
+          "Search by <b>name, phone or patient number</b> when somebody comes in to pay.",
+          "<b>Paid back</b> (the second tab) lists every payment received, newest first.",
+        ],
+      },
+      {
+        img: "51-dues-receive",
+        title: "Taking a payment",
+        blurb:
+          "Press <b>Receive payment</b> beside the person. The amount starts at everything they owe — if they are paying it all, just press the pink button.",
+        points: [
+          "Paying part of it? Type the amount. The <b>oldest bill is paid off first</b>, and the box shows how the money will be split before you save.",
+          "Choose <b>Cash</b> or <b>QR / wallet</b>, and add a note if it helps (who brought it, a cheque number).",
+          "ClinicNP will not take more than is owed — give the patient their change.",
+          "Money paid today shows on today's <b>Day close</b> under <i>Dues paid back</i>, and is counted in the cash expected in the drawer.",
+          "Typed the wrong amount? The owner can <b>Undo</b> it on the <b>Paid back</b> tab. It stays listed, marked <i>Undone</i>, and the amount is owed again.",
+        ],
+      },
+      {
+        img: "52-bill-dues",
+        title: "Dues on a bill",
+        blurb:
+          "Open any bill that went on dues to see where it stands: paid at billing, paid back since, and what is still owed, with every payment listed underneath.",
+        points: [
+          "<b>Receive payment</b> here takes money against this bill alone.",
+          "If they return medicine from a bill they still owe on, it comes <b>off what they owe first</b>; only anything left over is handed back. The return screen tells you which before you save.",
+          "Cancelling a bill takes it off the dues list. If they had already paid something back on it, give that back to them.",
         ],
       },
     ],
@@ -530,7 +596,7 @@ const CHAPTERS = [
         blurb:
           "Your shop's whole record can be saved to a file and, if ever needed, put back exactly as it was.",
         points: [
-          "<b>Download a backup</b> any time to keep a copy safe off the machine. ClinicNP also backs up nightly on its own.",
+          "<b>Back up now</b> downloads a file with everything in it. <b>That file is your backup</b> — keep it somewhere other than this computer. Do it at least once a week, and before anything big like closing the year.",
           "<b>Restore</b> replaces everything with a backup file. It asks you to type a confirmation first, and it's all-or-nothing — it can never leave your data half-changed.",
         ],
       },

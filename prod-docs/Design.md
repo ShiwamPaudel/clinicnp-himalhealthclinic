@@ -108,6 +108,7 @@ Unchanged: 4 px spacing base (`4, 8, 12, 16, 24, 32, 48`); radius 10 px cards, 8
     Suppliers
 
   Bills
+  Dues                         ← who owes what (both modules, 0019)
   Reports
   Settings
 ```
@@ -182,6 +183,10 @@ Rules for the timeline: one vertical navy hairline spine; a filled node for a vi
 **Fiscal-year selector.** Header-right, next to the offline chip, only for Admin/Accountant: a quiet sage-outlined select showing `2083/84 · current`. Choosing a closed year swaps the whole page into read-only and drops an `--info-100` banner beneath the header: *"You're looking at 2082/83. This year is closed — you can read and print, but not change anything."* The banner is not dismissible; leaving the year is the way out.
 
 **Stock-out reason select.** Not a bare dropdown: a 2-column list of reason tiles with a one-line consequence under each — *"Returned to supplier — this also credits the supplier's account"*, *"Used in the clinic — this comes out of stock but is not a sale"*. The consequence text is what stops the wrong choice.
+
+**Payment pane: Dues and the discount (2083-06-05).** The three method buttons read **Cash · QR · Dues**. Dues opens *Paying now* (tabular input), a small Cash/QR pair for that part when it is above zero, and *Left on dues* in `--warn-100` on the dark pane — owed money is a warning colour, never red and never magenta. The **bill discount** has a two-segment `रू | %` switch beside its box; the choice survives from one bill to the next, and in percent a 12 px line underneath says *"10% of रू 459.00 … − रू 45.90"* so nobody has to trust mental arithmetic.
+
+**Dues screen.** Three summary tiles (*Owed to you* in `--warn-600`, *People who owe*, *Oldest*), then *Owed / Paid back* tabs and one search box. People, not bills, are the rows: name in 500, patient number in Plex Mono navy (it is a person), phone in mono sage-500, amount owed in `--warn-600`, age as a badge (neutral, warn over 15 days, danger over 30). A row opens in place to show the bills behind the figure — a table on a desk, stacked cards on a phone, so the list never scrolls sideways. *Receive payment* is secondary on the row; inside its dialog the confirm button is the screen's one magenta CTA (*"Receive रू 310.00"*), because money is moving. The dialog shows the oldest-first split in `--ok-600` before anything is saved.
 
 **Module toggles (Settings → Modules).** Two large rows, each with the module name, a one-line description of what appears when it's on, and a switch. Turning one off shows a plain confirm: *"Turning off the clinic hides patients, visits and services. Nothing is deleted — turn it back on any time."* The last enabled module's switch is disabled with the reason shown inline.
 

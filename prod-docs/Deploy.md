@@ -232,6 +232,32 @@ a fresh one would have nothing to sell from.
 
 So: back up, migrate, then deploy.
 
+## 0019 dues — migrate, then deploy
+
+`0019_dues.sql` is **additive only**: two columns on `bills`
+(`due_paisa`, `paid_now_method`), one on `sale_returns`
+(`against_due_paisa`), a new `due_payments` table, and indexes. No table is
+rebuilt and no existing value changes, except that credit bills get
+`due_paisa = total_paisa` (production had none on 2083-06-05). It was
+rehearsed with `pnpm db:migrate` on a replica built from a full copy of
+production: 10 statements, row counts unchanged, every trading day's day close
+identical afterwards.
+
+    (take a backup from Settings -> Backup and keep the file)
+    pnpm db:migrate          # .env.local points at production
+    pnpm db:check            # "schema is up to date (19 migrations)"
+    git push                 # Vercel builds; db:check now lets it through
+
+**Why this order is safe.** The code running before the deploy never names the
+new columns, so it keeps billing normally. The one thing it can still do is
+make a "Credit" bill, which lands with `due_paisa = 0`. The new code reads any
+credit bill with `due_paisa = 0` as owing its whole total (`OWED_AT_SALE_SQL`,
+D-129), because it can never write that combination itself — so a credit bill
+made in the gap still shows as owed, never as paid.
+
+**Deploy first (not possible).** `pnpm build` refuses while production lacks
+0019, which is the point of the guard below.
+
 ### The build now refuses to get ahead of the schema
 
 That order used to be a paragraph in this file, and on 2083-05-23 a deploy went

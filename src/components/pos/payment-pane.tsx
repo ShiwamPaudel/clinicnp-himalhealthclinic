@@ -2,8 +2,8 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useBillStore } from "@/stores/bill-store";
-import { billTotals } from "@/lib/bill-calc";
-import { toPaisa, paisaToRupees, formatPaisa, change } from "@/lib/money";
+import { counterTotals, clampPercent, type DiscountMode } from "@/lib/discount";
+import { toPaisa, formatPaisa, change } from "@/lib/money";
 import type { PosConfig } from "@/components/pos/bill-table";
 import { npLabels } from "@/lib/strings";
 import { cn } from "@/lib/cn";
@@ -37,12 +37,16 @@ export const PaymentPane = forwardRef<
     paidNowPaisa,
     paidNowMethod,
     billDiscountPaisa,
+    billDiscountMode,
+    billDiscountPercent,
     setPatientName,
     setPaymentMethod,
     setTendered,
     setPaidNow,
     setPaidNowMethod,
     setBillDiscount,
+    setBillDiscountMode,
+    setBillDiscountPercent,
   } = useBillStore();
 
   const tenderRef = useRef<HTMLInputElement>(null);
@@ -52,28 +56,66 @@ export const PaymentPane = forwardRef<
       (paymentMethod === "credit" ? paidNowRef : tenderRef).current?.focus(),
   }));
 
-  // What was typed, kept as typed so "12." is not turned into "12" under the
-  // cursor. Cleared when the bill is (the store goes back to nothing paid).
+  // What was typed in each money box, kept as typed so "12." is not turned
+  // into "12" under the cursor. Each is cleared when the bill is: the store
+  // goes back to nothing, and the box follows. They used to be left showing
+  // the last bill's figures over a total that no longer used them.
   const [paidNowText, setPaidNowText] = useState("");
+  const [tenderText, setTenderText] = useState("");
+  const [discText, setDiscText] = useState("");
+  // A box is cleared only when it shows an amount the store no longer has —
+  // which is what a reset looks like — never while somebody is typing.
+  const paisaIn = (text: string) => toPaisa(Number(text) || 0);
   useEffect(() => {
-    if (paidNowPaisa === 0 && toPaisa(Number(paidNowText) || 0) !== 0) {
-      setPaidNowText("");
-    }
+    if (paidNowPaisa === 0 && paisaIn(paidNowText) !== 0) setPaidNowText("");
   }, [paidNowPaisa, paidNowText]);
+  useEffect(() => {
+    if (tenderedPaisa === 0 && paisaIn(tenderText) !== 0) setTenderText("");
+  }, [tenderedPaisa, tenderText]);
+  useEffect(() => {
+    const shown =
+      billDiscountMode === "percent"
+        ? (Number(discText) || 0) !== 0
+        : paisaIn(discText) !== 0;
+    const held =
+      billDiscountMode === "percent"
+        ? billDiscountPercent !== 0
+        : billDiscountPaisa !== 0;
+    if (shown && !held) setDiscText("");
+  }, [billDiscountMode, billDiscountPaisa, billDiscountPercent, discText]);
+
+  /** Switching between rupees and percent keeps the number typed and reads it the new way. */
+  function chooseDiscountMode(mode: DiscountMode) {
+    if (mode === billDiscountMode) return;
+    const n = Number(discText) || 0;
+    setBillDiscountMode(mode);
+    if (mode === "percent") {
+      setBillDiscountPercent(n);
+      setBillDiscount(0);
+    } else {
+      setBillDiscount(toPaisa(n));
+      setBillDiscountPercent(0);
+    }
+  }
 
   // Services count towards the total exactly as medicines do. Leaving them out
   // is not a rounding difference: a consultation-only bill totalled zero, the
   // Save button stayed disabled, and the counter could not bill a patient who
   // had bought nothing but a service.
-  const totals = billTotals(
+  const totals = counterTotals(
     lines,
-    billDiscountPaisa,
+    serviceLines,
+    {
+      mode: billDiscountMode,
+      amountPaisa: billDiscountPaisa,
+      percent: billDiscountPercent,
+    },
     {
       vatRegistered: config.vatRegistered,
       roundingOn: config.roundingOn,
     },
-    serviceLines,
   );
+  const percentTooBig = billDiscountMode === "percent" && billDiscountPercent > 100;
   const changeDue = change(tenderedPaisa, totals.totalPaisa);
   const hasControlled = lines.some((l) => l.item.controlledFlag);
   const onDues = paymentMethod === "credit";
@@ -115,17 +157,69 @@ export const PaymentPane = forwardRef<
 
       <div className="mt-auto flex flex-col gap-1.5 border-t border-sage-700/60 pt-3 text-[14px]">
         <Row label="Subtotal" value={formatPaisa(totals.subtotalPaisa)} />
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <span className="text-cream-50/70">Bill discount</span>
-          <input
-            inputMode="decimal"
-            aria-label="Bill discount"
-            defaultValue={billDiscountPaisa ? String(paisaToRupees(billDiscountPaisa)) : ""}
-            onChange={(e) => setBillDiscount(toPaisa(Number(e.target.value) || 0))}
-            placeholder="0"
-            className="h-8 w-24 rounded-[8px] border border-sage-700 bg-sage-950/40 px-2 text-right text-[14px] tnum text-cream-50 focus:outline-none"
-          />
+          <div className="flex items-center gap-1.5">
+            <div
+              className="flex rounded-[8px] bg-sage-950/40 p-0.5"
+              role="group"
+              aria-label="Discount in rupees or percent"
+            >
+              {(
+                [
+                  ["amount", "रू"],
+                  ["percent", "%"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => chooseDiscountMode(mode)}
+                  aria-pressed={billDiscountMode === mode}
+                  aria-label={mode === "amount" ? "Discount in rupees" : "Discount in percent"}
+                  className={cn(
+                    "h-7 min-w-[30px] rounded-[6px] px-1.5 text-[13px] font-medium transition-colors",
+                    billDiscountMode === mode
+                      ? "bg-cream-50 text-sage-900"
+                      : "text-cream-50/70 hover:bg-sage-700",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <input
+              inputMode="decimal"
+              aria-label={
+                billDiscountMode === "percent"
+                  ? "Bill discount, percent"
+                  : "Bill discount, rupees"
+              }
+              value={discText}
+              onChange={(e) => {
+                setDiscText(e.target.value);
+                const n = Number(e.target.value) || 0;
+                if (billDiscountMode === "percent") setBillDiscountPercent(n);
+                else setBillDiscount(toPaisa(n));
+              }}
+              placeholder="0"
+              className={cn(
+                "h-8 w-20 rounded-[8px] border bg-sage-950/40 px-2 text-right text-[14px] tnum text-cream-50 focus:outline-none",
+                percentTooBig ? "border-warn-100" : "border-sage-700",
+              )}
+            />
+          </div>
         </div>
+        {billDiscountMode === "percent" && billDiscountPercent > 0 && (
+          <div className="flex items-center justify-between text-[12px] text-cream-50/70">
+            <span>
+              {percentTooBig
+                ? "At most 100%"
+                : `${clampPercent(billDiscountPercent)}% of ${formatPaisa(totals.subtotalPaisa)}`}
+            </span>
+            <span className="tnum">− {formatPaisa(totals.billDiscountPaisa)}</span>
+          </div>
+        )}
         {config.vatRegistered && (
           <Row label="VAT (13%)" value={formatPaisa(totals.vatPaisa)} />
         )}
@@ -166,7 +260,11 @@ export const PaymentPane = forwardRef<
               id="pos-tendered"
               ref={tenderRef}
               inputMode="decimal"
-              onChange={(e) => setTendered(toPaisa(Number(e.target.value) || 0))}
+              value={tenderText}
+              onChange={(e) => {
+                setTenderText(e.target.value);
+                setTendered(toPaisa(Number(e.target.value) || 0));
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") onSave();
               }}

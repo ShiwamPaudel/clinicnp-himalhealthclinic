@@ -49,6 +49,8 @@ Read PRD.md, Architecture.md and Design.md before writing any code. Read Memory.
 7. **Patient data minimalism.** Store only the fields in PRD §4B.1. Do not add ethnicity, religion, occupation, income, insurance, marital status, or any field the clinic didn't ask for. Do not log patient names or phone numbers in server logs, error payloads, analytics or CBMS payloads beyond what the invoice legally requires.
 8. **Merging patients is Admin-only, audit-logged, and never automatic.** A duplicate is surfaced, never silently resolved.
 9. **Service history is snapshotted.** `partner_cost_paisa` and the doctor share basis are copied onto the bill line at billing time. Changing a service's rate or a doctor's share must never retroactively change what a past bill or report says.
+10. **Money owed belongs to somebody.** A bill on dues (medicine, service or both) carries a patient when the Clinic module is on, and a typed name when it is not — enforced at the counter and, for any bill that carries `paidNowPaisa`, at `/api/bills`. A credit bill queued by an older counter without `paidNowPaisa` is still accepted, so nothing queued is ever stranded (D-127).
+11. **What a bill owes is never stored and never computed anywhere but `lib/dues.ts` / `OWED_AT_SALE_SQL`.** No `balance` column, no "paid" flag, no second formula in a report. A payment entered by mistake is voided, never deleted. Dues from a closed year are still collected, recorded in the open year, and never write to the closed year's bill (D-126, D-128).
 
 ## 3. Libraries — allowed / forbidden
 

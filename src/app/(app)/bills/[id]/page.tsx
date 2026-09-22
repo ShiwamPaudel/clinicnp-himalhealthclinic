@@ -215,6 +215,8 @@ export default async function BillDetailPage({
           <h2 className="text-[15px] font-semibold text-sage-900">Medicines</h2>
         )}
 
+        {/* A bill of services alone has no medicine block, not an empty one. */}
+        {bill.lines.length > 0 && (
         <Table>
           <THead>
             <TR>
@@ -255,6 +257,7 @@ export default async function BillDetailPage({
             ))}
           </tbody>
         </Table>
+        )}
 
         <div className="flex justify-end">
           <div className="w-64 rounded-[10px] border border-line bg-cream-50 p-4">

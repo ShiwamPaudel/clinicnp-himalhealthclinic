@@ -21,7 +21,9 @@
 
 ## CURRENT STATE  *(edit in place — the only mutable section)*
 
-*Last rewritten 2083-05-26 (C-014). Everything below is verified against production, not remembered.*
+*Last rewritten 2083-05-26 (C-014); production figures re-read 2083-06-05 (C-015). Everything below is verified against production, not remembered.*
+
+> **C-015 left one thing for the owner: production has NOT run `0019_dues.sql`.** The owner committed and pushed the dues work mid-session as `02d0137 dues fix`; a read-only check on 2083-06-06 found production still at 0018, so that Vercel build will have been refused by `db:check` (D-089) and the live site is still on the previous deploy — confirm in Vercel. The later C-015 changes (discount switch, bill page, docs, guide) are uncommitted. The migration was rehearsed on a replica of production's real data and passed; running it on production was blocked by the tool's permission check, so it is the owner's to run: back up, `pnpm db:migrate`, `pnpm db:check`, commit the rest, push (or redeploy).
 
 **Product:** **ClinicNP** — clinic + pharmacy, two toggleable modules. First install: **Himal Health Clinic & Pharmacy**, Sallaghari, Bhaktapur (both modules on).
 **Predecessor:** Faarma v1 (pharmacy only), itself formerly AushadhiPOS. AushadhiPOS is fully retired as a name. Faarma survives only as the derived `appName` when the Clinic module is off.
@@ -33,20 +35,18 @@
 
 **`admin` / `admin123` still signs in as Owner on the public URL.** Flagged in C-008, C-009, C-010, C-012 and again here. The owner has said repeatedly they will change it themselves and asked not to be reminded further — so do not re-raise it unprompted, but never describe the install as secure while it is true, and never write it into a document as though it were fixed.
 
-### What is actually in production (verified 2083-05-26)
+### What is actually in production (re-read 2083-06-05, C-015, read-only)
 
-- **18 migrations** applied; `db:check` clean.
-- **478 items / 907 item_units**, every one still unpriced (`selling_rate_paisa = 0`) — by design, see D-092 and D-105.
-- **5 pieces of furniture** on the shop floor plan, placed by the owner.
-- **2 services, 2 service groups, 1 laboratory partner** (Proton Preventive Lab).
-- **2 users.** Company row: name and address set, letterhead image uploaded, **`pan_no` empty**, `invoice_footer` reads `Billed with ClincNP (Infobytes Nepal)` — the product's own name is missing an `i`, and it prints on every bill. Told to the owner; theirs to change.
-- Fiscal year **2083/84** open. **No bills, patients or visits** — cleared for go-live with `db:reset --keep-setup` (D-104), patient numbering restarted at 1.
-- **No doctors yet**, so no consultations can be booked until the clinic adds them (Settings → Doctors). `appointments`, `push_devices` and `alerts_sent` exist and are empty.
+- **18 migrations** applied — **`0019_dues.sql` pending** (see the note above). A full copy is at `backups/prod-before-0019-2026-09-21T12-19-26Z.json` (42 tables, 3,028 rows; gitignored — it holds patient details).
+- **Trading.** 8 bills (all cash, all clinic, 2083-05-29 → 2083-06-05), 10 patients, 8 visits, 19 service lines. No credit bills, no returns.
+- **932 items / 1,614 item_units** (the owner's "meds update", c5bf0aa, added to the 478). **251 services** in 2 groups (the lab rate list import, e224003), **16 doctors**, 1 laboratory partner, 17 suppliers, 5 pieces of furniture, 4 users, 7 booked consultations, 2 phones registered for alerts.
+- Company row: name and address set, letterhead uploaded; `pan_no` and the `ClincNP` footer typo were the owner's to fix — not re-checked this session.
+- Fiscal year **2083/84** open.
 - **Alerts are not configured on the live site.** No `VAPID_*` and no `RESEND_API_KEY` / `MAIL_FROM` in the hosting settings, so a booking saves and the screen says plainly that nobody was told. Generate the key pair once with `pnpm alert-keys` and never change it (D-122).
 
 ### Schema
 
-`0001` … `0018`, append-only, never edit an applied file. The last four: `0015` first-price/pricing groundwork · `0016_lab_workflow.sql` (collected/received/given timestamps on `bill_service_lines`) · `0017_floor_plan.sql` (`racks` rebuilt in centimetres with rotation; `company.floor_width_cm` / `floor_depth_cm`) · `0018_consultations.sql` (`users` rebuilt for the `doctor` role; `doctors` gains `email` / `user_id` / `notify_push` / `notify_email`; new `appointments`, `push_devices`, `alerts_sent`). `_migrations` tracks by column **`name`**, not `filename`.
+`0001` … `0019`, append-only, never edit an applied file. The last five: `0015` first-price/pricing groundwork · `0016_lab_workflow.sql` (collected/received/given timestamps on `bill_service_lines`) · `0017_floor_plan.sql` (`racks` rebuilt in centimetres with rotation; `company.floor_width_cm` / `floor_depth_cm`) · `0018_consultations.sql` (`users` rebuilt for the `doctor` role; `doctors` gains `email` / `user_id` / `notify_push` / `notify_email`; new `appointments`, `push_devices`, `alerts_sent`) · `0019_dues.sql` (`bills.due_paisa`, `bills.paid_now_method`, `sale_returns.against_due_paisa`, new `due_payments`; additive, **not yet on production**). `_migrations` tracks by column **`name`**, not `filename`; the table is created by `db/migrate.ts`, not by a migration file.
 
 **Audit facts established 2083-05-12 (do not re-derive):**
 - `stock_moves.reason` and `users.role` have CHECK constraints → changing either needs a table rebuild.
@@ -58,6 +58,7 @@
 
 - pnpm 11.13 · vitest · Playwright · Vercel. Settings in `pnpm-workspace.yaml`.
 - Local dev needs `TURSO_DATABASE_URL=file:./local.db` + `AUTH_SECRET`; `BLOB_READ_WRITE_TOKEN` for files. `db/*.ts` scripts read `.env.local` then `.env` via `process.loadEnvFile`. **A shell variable beats `.env.local` under Next** — that is how a script ends up writing to the wrong database.
+- 🔴 **As of 2083-06-05 `.env.local` points at the LIVE production database**, not the local file D-039 describes (the local line is commented out). `pnpm dev`, `db:seed`, `db:reset` and `db:migrate` all hit production unless a shell variable overrides it. `process.loadEnvFile` does **not** override a variable already set (verified), so always `export TURSO_DATABASE_URL=file:<drive letter path>` first for local work. **`db:seed` has no guard against a hosted database** — never run it without that export.
 - Commands: `pnpm db:migrate` · `db:check` · `db:seed` · `db:bootstrap` · `db:reset [--keep-access|--keep-setup]` · `db:import-items` · `pnpm dev` · `build` · `test` · `sweep` · `run audit` · `a11y <url>` · `alert-keys` · `node scripts/make-icons.mjs`.
 - **The clinic module defaults OFF on a fresh company row** (`module_clinic INTEGER NOT NULL DEFAULT 0`, 0006). Every clinic route 404s until it is switched on — which looks exactly like a broken build when a scratch install is set up by hand. `counters` uses **`next_value`**, not `value`.
 - **Alerts to a phone cannot be tested under `pnpm dev`.** The offline layer is switched off in development, so nothing is installed in the browser to receive one. Use `pnpm build && pnpm start`, or the deployed site.
@@ -65,7 +66,7 @@
 - **Never run `pnpm build` while `pnpm dev` is running.** They share `.next` and the build dies mid-prerender with `TypeError: Cannot read properties of undefined (reading 'call')`, naming an innocent page. Stop dev, `rm -rf .next`, rebuild.
 - **Windows notes:** libsql `file:` paths need a drive letter (a Git Bash `$(pwd)` path gives SQLITE_CANTOPEN 14). Free a held port with `Get-NetTCPConnection -LocalPort N -State Listen | Stop-Process`. Bash heredocs mangle backslashes and quotes here — use the Write tool or a scratchpad `.mjs`/`.py` file for anything with escapes in it.
 - **Testing note:** integration tests import repos with the vitest `@` alias plus a `server-only` stub (`tests/stubs/server-only.ts`); point `TURSO_DATABASE_URL` at a temp file DB before importing repos; `fileParallelism: false`; `__resetDbForTests()` between files.
-- Bundles at 2083-05-25: `/billing` **145 kB**, `/login` **128 kB** First Load.
+- Bundles at 2083-06-05: `/billing` **146 kB**, `/login` **129 kB**, `/dues` **125 kB** First Load.
 
 ### Working practices that were earned the hard way
 
@@ -73,9 +74,10 @@
 - **Back up before every destructive or schema-changing operation**, and dry-run every table rebuild against a replica built from that backup. Where production is empty, seed the replica with representative rows first — an empty rebuild proves nothing.
 - **Migrations are mine to run.** The owner's standing instruction (D-088): *"Always Fix the Migrate Please."* A schema change is not finished until production has run it and the screens have been opened.
 
-**In progress:** —
+**In progress:** C-015's dues + discount work — built and verified; dues pushed as `02d0137`, the rest uncommitted; waiting on the owner to run `0019` on production, then deploy (Deploy.md, "0019 dues").
 
-**Next up** *(all of it needs the clinic in the room; none of it is code)*
+**Next up**
+0. **Backups are not being kept** (C-015 finding): the nightly "Automatic" job and the close-year "backup first" record a size and keep no file. Needs the owner's decision on where a backup may live (the Blob store on hand is public and refused for patient data, D-055).
 1. Replace `admin` / `admin123`; create real accounts, roles and PINs.
 2. Services, rates, doctors and follow-up rules, as the clinic supplies them.
 3. Prices for the 478 medicines — **Items → Set prices**, or let the counter set each one on its first sale (D-105).
@@ -91,6 +93,9 @@
 - `company.print_format` is still stored and validated but **nothing reads it** — there has been one bill format since D-102/D-103. Harmless; do not wire it back up.
 - `storageDescription()` in `lib/file-store.ts` and `NOT_BACKED_UP` in `lib/repos/backup.ts` are exported and **called from nowhere**. Wording was made user-safe in C-013 in case they are ever wired up.
 - The dashboard still shows pharmacy panels when the pharmacy module is off.
+- 🔴 **`/api/cron/backup` keeps nothing.** It runs `exportAll()`, records the size in `backups` (`blob_url = 'download'`), and discards the archive; Settings → Backup lists these as "Automatic". `closeYearAction` does the same and the wizard then says "A backup was taken first: clinicnp-backup-….json" — no such file exists. Only a downloaded manual backup is real. Not fixed in C-015: the user asked only where they are stored, and the fix needs a decision about where patient data may be kept.
+- *(latent, not fixed)* `billRequestBody` in `offline/outbox.ts` drops the inline `patient` snapshot (`OUTBOX_ONLY_FIELDS` lists it, since fa88d88), although D-064 and `ingestBill` expect it. The patient queue drains first, and a bill that overtakes it fails on the foreign key and retries until the registration lands, so it self-heals — but D-064's "the bill can create the patient itself" is not what ships.
+- The per-line "Disc." boxes on medicine and service lines are still rupees only; only the bill discount has the `रू | %` switch (C-015).
 - Per-report recomputation beyond the `?fy=` range, and "refund a closed-year bill into the open year", remain unbuilt.
 
 **Requested but deliberately NOT built** *(keep this list; it is the scope fence)*
@@ -98,6 +103,7 @@
 - EMR features, prescription printing, appointments, SMS, patient portal.
 - A print-format setting. One bill, on A4, letterhead across the top (D-102, D-103).
 - Any maker's badge, version string or support number on a screen behind the login. The sign-in screen is the only place ClinicNP or Infobytes Nepal is named (D-108).
+- Dues extras nobody asked for: interest, due dates, reminders or SMS, credit limits, advance/deposit balances, a payment receipt slip, a dues export. The Dues screen is who owes, what, since when, and taking the money.
 
 ---
 
@@ -237,6 +243,18 @@
 | D-123 | **The Doctor role gets its own route tree (`/my`), not a narrowed back office** | A doctor holds a phone between patients. One column, thumb-height controls, a bar at the bottom. `requireBackOfficeUser()` sends a doctor to `/my/schedule` from every back-office page, and a Doctor sign-in never appears in counter quick-switch: it belongs to one person on their own phone, not to the shared machine |
 | D-124 | **A Doctor sign-in with no doctor attached is told so, rather than shown an empty list** | An empty list looks like a quiet day. A doctor would sit through an afternoon of patients believing nobody had been booked. `/my/not-linked` says what is wrong and who can fix it |
 | D-125 | **There is a "send a test alert" button, and it is not a nicety** | Turning alerts on succeeds on every phone, including the ones where nothing will ever arrive — a private window, a browser that never installs the app, a phone that has quietly withdrawn permission. Without a button that makes one appear, the first time anybody finds out is the morning a patient is waiting |
+
+| D-126 | **Dues from a closed year are still collected — into the open year, and the old bill is never written to** | A patient pays in Shrawan for medicine taken in Ashar; refusing the money would be absurd, and writing `credit_settled_at` onto a closed year's bill is exactly what Rules §1.12 forbids. D-060 already solved this for refunds: the money lands where it arrived, referencing the old bill. So "paid" is derived from `due_payments`, not stamped on the bill, and the old whole-bill "Mark paid" is retired |
+| D-127 | **A bill on dues must say who owes it** — a registered patient with the Clinic module on, a typed name without it — **but only a bill carrying `paidNowPaisa` is held to it** | The owner asked for dues bills to carry the patient's details "similar to service bills". Every counter since 0019 sends `paidNowPaisa`; a credit bill already queued on a counter before the deploy does not, and refusing it would strand it in a queue nobody can edit, which loses a sale. Those land as before and show on Dues as "No name on the bill" |
+| D-128 | **What a bill owes is derived, never stored; payments are voided, never deleted** | A stored balance is a second copy of the truth that the first return, refund or undo would leave behind. One formula (`balanceDue` + `OWED_AT_SALE_SQL`) feeds every screen. A payment typed wrongly has to be correctable, so Admin can Undo — but the row stays, marked void, because a day already closed must still show what was entered and taken back. Undo is refused in a closed year |
+| D-129 | **A credit bill with `due_paisa = 0` reads as owing its whole total** | New code cannot write that combination (`splitAtSale` turns a fully-paid dues bill into a cash/QR bill). It only arises from pre-0019 code running between the migration and the deploy, or from a pre-0019 backup — both from when credit meant nothing was paid. Found while planning the production run: without this, a "Credit" bill made in that window would have read as paid and the debt would have vanished. Replaced a restore-time fix-up with one read-side rule |
+| D-130 | **'credit' stays the stored method; "Dues" is the word on screen** | Widening `bills.payment_method`'s CHECK means rebuilding the hottest table, with every foreign key into it, for a label. 'credit' already meant "not paid at the counter"; part payment is `due_paisa` < total plus `paid_now_method`. Day close splits a dues bill's paid part into Cash/QR, so the three method figures still add up to gross sales |
+| D-131 | **One payment is one person's, clears their oldest bill first, and is idempotent on a receipt id the screen mints** | A person settling up asks what they owe in total, not per bill, and a shop clears the oldest debt first by hand. The receipt id makes a double press or a retry record once; `UNIQUE (receipt_id, bill_id)` makes even two racing presses land once. Mixing two people's bills in one receipt is refused |
+| D-132 | **A return on a bill still owing comes off the debt first** (`sale_returns.against_due_paisa`) | Handing somebody cash for goods they have not finished paying for is wrong, and leaving the debt at its old figure would chase them for medicine they gave back. The day close subtracts only what was actually handed back from expected cash |
+| D-133 | **Dues is its own sidebar item, beside Bills, outside both module groups** | The owner offered "a tab under a related one, or a new one". It is used daily by the front desk, spans medicine and services, and a button inside Bills (the old "Credit bills") was where nobody looked. `/bills/credit` redirects to `/dues`; the reports hub card points there too |
+| D-134 | **Anyone who can bill can take a dues payment; only the owner can undo one** | Taking money is counter work — the old Admin-only "Mark paid" meant staff could not record a patient paying. Recording a receipt only adds money the drawer should hold, so it is not the fraud path; removing one is, so Undo is Admin-only and audited. The Accountant sees Dues read-only |
+| D-135 | **A percentage bill discount is of the bill as it stands, recomputed as it changes, and sent as rupees; the rupees/percent choice carries to the next bill** | "10%" that froze at the moment it was typed would be wrong the moment a strip was added. The server and the printed bill only ever see the rupee figure, exactly as before, so nothing downstream changed. A counter that discounts in percent does so all day; making them switch every bill is friction for nothing |
+| D-136 | **A cancelled bill takes its dues payments out of the day close too** | Cancelling has always taken a bill's money out of its day. Money paid back against it is part of that; the cancel dialog tells the owner to hand it back, and the day close now agrees with the drawer after they do |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -493,3 +511,21 @@ Verified: **374 tests across 33 files**, up from 343 — 31 new in three files: 
 **Not configured yet, and this is the part that needs the owner.** `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` are in `.env.local` for local work only — the live site needs its own pair, generated once with `pnpm alert-keys` and **never changed** (D-122). Email needs `RESEND_API_KEY` and `MAIL_FROM` on a domain Resend has been shown to own. Until each is set the screens say so plainly and bookings still save.
 **A note for testing alerts:** the app's offline layer is switched off under `pnpm dev`, so there is nothing installed in the browser to receive an alert. Alerts can only be tested against `pnpm build && pnpm start`, or the deployed site.
 Still live: **`admin` / `admin123`.** Untouched, unmentioned to the owner, and not fixed.
+
+### C-015  ·  2083-06-05  ·  Dues and part payments, a rupees-or-percent discount, and a backup that was never kept
+
+The owner asked for three things: bills sold on dues or part payment (medicine and services alike), the patient's details on such a bill as a service bill has them, and a place to track who owes what by name and clear it when the money comes in. Mid-session they added: the bill discount should take rupees **or** a percentage; and — looking at Settings → Backup — where are the "Automatic" backups kept?
+
+**Dues** (D-126 … D-134, D-136). The counter's methods are now Cash · QR · **Dues**; Dues takes *Paying now* (Cash or QR) and shows *Left on dues*, and needs a patient attached exactly as a service does (a typed name on a pharmacy-only install). `lib/dues.ts` is the arithmetic — split at sale, balance, return split, oldest-first allocation, grouping by person — and `lib/repos/dues.ts` the SQL, with `OWED_AT_SALE_SQL` as the one reading of what a bill left owing. A new **Dues** item in the sidebar lists people who owe, biggest first, opening to their bills; *Receive payment* clears the oldest bill first and shows the split before saving; *Paid back* lists payments, which the owner can undo. It reaches the bill page (still owed, payments, receive for this bill), the register (*Owes X* / *Dues cleared*), the patient card, the dashboard, returns (debt first, then cash), the printed bill (*Paid*, *Balance due*) and the day close (money actually taken, left on dues, dues paid back, expected cash). The old whole-bill "Mark paid" and `credit-bills.tsx` are gone; `/bills/credit` redirects.
+
+**Discount** (D-135). A `रू | %` switch on the bill discount in `lib/discount.ts` (`counterTotals`, shared by the pane and the save). Found and fixed on the way: the discount and tendered boxes kept the previous bill's figures after a save while the total silently ignored them.
+
+**Backups — found, not fixed.** The nightly cron and the close-year "backup first" both record a size and keep no file (Known issues). The owner asked only where they are stored, so this is written down and put to them rather than changed.
+
+Schema: **`0019_dues.sql`** (additive). Rehearsed on a replica rebuilt from a full read-only export of production with the real runner: guard refused → 10 statements, row counts unchanged → guard clean; every real trading day's day close identical afterwards. **Not applied to production** — the tool's permission check blocked it; the owner runs it (Deploy.md, "0019 dues"). Backup of production at `backups/prod-before-0019-2026-09-21T12-19-26Z.json`, and `backups/prod-*.json` is now gitignored.
+Broke/fixed: planning the production run exposed that pre-0019 code could still write a credit bill with `due_paisa = 0` after the migration, which would read as paid (D-129) — fixed on the read side and tested. `getBillDetail` never joined `patients`, so the bill page never showed a patient number; now it does. The Dues table pushed a phone's screen sideways and wrapped patient numbers; it stacks on a phone now.
+Verified: **436 tests across 36 files**, up from 374 (62 new: 61 in `dues.test.ts`, `dues.integration.test.ts` and `discount.test.ts`, one in `outbox.test.ts`), mutation-checked by breaking the return split (5 fail). Typecheck, `run audit` (80 INSERTs), accessibility clean across **16** screens (`/dues` added), sweep clean in `src/`. A real browser against a production build on a seeded scratch database: 50 checks for dues (counter, patient required, dues list, oldest-first split, over-payment refused, toasts, bill page, register, patient card, return split, undo, day close, dashboard, old address, 390 px) and 10 for the discount.
+Docs: PRD §4C (new) and the roles table · Architecture §2.5, §3.2–3.3, file tree, §5.7 (new) · Rules §2.10–2.11 · Design sidebar + payment pane + Dues screen · Phases "After Phase 5" with acceptance boxes · Go-live checklist (status, printing, the backup warning, first day) · Deploy "0019 dues". **User Guide** rebuilt (8.0 MB): a new *Dues* chapter and *Selling on dues* / *discount* sections from five new screenshots (`49`–`53`, captured from the seeded sample database, never production), "Credit" wording gone, and the sentence "ClinicNP also backs up nightly on its own" — false — replaced with what is true. Also: a bill of services alone no longer draws an empty medicine table on its bill page.
+Not built (requested, out of scope): none. Offered, not built: `रू | %` on the per-line discount boxes; a fix for backups.
+Also found: `.env.local` now points at production (see Environment), and the outbox drops the inline patient snapshot (Known issues). Neither changed.
+Next: owner runs 0019 on production, commits the rest and deploys; then decide where backups may be kept.

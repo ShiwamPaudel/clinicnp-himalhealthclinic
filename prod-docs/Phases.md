@@ -145,6 +145,30 @@ Acceptance:
 
 ---
 
+## After Phase 5 — asked for by the clinic
+
+Work since the five phases is recorded session by session in Memory.md. Acceptance for the larger pieces is kept here.
+
+### Dues and part payments (C-015, 0019)
+- [x] Cash · QR · **Dues** at the counter; Dues takes *Paying now* (Cash or QR) and shows *Left on dues*; paying the whole total on Dues is refused.
+- [x] A bill on dues — medicine, service or both — cannot be saved without a patient (Clinic on) or a typed name (Clinic off); the server refuses it too.
+- [x] The printed bill shows *Paid* and *Balance due*.
+- [x] **Dues** in the sidebar: owed grouped by person, searchable, opens to the bills; receive a payment that clears the oldest bill first; more than is owed refused; a double press records once.
+- [x] *Paid back* history; the owner can undo a payment entered by mistake; staff cannot; a payment in a closed year cannot be undone.
+- [x] A debt from a closed year is collected into the open year without touching the closed year.
+- [x] A return on a bill still owing comes off the debt first; the screen and the return note say how much was handed back.
+- [x] Bill page, register, patient card and dashboard all show what is owed; cancelling takes a bill off the list.
+- [x] Day close: cash/QR are money actually taken; left on dues; dues paid back; expected cash reconciles (hand calculation in `tests/dues.integration.test.ts`).
+- [x] A credit bill made by pre-0019 code after the migration reads as owed, not paid.
+- [x] 390 px: the Dues page and the payment dialog fit without sideways scrolling.
+- [ ] **Production has run 0019** and the deploy is live (owner — see Deploy.md).
+
+### Bill discount in rupees or percent (C-015)
+- [x] `रू | %` switch on the bill discount; percent is of the bill as it stands and follows it when lines change; over 100% says so; the choice carries to the next bill.
+- [x] The discount and tendered boxes clear after every save (they used to keep the last bill's figures).
+
+---
+
 ### Cross-phase rules
 - Memory.md is updated at the end of **every** working session, not just phase ends.
 - A phase is complete only when Rules.md §7 (Definition of Done) passes — including the module sweep and the vocabulary grep.

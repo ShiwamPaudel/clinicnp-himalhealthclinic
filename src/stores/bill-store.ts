@@ -14,6 +14,7 @@ import {
   type BillLine,
   type ServiceLine,
 } from "@/lib/bill-calc";
+import type { DiscountMode } from "@/lib/discount";
 
 export type PaymentMethod = "cash" | "qr" | "credit";
 
@@ -53,7 +54,12 @@ interface BillState {
   /** on a bill on dues: what the patient is paying now; the rest is owed */
   paidNowPaisa: number;
   paidNowMethod: "cash" | "qr";
+  /** the bill discount as typed in rupees; used when the mode is "amount" */
   billDiscountPaisa: number;
+  /** rupees or a percentage of the bill; kept from one bill to the next */
+  billDiscountMode: DiscountMode;
+  /** the bill discount as typed as a percentage; used when the mode is "percent" */
+  billDiscountPercent: number;
   activeLineId: string | null;
 
   addItem: (item: PosItem) => void;
@@ -85,6 +91,8 @@ interface BillState {
   setPaidNow: (paisa: number) => void;
   setPaidNowMethod: (m: "cash" | "qr") => void;
   setBillDiscount: (paisa: number) => void;
+  setBillDiscountMode: (mode: DiscountMode) => void;
+  setBillDiscountPercent: (percent: number) => void;
   reset: () => void;
   loadLines: (lines: BillLine[], patientName: string) => void;
 }
@@ -131,6 +139,8 @@ export const useBillStore = create<BillState>((set) => ({
   paidNowPaisa: 0,
   paidNowMethod: "cash",
   billDiscountPaisa: 0,
+  billDiscountMode: "amount",
+  billDiscountPercent: 0,
   activeLineId: null,
 
   addItem: (item) =>
@@ -292,7 +302,12 @@ export const useBillStore = create<BillState>((set) => ({
   setPaidNow: (paisa) => set({ paidNowPaisa: Math.max(0, paisa) }),
   setPaidNowMethod: (m) => set({ paidNowMethod: m }),
   setBillDiscount: (paisa) => set({ billDiscountPaisa: Math.max(0, paisa) }),
+  setBillDiscountMode: (mode) => set({ billDiscountMode: mode }),
+  setBillDiscountPercent: (percent) =>
+    set({ billDiscountPercent: Number.isFinite(percent) ? Math.max(0, percent) : 0 }),
 
+  // The discount mode is left as it is: a counter that discounts in percent
+  // does so on the next bill too. Only the figures go.
   reset: () =>
     set({
       lines: [],
@@ -305,6 +320,7 @@ export const useBillStore = create<BillState>((set) => ({
       paidNowPaisa: 0,
       paidNowMethod: "cash",
       billDiscountPaisa: 0,
+      billDiscountPercent: 0,
       activeLineId: null,
     }),
 
@@ -317,6 +333,7 @@ export const useBillStore = create<BillState>((set) => ({
       paidNowPaisa: 0,
       paidNowMethod: "cash",
       billDiscountPaisa: 0,
+      billDiscountPercent: 0,
       activeLineId: lines[lines.length - 1]?.lineId ?? null,
     }),
 }));

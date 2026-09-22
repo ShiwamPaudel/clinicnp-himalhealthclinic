@@ -5,8 +5,8 @@ import { ulid } from "ulid";
 import Link from "next/link";
 import { ArrowLeft, HelpCircle, PauseCircle, PlayCircle } from "lucide-react";
 import { useBillStore, linesFromHeld } from "@/stores/bill-store";
+import { counterTotals } from "@/lib/discount";
 import {
-  billTotals,
   linePreview,
   lineAmountPaisa,
   serviceLineAmountPaisa,
@@ -185,14 +185,20 @@ export function PosScreen({ config }: { config: PosConfig }) {
       return;
     }
 
-    const totals = billTotals(
+    // The same figures the payment panel is showing, discount worked out the
+    // same way — rupees as typed, or a percentage of the bill as it is now.
+    const totals = counterTotals(
       s.lines,
-      s.billDiscountPaisa,
+      s.serviceLines,
+      {
+        mode: s.billDiscountMode,
+        amountPaisa: s.billDiscountPaisa,
+        percent: s.billDiscountPercent,
+      },
       {
         vatRegistered: config.vatRegistered,
         roundingOn: config.roundingOn,
       },
-      s.serviceLines,
     );
 
     // Money owed has to be owed by somebody who can be found again. With
@@ -321,7 +327,9 @@ export function PosScreen({ config }: { config: PosConfig }) {
       // server knows this counter asked who owes it (see ingestBill).
       paidNowPaisa: onDues ? paidNowPaisa : undefined,
       paidNowMethod: onDues ? s.paidNowMethod : undefined,
-      billDiscountPaisa: s.billDiscountPaisa,
+      // Always rupees on the way out: a percentage is resolved here, against
+      // the bill the patient was shown.
+      billDiscountPaisa: totals.billDiscountPaisa,
       lines: outboxLines,
       serviceLines: s.serviceLines.map((l) => ({
         id: l.lineId,

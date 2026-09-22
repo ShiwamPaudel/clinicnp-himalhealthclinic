@@ -32,6 +32,17 @@ patient numbering restarted at 1.
 | 🟡 | `company.pan_no` is empty — only the stock-out and refund slips use it | Settings → Company |
 | 🟡 | Invoice footer reads "ClincNP", missing an `i` | Settings → Company |
 
+**2083-06-05 — dues and the discount switch are built, not yet live.** Production
+is trading (8 bills, 10 patients, all cash so far) and is still at **18
+migrations**. `0019_dues.sql` has been rehearsed on a copy of production's real
+data and must be run on production **before** the code is deployed — the build
+refuses otherwise. See Deploy.md, "0019 dues".
+
+| | What | Where |
+|---|---|---|
+| 🔴 | **The nightly "Automatic" backups are not kept anywhere** — see §7 | Settings → Backup |
+| 🟠 | Run `pnpm db:migrate` on production, then deploy | Deploy.md |
+
 ---
 
 ## 0. Before the day
@@ -152,6 +163,8 @@ letterhead image is what makes it theirs.
 - [ ] Print an **OPD slip** and confirm there is room for the doctor to write.
 - [ ] Print a **lab dispatch slip** and confirm it names the laboratory.
 - [ ] Print a **refund note**.
+- [ ] Print a **bill on dues** with part paid: it says *Payment: Dues*, then
+      *Paid* and *Balance due* under the total.
 
 ---
 
@@ -191,11 +204,16 @@ rather than about the clinic.
 
 ## 7. Backups
 
-- [ ] Take a **manual backup** and download it.
+- [ ] Take a **manual backup** and download it. **The downloaded file is the
+      only copy** — keep it somewhere that is not the counter PC.
 - [ ] **Restore it into a throwaway database and check it comes back.** A backup
       nobody has ever restored is a hope, not a backup.
-- [ ] Confirm the nightly backup cron is firing (Vercel → the project → Cron
-      Jobs, after the first night).
+- [ ] ⚠️ **Do not rely on the "Automatic" rows in Recent backups.** Found
+      2083-06-05: the nightly job (`/api/cron/backup`) builds the backup,
+      writes its size into that list, and keeps nothing — there is no file
+      anywhere to restore from. The close-year wizard's "a backup was taken
+      first" is the same: a row, not a file. Until this is fixed, the only
+      backups are the ones somebody downloaded. (Memory.md, C-015.)
 - [ ] Explain to the owner, in their words, what a restore does: the whole
       system goes back to that moment, and anything since is gone.
 
@@ -209,6 +227,11 @@ rather than about the clinic.
       connection returns.
 - [ ] Show the counter what "not sent" looks like and what to do about it.
 - [ ] Show the owner: the dashboard, the day close, and where the reports are.
+- [ ] Put one bill on **Dues** with part paid, then take the rest from
+      **Dues → Receive payment**. Show where it appears on the day close
+      (*Left on dues*, *Dues paid back*) and that the bill now says *Dues
+      cleared*.
+- [ ] Show the **रू / %** switch on the bill discount.
 - [ ] Agree who closes the fiscal year, and when.
 
 ---
