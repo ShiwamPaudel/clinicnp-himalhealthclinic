@@ -32,7 +32,7 @@ interface Feature {
   title: string;
   body: string;
 }
-
+/**for commit */
 /** What this install can actually do, in the order it matters at a counter. */
 export function featuresFor(modules: ModuleFlags): Feature[] {
   const both = modules.pharmacy && modules.clinic;
