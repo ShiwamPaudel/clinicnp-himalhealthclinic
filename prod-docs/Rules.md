@@ -39,6 +39,7 @@ Read PRD.md, Architecture.md and Design.md before writing any code. Read Memory.
 13. **Patient files are never public.** Upload goes through the server route; serving goes through an authenticated route. No public blob URLs, no signed URLs in HTML, no client-side blob tokens. A file URL that works logged-out is a defect that blocks the phase.
 14. **A backup holds every patient's details, so it follows rule 13.** It is kept only in the private store, and downloaded only through an admin-checked route. Never a public store, never a production server's own disk, and never a row that claims a backup exists when no file was kept (D-138).
 15. **Dates travel as BS text.** A date box may show either calendar (D-137), but what it emits, what the server receives and what the database stores is BS `YYYY-MM-DD`. On the screen, only `lib/calendar-view.ts` turns an English pick into BS; on the server, BS becomes AD through `lib/bs.ts` exactly as before.
+16. **Every medicine on a bill prints its batch number and expiry.** Mandatory (D-141): each batch the line was sold from, each with its own expiry — English month and year, `MM/YYYY` (D-142) — at the counter and on every reprint. A medicine line that cannot print both is refused at the counter, never printed with a blank or "—". Removing either column from the bill, or letting a batch be created without both, breaks this rule.
 
 ## 2. Clinic-specific rules
 

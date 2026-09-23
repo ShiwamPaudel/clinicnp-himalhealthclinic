@@ -225,7 +225,7 @@ Clinic billing runs on the same counter, the same bill and the same invoice seri
 
 | Document | Size | Content |
 |---|---|---|
-| **Invoice** | 80 mm / A5 | Clinic name, address, phone, **PAN**, DDA no. where applicable; invoice number; BS date and time; **patient number, name, age/sex**; service lines (name, doctor, qty, rate, amount) and medicine lines (name, batch, expiry, qty+unit, rate, amount) in separate blocks under one set of totals; VAT block when registered; payment, tendered, change; footer message. |
+| **Invoice** | 80 mm / A5 | Clinic name, address, phone, **PAN**, DDA no. where applicable; invoice number; BS date and time; **patient number, name, age/sex**; service lines (name, doctor, qty, rate, amount) and medicine lines (name, **batch number, expiry** — mandatory, D-141 — qty+unit, rate, amount) in separate blocks under one set of totals; VAT block when registered; payment, tendered, change; footer message. |
 | **OPD slip** | 80 mm / A5 | Patient number, name, age/sex, visit number, BS date, doctor, department, complaint; a large empty area below the rule for the doctor's handwriting; clinic header and phone. This is the piece of paper the patient carries to the doctor's room. |
 | **Lab dispatch slip** | 80 mm / A5 | Patient number, name, age/sex, BS date, **partner laboratory name**, tests requested, referring doctor, and a blank sample-collection line. Goes with the sample. Prints only for services flagged "sent to an outside lab". |
 | **Refund note** | 80 mm / A5 | Original invoice number and BS date, refunded lines, amount, reason, who authorised. |
@@ -326,6 +326,11 @@ Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote 
 - Without it, Settings → Backup says **Automatic backups are off** in plain words, and nothing pretends otherwise.
 - **Back up now** still downloads the file straight away, whatever the storage.
 
+### 4D.4 Batch number and expiry on every medicine line of a bill *(mandatory, added 2083-06-06)*
+- Every medicine on a printed bill — at the counter and on a reprint — shows the **batch number** it was sold from and that batch's **expiry**. A medicine taken from two batches prints both, each batch number level with its own expiry.
+- There is no bill without them: the counter refuses to save a medicine line whose batch number or expiry it cannot print, and says which medicine (D-141). Batch and expiry are already required when stock comes in (purchase, opening stock), and the server records the batch of every medicine line or refuses the sale.
+- The expiry prints as the **English month and year, `MM/YYYY`** — the way the pack prints it, so the two can be read against each other: an expiry of 30 December 2026 prints as `12/2026` (D-142). Every other date on the bill stays Nepali.
+
 ---
 
 ## 5. Non-Functional Requirements
@@ -377,4 +382,4 @@ Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote 
 4. Whether the pharmacy counter at Himal Health Clinic is the same physical device as the clinic front desk (affects default counter mode and the PIN switch list).
 5. Nepali-numeral display default: off. Grand-total rounding: default off. (Carried from v1.)
 6. CBMS activation timing — depends on the clinic's IRD registration.
-7. **Invoice photo → purchase entry** — explored 2083-06-06 (Memory.md C-016), not built. Feasible with a vision model reading the photo into the existing purchase form for the person to check and correct; needs an Anthropic API key and 10–20 real supplier invoices to tune against.
+7. **Invoice photo → purchase entry** — explored, not built. A paid vision model (C-016) is **ruled out on cost** by the owner. The free route, checked in C-018: on the device, straighten the photo (OpenCV.js), read it with PaddleOCR (MIT licence, runs in the browser, nothing leaves the device, works offline once its model is cached), then ClinicNP's own code maps the columns, checks each line's arithmetic and the total, and matches medicines against the catalogue — all into the existing purchase form for the person to check and correct. Waiting on the owner's answers (Memory.md C-018) and 5–10 real invoice photos before anything is built.

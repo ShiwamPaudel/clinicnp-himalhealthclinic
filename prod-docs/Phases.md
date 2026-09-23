@@ -180,6 +180,13 @@ Work since the five phases is recorded session by session in Memory.md. Acceptan
 - [x] A manufacture date after the expiry is refused, on the screen and on the server.
 - [x] An optional date box has *Clear*.
 
+### Batch number and expiry on every medicine bill (C-017)
+- [x] The printed bill has *Batch no.* and *Expiry* columns filled for every medicine line, at the counter and on the reprint, and they agree.
+- [x] A medicine from two batches prints both, each batch number level with its own expiry.
+- [x] The counter refuses to save a medicine line whose batch number or expiry it cannot print, naming the medicine.
+- [x] Covered by `tests/print-batches.test.tsx`, which renders the bill itself.
+- [x] Expiry prints as the English month and year, `12/2026` for 30 December 2026 (D-142, C-018).
+
 ### Backups kept, not just counted (C-016)
 - [x] Nightly, *Back up now* and close-year backups are kept in the private store, gzipped; each can be downloaded as the file Restore takes.
 - [x] The newest 30 nightly and 20 manual copies are kept, year-end copies for good; the file goes before the row.

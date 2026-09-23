@@ -132,6 +132,13 @@
     font-size: 9px;
     color: #555;
   }
+  /* Batch numbers and expiry dates are read back against a pack: never
+     wrapped mid-number, and in the monospace the rest of the numbers use. */
+  .invoice-a4 .a4-batch {
+    white-space: nowrap;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+  }
   .invoice-a4 .a4-rx {
     font-size: 9px;
     font-weight: 700;

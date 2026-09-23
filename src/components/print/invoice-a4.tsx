@@ -132,7 +132,7 @@ export function InvoiceA4({ bill }: { bill: PrintBill }) {
             <tr>
               <th className="a4-num">#</th>
               <th>Medicine</th>
-              <th>Batch</th>
+              <th>Batch no.</th>
               <th>Expiry</th>
               <th className="a4-r">Qty</th>
               <th className="a4-r">Rate</th>
@@ -148,8 +148,20 @@ export function InvoiceA4({ bill }: { bill: PrintBill }) {
                   {l.controlled && <span className="a4-rx"> Rx</span>}
                   {l.genericName && <div className="a4-sub">{l.genericName}</div>}
                 </td>
-                <td>{l.batches.map((b) => b.batchNo).join(", ") || "—"}</td>
-                <td>{l.batches.map((b) => b.expiryBs).join(", ") || "—"}</td>
+                {/* Mandatory on a medicine bill (D-141). One batch per line
+                    in both cells, so a medicine taken from two batches prints
+                    each batch number level with its own expiry. Expiry is the
+                    English month and year, as on the pack (D-142). */}
+                <td className="a4-batch">
+                  {l.batches.map((b, j) => (
+                    <div key={j}>{b.batchNo}</div>
+                  ))}
+                </td>
+                <td className="a4-batch">
+                  {l.batches.map((b, j) => (
+                    <div key={j}>{b.expiry}</div>
+                  ))}
+                </td>
                 <td className="a4-r">
                   {l.qty} {l.unitName}
                 </td>

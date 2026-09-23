@@ -2,7 +2,8 @@
 
 export interface PrintBatchLine {
   batchNo: string;
-  expiryBs: string;
+  /** As printed: the English month and year, "12/2026" (D-142). */
+  expiry: string;
 }
 
 export interface PrintLine {

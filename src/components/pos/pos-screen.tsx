@@ -13,7 +13,7 @@ import {
   unitByLevel,
 } from "@/lib/bill-calc";
 import { change } from "@/lib/money";
-import { adFromIso, toBS, formatBS } from "@/lib/bs";
+import { batchesForPrint } from "@/lib/print-batches";
 import type {
   PosItem,
   PosService,
@@ -24,7 +24,7 @@ import type {
   OutboxBill,
   HeldBill,
 } from "@/lib/pos-types";
-import type { PrintBill, PrintLine } from "@/lib/print-types";
+import type { PrintBatchLine, PrintBill, PrintLine } from "@/lib/print-types";
 import {
   getCachedItems,
   getCachedServices,
@@ -274,6 +274,26 @@ export function PosScreen({ config }: { config: PosConfig }) {
       );
       return;
     }
+    // Batch number and expiry are mandatory on a medicine bill (D-141). The
+    // stock check above means every line draws on batches; this makes sure
+    // each of them prints with both, rather than a bill going out with "—".
+    const printedBatches = new Map<string, PrintBatchLine[]>();
+    const unprintable: string[] = [];
+    for (const line of s.lines) {
+      const batches = batchesForPrint(
+        linePreview(line, config.todayIso).allocations,
+        line.item.batches,
+      );
+      if (batches) printedBatches.set(line.lineId, batches);
+      else unprintable.push(line.item.brandName);
+    }
+    if (unprintable.length > 0) {
+      const names = Array.from(new Set(unprintable)).join(", ");
+      toast.error(
+        `The batch number or expiry for ${names} is missing, and a medicine bill must show both. Reload this page; if it still says this, check that medicine's batch under Stock.`,
+      );
+      return;
+    }
     setSaving(true);
     const id = ulid();
     const nowIso = new Date().toISOString();
@@ -304,13 +324,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
         discountPaisa: line.discountPaisa,
         amountPaisa: lineAmountPaisa(line),
         rateOverridden: line.rateOverridden,
-        batches: preview.allocations.map((a) => {
-          const b = line.item.batches.find((x) => x.id === a.batchId);
-          return {
-            batchNo: b?.batchNo ?? "",
-            expiryBs: b ? formatBS(toBS(adFromIso(b.expiryDateAd))) : "",
-          };
-        }),
+        batches: printedBatches.get(line.lineId)!,
       });
       // optimistic local stock decrement
       await applyLocalAllocation(line.item.id, preview.allocations);

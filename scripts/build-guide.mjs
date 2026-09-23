@@ -98,6 +98,7 @@ const CHAPTERS = [
           "You <b>can't oversell</b> — if a line is short on stock, saving is blocked until you lower the quantity or add the stock (record a purchase).",
           "On the right: enter any <b>bill discount</b> (in rupees or as a percentage — see below), choose <b>Cash</b>, <b>QR</b>, or <b>Dues</b>, type what the customer <b>tendered</b>, and ClinicNP shows the <b>change</b>.",
           "Press <b>F9</b> (or <b>Save &amp; print</b>) to finish. The bill prints and stock comes down on its own.",
+          "Every medicine on the printed bill shows its <b>batch number</b> and <b>expiry</b> — the batch that was actually sold. A medicine taken from two batches shows both. Hand over the batch the bill names.",
           "No internet? Keep billing. ClinicNP works offline and quietly sends the bills the moment you're back online — the top of the screen tells you what's waiting.",
           "Not ready to finish a bill? <b>Held</b> (top right) parks it so you can start another and come back.",
           "Use <b>Back to app</b> (top left) to return to the dashboard any time.",

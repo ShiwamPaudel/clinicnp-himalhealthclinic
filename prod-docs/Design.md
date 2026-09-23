@@ -200,6 +200,8 @@ Rules for the timeline: one vertical navy hairline spine; a filled node for a vi
 
 ## 6. Print design
 
+**A4 invoice — the one bill (D-102, D-103).** Letterhead image across the top, *TAX INVOICE* / *INVOICE*, patient and bill details, services above medicines. The medicine table is `# · Medicine (generic under it) · Batch no. · Expiry · Qty · Rate · Amount`. **Batch no. and Expiry are mandatory on every medicine line (D-141)**: Plex Mono 10 px, never wrapped, one batch per line in both cells so a medicine taken from two batches reads as two pairs, each batch number level with its own expiry. Expiry is the English month and year, `12/2026`, as the pack prints it (D-142) — the one English date on the bill. There is no "—" for a medicine: a line that cannot print both is not saved. The thermal layout below is kept for reference only.
+
 **Invoice (80 mm thermal)** — as v1, with a patient block and a service block:
 ```
         HIMAL HEALTH CLINIC PVT. LTD.

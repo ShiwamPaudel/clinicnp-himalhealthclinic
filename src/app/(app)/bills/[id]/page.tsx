@@ -16,6 +16,7 @@ import { BillActions } from "@/components/app/bill-actions";
 import { BillDuesPanel } from "@/components/app/bill-dues-panel";
 import { ClosedYearBanner } from "@/components/app/closed-year-banner";
 import type { PrintBill } from "@/lib/print-types";
+import { expiryForPrint } from "@/lib/print-batches";
 
 function bsShort(iso: string): string {
   return formatBS(toBS(adFromIso(iso)));
@@ -90,7 +91,7 @@ export default async function BillDetailPage({
       rateOverridden: l.rateOverridden,
       batches: l.batches.map((b) => ({
         batchNo: b.batchNo,
-        expiryBs: bsShort(b.expiryDateAd),
+        expiry: expiryForPrint(b.expiryDateAd),
       })),
     })),
     subtotalPaisa: bill.subtotalPaisa,

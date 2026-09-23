@@ -161,8 +161,10 @@ letterhead image is what makes it theirs.
 
 - [ ] Print a **test invoice on the real printer**, on a normal A4 sheet. Check:
       the letterhead image is sharp and not stretched, the BS date, the patient
-      block, the service block above the medicine block, batch and expiry on a
-      medicine line, one set of totals, and that nothing runs off the margin.
+      block, the service block above the medicine block, **the batch number and
+      expiry on every medicine line** (mandatory — compare them with the pack
+      that was handed over), one set of totals, and that nothing runs off the
+      margin.
       Nothing prints below the total except the one footer line — no signature
       box, and no second PAN line under the letterhead.
 - [ ] Print an **OPD slip** and confirm there is room for the doctor to write.
