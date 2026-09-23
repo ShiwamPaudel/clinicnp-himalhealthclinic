@@ -430,6 +430,41 @@ subtotal          = Σ qty × cost
 - `discount_paisa` keeps its old meaning (the line discounts), so every purchase recorded before 0021 reads exactly as it did. The purchase register adds the two discounts into its one column; the VAT summary subtracts both.
 - A batch's cost stays the line's own rate. The discount on the bill belongs to the invoice, not to any one medicine (revisit if profit-by-item ever needs landed cost).
 
+### 5.7b Reading a supplier's invoice off a photo (`lib/invoice-read/`) — C-020
+
+Four files, and the split between them is the point: only one of them can fail
+in a way that needs a browser to reproduce.
+
+| File | What it does | Runs where |
+|---|---|---|
+| `ocr.ts` | straightens the page, scales it, runs PaddleOCR | browser only |
+| `parse.ts` | OCR text -> rows, batches, expiries, the closing figures | pure |
+| `match.ts` | a printed name -> a catalogue item | pure |
+| `draft.ts` | all of it -> the boxes the purchase form holds | pure |
+
+- **On the device.** `ppu-paddle-ocr` (MIT) on `onnxruntime-web`; the PP-OCRv6
+  tiny model is served from `public/ocr/`, the WebAssembly runtime from
+  `public/ort/` (copied out of node_modules by `scripts/copy-ort.mjs`, which
+  `dev` and `build` both run; the folder is gitignored). Neither comes from a
+  CDN — a clinic on a bad line should not depend on somebody else's server.
+  `next.config.ts` points `onnxruntime-web` at its wasm-only build, which saves
+  serving a 28 MB WebGPU runtime nothing here asks for.
+- **Straighten first.** A bill photographed flat gives back every row; the same
+  bill at the angle a person actually holds a phone gave back one of twelve.
+  OpenCV (`ppu-ocv` + `@techstark/opencv-js`) finds the sheet of paper, warps
+  its corners square, and only then is anything read. Every step falls back to
+  the photo as it came.
+- **The hinge in `parse.ts` is the expiry**, because the dot-matrix bills print
+  description, pack and batch to its left and quantity, rate and amount to its
+  right. When a bill has no expiry column, or OCR drops it onto a line of its
+  own, the quantity takes over as the hinge: the last bare number with two
+  printed amounts after it.
+- **Nothing is trusted.** Every row's arithmetic is checked against its printed
+  amount, and the bill's own TOTAL / DISCOUNT / ROUNDING / NET TOTAL are read
+  separately so the form can say where the reading and the paper disagree.
+- **Nothing is kept** (D-144): no upload, no attachment, no row. The photo
+  exists as bytes in the tab for a few seconds and then does not.
+
 ### 5.8 Date boxes in either calendar (`lib/calendar-view.ts`) — added 0020
 
 Every date box is `DatePickerBS`, and its contract did not change: **BS text in, BS text out** (`"2083-06-06"`). Nothing behind a box knows which calendar was used to pick (D-137).

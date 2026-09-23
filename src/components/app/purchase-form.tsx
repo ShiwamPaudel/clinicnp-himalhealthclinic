@@ -2,16 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DatePickerBS } from "@/components/ui/date-picker-bs";
 import { useToast } from "@/components/ui/toast";
+import { InvoicePhotoButton } from "@/components/app/invoice-photo";
 import { createPurchaseAction } from "@/app/(app)/purchases/actions";
 import { toPaisa, formatPaisa, vatOf } from "@/lib/money";
 import { clampPercent, resolveBillDiscount, type DiscountMode } from "@/lib/discount";
 import { bsToDbText, today } from "@/lib/bs";
+import type { Draft } from "@/lib/invoice-read/draft";
 import type { Item } from "@/lib/repos/items";
 import type { Supplier } from "@/lib/repos/suppliers";
 import { strings } from "@/lib/strings";
@@ -26,6 +29,13 @@ interface LineState {
   freeQty: string;
   costRupees: string;
   discountRupees: string;
+  /**
+   * Only set on lines that came off a photo: the medicine's name as the
+   * supplier printed it, and whether the row's own arithmetic disagreed with
+   * the printed amount. Both are shown beside the boxes and neither is saved.
+   */
+  printedName?: string;
+  amountDisagrees?: boolean;
 }
 
 function blankLine(): LineState {
@@ -65,6 +75,9 @@ export function PurchaseForm({
   const [lines, setLines] = useState<LineState[]>([blankLine()]);
   const [busy, setBusy] = useState(false);
   const [showBonus, setShowBonus] = useState(false);
+  // What a photo said the bill came to, kept only so the form can say whether
+  // the two agree. It is never what gets saved — the lines are.
+  const [billNetTotalPaisa, setBillNetTotalPaisa] = useState<number | null>(null);
 
   const itemsById = useMemo(
     () => new Map(items.map((i) => [i.id, i])),
@@ -73,6 +86,39 @@ export function PurchaseForm({
 
   function setLine(i: number, patch: Partial<LineState>) {
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+
+  /**
+   * Put what was read off a photo into the boxes. Everything is replaced, not
+   * merged: a half-typed purchase and a photo of a different bill have nothing
+   * to do with each other, and quietly mixing the two would be the worst of
+   * both. The supplier is left alone — a name on a bill is not a supplier
+   * record, and picking the wrong one puts money on the wrong ledger.
+   */
+  function applyDraft(draft: Draft) {
+    if (draft.invoiceNo) setInvoiceNo(draft.invoiceNo);
+    if (draft.dateBs) setDateBs(draft.dateBs);
+    setApplyVat(draft.applyVat);
+    setBillDiscountMode("amount");
+    setBillDiscountRupees(draft.billDiscountRupees);
+    setBillDiscountPercent("");
+    setRoundingRupees(draft.roundingRupees);
+    setBillNetTotalPaisa(draft.netTotalPaisa);
+    if (draft.lines.some((l) => Number(l.freeQty) > 0)) setShowBonus(true);
+    setLines(
+      draft.lines.map((l) => ({
+        ...blankLine(),
+        itemId: l.itemId,
+        unitLevel: l.unitLevel,
+        batchNo: l.batchNo,
+        expiryDateBs: l.expiryDateBs,
+        qty: l.qty,
+        freeQty: l.freeQty,
+        costRupees: l.costRupees,
+        printedName: l.printedName,
+        amountDisagrees: l.amountDisagrees,
+      })),
+    );
   }
 
   function onItemChange(i: number, itemId: string) {
@@ -126,6 +172,9 @@ export function PurchaseForm({
     billDiscountPercent,
     roundingRupees,
   ]);
+
+  /** Lines a photo filled in but could not find a medicine for. */
+  const unmatched = lines.filter((l) => l.printedName && !l.itemId).length;
 
   async function submit() {
     if (!supplierId) {
@@ -192,6 +241,10 @@ export function PurchaseForm({
 
   return (
     <div className="flex flex-col gap-6">
+      <section className="rounded-[10px] border border-line bg-cream-50 p-4">
+        <InvoicePhotoButton items={items} onDraft={applyDraft} />
+      </section>
+
       <section className="rounded-[10px] border border-line bg-cream-50 p-6">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Supplier">
@@ -225,6 +278,16 @@ export function PurchaseForm({
               />
               Bonus (free) qty
             </label>
+            {unmatched > 0 && (
+              <button
+                type="button"
+                onClick={() => router.refresh()}
+                className="flex items-center gap-1.5 text-[13px] text-sage-600 underline-offset-2 hover:text-sage-900 hover:underline"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Reload the item list
+              </button>
+            )}
             <Button variant="secondary" onClick={() => setLines((l) => [...l, blankLine()])}>
               <Plus className="h-4 w-4" />
               Add line
@@ -240,6 +303,13 @@ export function PurchaseForm({
                 key={i}
                 className="rounded-[8px] border border-line bg-cream-100 p-3"
               >
+                {l.amountDisagrees && (
+                  <p className="mb-2 flex items-center gap-1.5 text-[12px] text-danger-600">
+                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                    Quantity times rate did not come to the amount printed on
+                    this row. Check all three against the paper.
+                  </p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
                   <Field label="Item">
                     <Select
@@ -253,6 +323,33 @@ export function PurchaseForm({
                         </option>
                       ))}
                     </Select>
+                    {/* What the paper actually said, so the person can check
+                        the guess — or find the medicine themselves when there
+                        was no guess to make. */}
+                    {l.printedName && (
+                      <p
+                        className={
+                          "mt-1 text-[12px] " +
+                          (l.itemId ? "text-sage-500" : "font-medium text-danger-600")
+                        }
+                      >
+                        {l.itemId ? (
+                          <>On the bill: {l.printedName}</>
+                        ) : (
+                          <>
+                            &ldquo;{l.printedName}&rdquo; is not in the list — choose it, or{" "}
+                            <Link
+                              href="/items/new"
+                              target="_blank"
+                              className="underline underline-offset-2"
+                            >
+                              add it
+                            </Link>{" "}
+                            and reload the list.
+                          </>
+                        )}
+                      </p>
+                    )}
                   </Field>
                   <Field label="Unit">
                     <Select
@@ -448,6 +545,25 @@ export function PurchaseForm({
           <span>Net total</span>
           <span className="tnum">{formatPaisa(totals.total)}</span>
         </div>
+        {/* The one check that catches a line the photo missed altogether: the
+            bill's own net total against what the lines here come to. */}
+        {billNetTotalPaisa !== null && (
+          <p
+            className={
+              "max-w-[320px] text-right text-[12px] " +
+              (billNetTotalPaisa === totals.total ? "text-sage-500" : "font-medium text-danger-600")
+            }
+          >
+            {billNetTotalPaisa === totals.total ? (
+              <>This matches the net total on the bill.</>
+            ) : (
+              <>
+                The bill says {formatPaisa(billNetTotalPaisa)}. A line is
+                missing or wrong — check it against the paper before saving.
+              </>
+            )}
+          </p>
+        )}
         <div className="mt-2 flex gap-2">
           <Button variant="secondary" onClick={() => router.push("/purchases")}>
             {strings.cancel}

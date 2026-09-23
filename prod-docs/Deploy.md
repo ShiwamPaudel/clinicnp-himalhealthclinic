@@ -279,6 +279,18 @@ made in the gap still shows as owed, never as paid.
 **Deploy first (not possible).** `pnpm build` refuses while production lacks
 0019, which is the point of the guard below.
 
+## C-020 invoice reader — no migration, but new assets
+
+Nothing to migrate. Two things to know about the deploy:
+
+- `scripts/copy-ort.mjs` runs from `dev`, `build` and `postinstall`, and puts
+  the WebAssembly runtime into `public/ort/` out of node_modules. That folder
+  is gitignored and rebuilt on Vercel at install time; `public/ocr/` (the
+  ~6 MB model) **is** committed.
+- The first photo read on a device fetches roughly 20 MB — the model, the
+  runtime and the OpenCV chunk — and then it is cached. Later reads are a few
+  seconds. Worth knowing before somebody tries it on a phone on mobile data.
+
 ## 0021 purchase bill discount — migrate, then deploy
 
 `0021_purchase_bill_discount.sql` adds two columns to `purchases`

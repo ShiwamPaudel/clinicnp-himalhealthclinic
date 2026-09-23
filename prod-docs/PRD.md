@@ -326,6 +326,16 @@ Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote 
 - Without it, Settings → Backup says **Automatic backups are off** in plain words, and nothing pretends otherwise.
 - **Back up now** still downloads the file straight away, whatever the storage.
 
+### 4D.6 A purchase entered from a photo of the bill *(added 2083-06-08)*
+Typing a distributor's invoice is the longest job on the pharmacy side: ten to fifteen rows, each with a batch number and an expiry that must be right or the stock is wrong. A photo of the bill now fills those boxes in (D-145).
+
+- **Purchases -> New purchase -> Fill from a photo.** Take or pick a photo; the lines below fill themselves; the person reads the paper against the screen, fixes what is wrong, and presses Save as before.
+- **It fills, it never saves.** No purchase, batch or stock movement exists until the person presses Save, and every check that guarded the form by hand still guards it.
+- **Nothing of the photo is kept** (D-144). It is read on the device and dropped: not uploaded, not attached to the purchase, not backed up.
+- **It runs on the device.** PaddleOCR as WebAssembly, the model served by this app. No account, no key, no per-page charge, and nothing leaves the clinic.
+- **What it says when it is unsure**, because that is the whole value: a row whose quantity times rate does not come to the printed amount is flagged; a medicine it could not find is left empty with the supplier's own wording beside it; and the net total the lines come to is set against the net total printed on the bill.
+- **Handwritten bills are still typed by hand.** Three of Himal's suppliers write theirs out; OCR returns nothing usable from those and the screen says so rather than inventing rows.
+
 ### 4D.5 A purchase adds up to the supplier's paper *(added 2083-06-07)*
 Real invoices from Himal's distributors take their discount off the **whole bill**, after the lines, and then round the net total to whole rupees: *LESS DISCOUNT 480.61 / ROUNDING 0.43 / NET TOTAL 9,132.00*, *10% Discount*, *Discount 0% + Trade Discount 0% + Taxable Amount + VAT + Net Total*.
 - Purchase entry carries the supplier's own block: per-line discounts as before, then **Discount on the bill** (rupees or a percentage) and **Rounding** (which may be a minus figure), then VAT on what is left, then **Net total** (D-143).
@@ -389,4 +399,4 @@ Real invoices from Himal's distributors take their discount off the **whole bill
 4. Whether the pharmacy counter at Himal Health Clinic is the same physical device as the clinic front desk (affects default counter mode and the PIN switch list).
 5. Nepali-numeral display default: off. Grand-total rounding: default off. (Carried from v1.)
 6. CBMS activation timing — depends on the clinic's IRD registration.
-7. **Invoice photo → purchase entry** — explored against ten real invoices (C-019), not built. A paid vision model is **ruled out on cost** by the owner; the free route is PaddleOCR on the device (MIT licence, nothing leaves the phone or PC). Measured on the owner's own photos: **printed invoices give back 94% of their rows, with quantities and rates right 97% of the time, batch numbers 65% and expiry 74%** — a real saving on typing, with the person checking and fixing the rest. **Handwritten invoices are out of reach** and stay typed by hand; three of the ten were handwritten. The photo is read and thrown away — **nothing is kept with the purchase** (owner's instruction). Settling before it is built: the photos to test against were WhatsApp copies at a quarter of the phone's resolution, which is what costs most of the accuracy.
+7. **Invoice photo → purchase entry** — **built** (C-020, §4D.6). Open: whether blank batch and expiry should be allowed on a purchase line for Consumable and Other items, which is what suppliers who print no batch column would need; today every line still requires both, so those are typed off the pack. Also open: remembering a supplier's own wording for a medicine, so the same name matches by itself next month.

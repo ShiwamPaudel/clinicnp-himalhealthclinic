@@ -28,6 +28,9 @@ const securityHeaders = [
       "connect-src 'self' https:",
       "style-src 'self' 'unsafe-inline'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // The invoice reader compiles WebAssembly served from this app; its
+      // runtime may also start a worker of its own.
+      "worker-src 'self' blob:",
       "font-src 'self' data:",
     ].join("; "),
   },
@@ -39,6 +42,25 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  webpack: (config, { isServer }) => {
+    // The invoice reader runs PaddleOCR on WebAssembly. onnxruntime-web's
+    // default build also carries the WebGPU path, which loads a different,
+    // far larger .wasm — 28 MB we would have to serve for a feature that asks
+    // for the plain WebAssembly backend anyway. Pointing at the wasm-only
+    // build keeps it to the one file scripts/copy-ort.mjs puts in public/ort.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "onnxruntime-web$": "onnxruntime-web/wasm",
+    };
+    if (!isServer) {
+      // OpenCV (which straightens the photographed page) ships one file for
+      // every environment it can run in, Node included. Its Node half asks for
+      // `fs`, which a browser has no answer for; telling the bundler so is
+      // what lets the browser half through.
+      config.resolve.fallback = { ...config.resolve.fallback, fs: false, path: false, crypto: false };
+    }
+    return config;
   },
 };
 

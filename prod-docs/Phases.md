@@ -180,12 +180,20 @@ Work since the five phases is recorded session by session in Memory.md. Acceptan
 - [x] A manufacture date after the expiry is refused, on the screen and on the server.
 - [x] An optional date box has *Clear*.
 
+### A purchase entered from a photo of the bill (C-020)
+- [x] *Fill from a photo* on Purchases → New purchase; it fills boxes and saves nothing.
+- [x] Reads on the device (PaddleOCR as WebAssembly), model and runtime served by this app, nothing uploaded and nothing kept.
+- [x] Straightens a photographed page first — the angled test photo went from 1 of 12 rows to 12 of 12.
+- [x] Flags a row whose arithmetic disagrees, names a medicine it could not match, and sets the lines against the bill's own net total.
+- [x] 19 tests pinned to the OCR text the owner's real bills actually produced; 22 checks in a browser against photographed invoices.
+- [ ] Watch the first few real bills entered this way, then decide on blank batch/expiry for Consumable and Other items.
+
 ### A purchase that adds up to the supplier's paper (C-019, 0021)
 - [x] *Discount on the bill* in rupees or percent, and a *Rounding* line that takes a minus figure.
 - [x] VAT is charged on what is left after the discount, as the invoices print it.
 - [x] The net total stored is the supplier's net total: checked in a browser against a real invoice (1,190.40 − 63.66 + 0.26 = 1,127.00).
 - [x] A discount bigger than the bill is refused; purchases recorded before 0021 read unchanged.
-- [ ] **Production has run 0021** (owner — see Deploy.md).
+- [x] **Production has run 0021** (owner, 2083-06-08).
 
 ### Batch number and expiry on every medicine bill (C-017)
 - [x] The printed bill has *Batch no.* and *Expiry* columns filled for every medicine line, at the counter and on the reprint, and they agree.

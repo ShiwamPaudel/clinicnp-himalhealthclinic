@@ -32,8 +32,8 @@ patient numbering restarted at 1.
 | 🟡 | `company.pan_no` is empty — only the stock-out and refund slips use it | Settings → Company |
 | 🟡 | Invoice footer reads "ClincNP", missing an `i` | Settings → Company |
 
-**2083-06-07 — 0019 and 0020 are live; `0021` (the supplier's discount on a
-purchase) is built and waiting.** The note below is kept for the storage item,
+**2083-06-08 — 0019, 0020 and 0021 are all live. The invoice reader (C-020)
+needs no migration.** The note below is kept for the storage item,
 which is still open.
 
 **2083-06-06 — dues, the discount switch, the Nepali/English date boxes, the
@@ -47,7 +47,7 @@ together on a copy of production's real data and must be run on production
 | | What | Where |
 |---|---|---|
 | 🔴 | **Connect a private Blob store.** Until then nothing is backed up on its own and patient files have nowhere safe to go — see §0 and §7 | Vercel → Storage; Deploy.md |
-| 🟠 | Run `pnpm db:migrate` on production (**0021**), then push | Deploy.md |
+| 🟢 | Run `pnpm db:migrate` on production (**0021**) — done 2083-06-08 | Deploy.md |
 
 ---
 
