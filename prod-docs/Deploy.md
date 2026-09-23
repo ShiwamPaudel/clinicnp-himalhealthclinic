@@ -279,6 +279,21 @@ made in the gap still shows as owed, never as paid.
 **Deploy first (not possible).** `pnpm build` refuses while production lacks
 0019, which is the point of the guard below.
 
+## 0021 purchase bill discount — migrate, then deploy
+
+`0021_purchase_bill_discount.sql` adds two columns to `purchases`
+(`bill_discount_paisa`, `rounding_paisa`), both defaulting to 0. Nothing is
+rebuilt and every existing purchase reads exactly as before. Rehearsed on a
+replica built from a full read-only copy of production taken on 2083-06-07 (43
+tables, 3,170 rows): the guard refused, 2 statements applied with row counts
+unchanged, the guard then passed at 21 migrations, and production's one
+existing purchase came back with both new columns at 0.
+
+    (Settings -> Backup -> Back up now, and keep the file)
+    pnpm db:migrate          # .env.local points at production
+    pnpm db:check            # "schema is up to date (21 migrations)"
+    git push                 # Vercel builds; db:check now lets it through
+
 ## 0019 and 0020 together — one run
 
 On 2083-06-06 production was still at 0018: the pushes `dues fix` and

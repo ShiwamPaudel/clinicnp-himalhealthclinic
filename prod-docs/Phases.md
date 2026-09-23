@@ -180,6 +180,13 @@ Work since the five phases is recorded session by session in Memory.md. Acceptan
 - [x] A manufacture date after the expiry is refused, on the screen and on the server.
 - [x] An optional date box has *Clear*.
 
+### A purchase that adds up to the supplier's paper (C-019, 0021)
+- [x] *Discount on the bill* in rupees or percent, and a *Rounding* line that takes a minus figure.
+- [x] VAT is charged on what is left after the discount, as the invoices print it.
+- [x] The net total stored is the supplier's net total: checked in a browser against a real invoice (1,190.40 − 63.66 + 0.26 = 1,127.00).
+- [x] A discount bigger than the bill is refused; purchases recorded before 0021 read unchanged.
+- [ ] **Production has run 0021** (owner — see Deploy.md).
+
 ### Batch number and expiry on every medicine bill (C-017)
 - [x] The printed bill has *Batch no.* and *Expiry* columns filled for every medicine line, at the counter and on the reprint, and they agree.
 - [x] A medicine from two batches prints both, each batch number level with its own expiry.

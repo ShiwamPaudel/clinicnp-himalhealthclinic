@@ -122,6 +122,15 @@ export const purchaseSchema = z.object({
   supplierInvoiceNo: z.string(),
   dateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
   applyVat: z.boolean(),
+  /** taken off the whole bill after the lines are added up (0021) */
+  billDiscountPaisa: z.number().int().min(0, "A discount cannot be less than nothing").default(0),
+  /** the supplier's rounding line, up or down; a rupee or two at most */
+  roundingPaisa: z
+    .number()
+    .int()
+    .min(-1000, "Rounding that big is not rounding")
+    .max(1000, "Rounding that big is not rounding")
+    .default(0),
   lines: z.array(purchaseLineSchema).min(1, "Add at least one item"),
 });
 export type PurchaseFormInput = z.infer<typeof purchaseSchema>;

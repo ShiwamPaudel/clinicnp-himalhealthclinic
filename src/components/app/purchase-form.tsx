@@ -10,6 +10,7 @@ import { DatePickerBS } from "@/components/ui/date-picker-bs";
 import { useToast } from "@/components/ui/toast";
 import { createPurchaseAction } from "@/app/(app)/purchases/actions";
 import { toPaisa, formatPaisa, vatOf } from "@/lib/money";
+import { clampPercent, resolveBillDiscount, type DiscountMode } from "@/lib/discount";
 import { bsToDbText, today } from "@/lib/bs";
 import type { Item } from "@/lib/repos/items";
 import type { Supplier } from "@/lib/repos/suppliers";
@@ -54,6 +55,13 @@ export function PurchaseForm({
   const [invoiceNo, setInvoiceNo] = useState("");
   const [dateBs, setDateBs] = useState(bsToDbText(today()));
   const [applyVat, setApplyVat] = useState(false);
+  // Suppliers take their discount off the whole bill, after the lines: some
+  // print a percentage ("10% Discount"), some an amount ("LESS DISCOUNT
+  // 480.61"), and most then round the net total to whole rupees (D-143).
+  const [billDiscountMode, setBillDiscountMode] = useState<DiscountMode>("amount");
+  const [billDiscountRupees, setBillDiscountRupees] = useState("");
+  const [billDiscountPercent, setBillDiscountPercent] = useState("");
+  const [roundingRupees, setRoundingRupees] = useState("");
   const [lines, setLines] = useState<LineState[]>([blankLine()]);
   const [busy, setBusy] = useState(false);
   const [showBonus, setShowBonus] = useState(false);
@@ -86,10 +94,38 @@ export function PurchaseForm({
       subtotal += qty * cost;
       discount += disc;
     }
-    const net = subtotal - discount;
-    const vat = applyVat ? vatOf(net) : 0;
-    return { subtotal, discount, vat, total: net + vat };
-  }, [lines, applyVat]);
+    const afterLines = Math.max(0, subtotal - discount);
+    // The paper's order: lines, the discount on the whole bill, VAT on what is
+    // left, then the rounding line.
+    const billDiscount = Math.min(
+      resolveBillDiscount(
+        afterLines,
+        billDiscountMode,
+        toPaisa(Number(billDiscountRupees) || 0),
+        Number(billDiscountPercent) || 0,
+      ),
+      afterLines,
+    );
+    const taxable = afterLines - billDiscount;
+    const vat = applyVat ? vatOf(taxable) : 0;
+    const rounding = toPaisa(Number(roundingRupees) || 0);
+    return {
+      subtotal,
+      discount,
+      billDiscount,
+      taxable,
+      vat,
+      rounding,
+      total: taxable + vat + rounding,
+    };
+  }, [
+    lines,
+    applyVat,
+    billDiscountMode,
+    billDiscountRupees,
+    billDiscountPercent,
+    roundingRupees,
+  ]);
 
   async function submit() {
     if (!supplierId) {
@@ -120,12 +156,18 @@ export function PurchaseForm({
         return;
       }
     }
+    if (billDiscountMode === "percent" && Number(billDiscountPercent) > 100) {
+      toast.error("A discount cannot be more than 100%.");
+      return;
+    }
     setBusy(true);
     const res = await createPurchaseAction({
       supplierId,
       supplierInvoiceNo: invoiceNo,
       dateBs,
       applyVat,
+      billDiscountPaisa: totals.billDiscount,
+      roundingPaisa: totals.rounding,
       lines: lines.map((l) => ({
         itemId: l.itemId,
         batchNo: l.batchNo.trim(),
@@ -316,11 +358,94 @@ export function PurchaseForm({
           />
           This purchase includes 13% VAT
         </label>
+        {/* The supplier's own totals block, in their order, so the two can be
+            read against each other line by line (D-143). */}
         <Row label="Subtotal" value={formatPaisa(totals.subtotal)} />
-        <Row label="Discount" value={`- ${formatPaisa(totals.discount, false)}`} />
+        {totals.discount > 0 && (
+          <Row label="Line discounts" value={`- ${formatPaisa(totals.discount, false)}`} />
+        )}
+
+        <div className="flex w-full flex-col items-end gap-1.5 border-t border-line pt-3">
+          <div className="mb-0.5 text-[12px] font-semibold uppercase tracking-wide text-sage-500">
+            From the supplier&apos;s bill
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] text-sage-700">Discount on the bill</span>
+            <div
+              role="group"
+              aria-label="Discount on the bill"
+              className="inline-flex rounded-[8px] border border-line bg-cream-100 p-0.5"
+            >
+              <ModeChip
+                active={billDiscountMode === "amount"}
+                onClick={() => setBillDiscountMode("amount")}
+                label="Discount in rupees"
+              >
+                रू
+              </ModeChip>
+              <ModeChip
+                active={billDiscountMode === "percent"}
+                onClick={() => setBillDiscountMode("percent")}
+                label="Discount in percent"
+              >
+                %
+              </ModeChip>
+            </div>
+            {billDiscountMode === "amount" ? (
+              <Input
+                numeric
+                inputMode="decimal"
+                className="w-28 text-right"
+                aria-label="Discount on the bill, rupees"
+                value={billDiscountRupees}
+                onChange={(e) => setBillDiscountRupees(e.target.value)}
+              />
+            ) : (
+              <Input
+                numeric
+                inputMode="decimal"
+                className="w-28 text-right"
+                aria-label="Discount on the bill, percent"
+                value={billDiscountPercent}
+                onChange={(e) => setBillDiscountPercent(e.target.value)}
+              />
+            )}
+          </div>
+          {billDiscountMode === "percent" && Number(billDiscountPercent) > 0 && (
+            <p className="text-[12px] text-sage-500">
+              {Number(billDiscountPercent) > 100
+                ? "At most 100%."
+                : `${clampPercent(Number(billDiscountPercent))}% of ${formatPaisa(
+                    Math.max(0, totals.subtotal - totals.discount),
+                  )} — ${formatPaisa(totals.billDiscount)}`}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] text-sage-700">Rounding</span>
+            <Input
+              numeric
+              inputMode="decimal"
+              className="w-28 text-right"
+              aria-label="Rounding, rupees"
+              placeholder="0.00"
+              value={roundingRupees}
+              onChange={(e) => setRoundingRupees(e.target.value)}
+            />
+          </div>
+          <p className="max-w-[320px] text-right text-[12px] text-sage-500">
+            Copy these from the paper. Rounding may be a minus figure.
+          </p>
+        </div>
+
+        {totals.billDiscount > 0 && (
+          <Row label="Taxable amount" value={formatPaisa(totals.taxable)} />
+        )}
         {applyVat && <Row label="VAT (13%)" value={formatPaisa(totals.vat)} />}
+        {totals.rounding !== 0 && (
+          <Row label="Rounding" value={formatPaisa(totals.rounding)} />
+        )}
         <div className="flex w-56 justify-between border-t border-line pt-2 text-[16px] font-semibold">
-          <span>Total</span>
+          <span>Net total</span>
           <span className="tnum">{formatPaisa(totals.total)}</span>
         </div>
         <div className="mt-2 flex gap-2">
@@ -333,6 +458,33 @@ export function PurchaseForm({
         </div>
       </section>
     </div>
+  );
+}
+
+function ModeChip({
+  active,
+  onClick,
+  label,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={label}
+      className={
+        "rounded-[6px] px-2 py-0.5 text-[13px] transition-colors " +
+        (active ? "bg-sage-700 text-cream-50" : "text-sage-600 hover:text-sage-900")
+      }
+    >
+      {children}
+    </button>
   );
 }
 

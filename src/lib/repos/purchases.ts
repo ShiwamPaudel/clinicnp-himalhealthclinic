@@ -32,14 +32,24 @@ export interface PurchaseInput {
   dateAd: string;
   dateBs: string;
   vatPaisa: number;
+  /** taken off the whole bill after the lines were added up (0021) */
+  billDiscountPaisa?: number;
+  /** the supplier's rounding line, up or down (0021) */
+  roundingPaisa?: number;
   lines: PurchaseLineInput[];
   userId: string;
 }
 
 export interface PurchaseTotals {
   subtotalPaisa: number;
+  /** the per-line discounts added up */
   discountPaisa: number;
+  /** taken off the whole bill afterwards */
+  billDiscountPaisa: number;
+  /** what VAT is charged on: subtotal less both discounts */
+  taxablePaisa: number;
   vatPaisa: number;
+  roundingPaisa: number;
   totalPaisa: number;
 }
 
@@ -53,9 +63,16 @@ function lineMath(l: PurchaseLineInput) {
   return { totalBase, lineCost, costPerBase };
 }
 
+/**
+ * The bill as the paper reads it, in the supplier's own order: lines, their
+ * discounts, the discount on the whole bill, VAT on what is left, then the
+ * rounding line (D-143).
+ */
 export function purchaseTotals(
   lines: PurchaseLineInput[],
   vatPaisa: number,
+  billDiscountPaisa = 0,
+  roundingPaisa = 0,
 ): PurchaseTotals {
   let subtotal = 0;
   let discount = 0;
@@ -63,12 +80,19 @@ export function purchaseTotals(
     subtotal += l.qty * l.unitCostPaisa;
     discount += l.discountPaisa;
   }
-  const net = subtotal - discount;
+  const afterLines = subtotal - discount;
+  // Never more than there is to take off: a bigger figure is a typo, and a
+  // negative payable would flow straight into the supplier's ledger.
+  const billDiscount = Math.min(Math.max(0, Math.trunc(billDiscountPaisa)), Math.max(0, afterLines));
+  const taxable = afterLines - billDiscount;
   return {
     subtotalPaisa: subtotal,
     discountPaisa: discount,
+    billDiscountPaisa: billDiscount,
+    taxablePaisa: taxable,
     vatPaisa,
-    totalPaisa: net + vatPaisa,
+    roundingPaisa: Math.trunc(roundingPaisa),
+    totalPaisa: taxable + vatPaisa + Math.trunc(roundingPaisa),
   };
 }
 
@@ -84,7 +108,12 @@ export async function createPurchase(
     ? `PI-${fy.bsLabel}-${String(seq).padStart(6, "0")}`
     : `PI-${String(seq).padStart(6, "0")}`;
 
-  const totals = purchaseTotals(input.lines, input.vatPaisa);
+  const totals = purchaseTotals(
+    input.lines,
+    input.vatPaisa,
+    input.billDiscountPaisa ?? 0,
+    input.roundingPaisa ?? 0,
+  );
   const purchaseId = ulid();
   const now = new Date().toISOString();
 
@@ -92,8 +121,9 @@ export async function createPurchase(
   stmts.push({
     sql: `INSERT INTO purchases
             (id, purchase_no, supplier_id, supplier_invoice_no, date_ad, date_bs,
-             subtotal_paisa, discount_paisa, vat_paisa, total_paisa, user_id, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             subtotal_paisa, discount_paisa, bill_discount_paisa, vat_paisa,
+             rounding_paisa, total_paisa, user_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       purchaseId,
       purchaseNo,
@@ -103,7 +133,9 @@ export async function createPurchase(
       input.dateBs,
       totals.subtotalPaisa,
       totals.discountPaisa,
+      totals.billDiscountPaisa,
       totals.vatPaisa,
+      totals.roundingPaisa,
       totals.totalPaisa,
       input.userId,
       now,

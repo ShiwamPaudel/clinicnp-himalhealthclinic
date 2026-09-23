@@ -326,6 +326,13 @@ Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote 
 - Without it, Settings → Backup says **Automatic backups are off** in plain words, and nothing pretends otherwise.
 - **Back up now** still downloads the file straight away, whatever the storage.
 
+### 4D.5 A purchase adds up to the supplier's paper *(added 2083-06-07)*
+Real invoices from Himal's distributors take their discount off the **whole bill**, after the lines, and then round the net total to whole rupees: *LESS DISCOUNT 480.61 / ROUNDING 0.43 / NET TOTAL 9,132.00*, *10% Discount*, *Discount 0% + Trade Discount 0% + Taxable Amount + VAT + Net Total*.
+- Purchase entry carries the supplier's own block: per-line discounts as before, then **Discount on the bill** (rupees or a percentage) and **Rounding** (which may be a minus figure), then VAT on what is left, then **Net total** (D-143).
+- The order is the paper's order: lines → line discounts → discount on the bill → VAT → rounding → net total. The net total is what the supplier is owed, so the ledger and the VAT summary follow it.
+- A discount bigger than the bill is refused; rounding is capped at a rupee or two.
+- What a batch costs is still the line's own rate: the discount on the bill is recorded against the purchase, not spread across the medicines.
+
 ### 4D.4 Batch number and expiry on every medicine line of a bill *(mandatory, added 2083-06-06)*
 - Every medicine on a printed bill — at the counter and on a reprint — shows the **batch number** it was sold from and that batch's **expiry**. A medicine taken from two batches prints both, each batch number level with its own expiry.
 - There is no bill without them: the counter refuses to save a medicine line whose batch number or expiry it cannot print, and says which medicine (D-141). Batch and expiry are already required when stock comes in (purchase, opening stock), and the server records the batch of every medicine line or refuses the sale.
@@ -382,4 +389,4 @@ Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote 
 4. Whether the pharmacy counter at Himal Health Clinic is the same physical device as the clinic front desk (affects default counter mode and the PIN switch list).
 5. Nepali-numeral display default: off. Grand-total rounding: default off. (Carried from v1.)
 6. CBMS activation timing — depends on the clinic's IRD registration.
-7. **Invoice photo → purchase entry** — explored, not built. A paid vision model (C-016) is **ruled out on cost** by the owner. The free route, checked in C-018: on the device, straighten the photo (OpenCV.js), read it with PaddleOCR (MIT licence, runs in the browser, nothing leaves the device, works offline once its model is cached), then ClinicNP's own code maps the columns, checks each line's arithmetic and the total, and matches medicines against the catalogue — all into the existing purchase form for the person to check and correct. Waiting on the owner's answers (Memory.md C-018) and 5–10 real invoice photos before anything is built.
+7. **Invoice photo → purchase entry** — explored against ten real invoices (C-019), not built. A paid vision model is **ruled out on cost** by the owner; the free route is PaddleOCR on the device (MIT licence, nothing leaves the phone or PC). Measured on the owner's own photos: **printed invoices give back 94% of their rows, with quantities and rates right 97% of the time, batch numbers 65% and expiry 74%** — a real saving on typing, with the person checking and fixing the rest. **Handwritten invoices are out of reach** and stay typed by hand; three of the ten were handwritten. The photo is read and thrown away — **nothing is kept with the purchase** (owner's instruction). Settling before it is built: the photos to test against were WhatsApp copies at a quarter of the phone's resolution, which is what costs most of the accuracy.

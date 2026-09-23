@@ -192,6 +192,10 @@ ALTER TABLE sale_returns ADD COLUMN against_due_paisa INTEGER NOT NULL DEFAULT 0
 -- 0020_date_calendar.sql  (one column; only the date picker reads it — D-137)
 ALTER TABLE company ADD COLUMN date_calendar TEXT NOT NULL DEFAULT 'bs'
   CHECK (date_calendar IN ('bs', 'ad'));
+
+-- 0021_purchase_bill_discount.sql  (additive; the supplier's own totals block — D-143)
+ALTER TABLE purchases ADD COLUMN bill_discount_paisa INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE purchases ADD COLUMN rounding_paisa INTEGER NOT NULL DEFAULT 0;
 ```
 
 ### 3.3 New tables
@@ -352,7 +356,7 @@ clinicnp/
 │   │   ├── patient-outbox.ts        # ★
 │   │   └── sw.ts
 │   └── stores/bill-store.ts         # + service lines, patient ref
-├── db/migrations/0006 … 0020
+├── db/migrations/0006 … 0021
 └── tests/                           # + clinic-calc, age, patient-no, modules, phases
 ```
 
@@ -409,6 +413,22 @@ owed now = max(0, owed at sale − paid back since (not voided) − returns take
 - **Returns** (`createSaleReturn`): `splitReturn(return, owed now)` — the debt is cleared first; only the rest is handed back. The split is stored as `sale_returns.against_due_paisa`.
 - **Day close**: cash/QR count only money taken (on a dues bill, `total − owed at sale`, by `paid_now_method`); `credit` is what was left owing; dues paid back today (cancelled bills excluded) are added; expected cash = cash taken + dues paid back in cash − (returns − returns taken off dues).
 - **Grouping by person** (`groupByPerson`): a registered patient by id; otherwise the typed name, folded; a bill with no name stands alone.
+
+### 5.7a A purchase's totals (`purchaseTotals`) — 0021
+
+One function, in the supplier's order, so a purchase adds up to the paper it was copied from (D-143):
+
+```
+subtotal          = Σ qty × cost
+− line discounts  = Σ line.discountPaisa      (discount_paisa)
+− bill discount   = what the supplier took off the whole bill, capped at what is left (bill_discount_paisa)
+= taxable         → VAT is charged on this, never on the pre-discount figure
++ VAT + rounding  = total_paisa               (rounding_paisa may be negative)
+```
+
+- The cap is the safety: a mistyped discount cannot make a payable negative, because a negative payable would flow straight into the supplier's ledger.
+- `discount_paisa` keeps its old meaning (the line discounts), so every purchase recorded before 0021 reads exactly as it did. The purchase register adds the two discounts into its one column; the VAT summary subtracts both.
+- A batch's cost stays the line's own rate. The discount on the bill belongs to the invoice, not to any one medicine (revisit if profit-by-item ever needs landed cost).
 
 ### 5.8 Date boxes in either calendar (`lib/calendar-view.ts`) — added 0020
 

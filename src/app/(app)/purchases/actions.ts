@@ -70,7 +70,17 @@ export async function createPurchaseAction(input: unknown): Promise<ActionResult
       (s, l) => s + l.qty * l.unitCostPaisa - l.discountPaisa,
       0,
     );
-    const vatPaisa = d.applyVat ? vatOf(netSubtotal) : 0;
+    // The supplier's own order: lines, then the discount on the whole bill,
+    // then VAT on what is left (D-143). Every invoice from Himal's
+    // distributors reads this way — "Discount", then "Taxable Amount",
+    // then "VAT".
+    if (d.billDiscountPaisa > netSubtotal) {
+      return fail(
+        "The discount is more than the bill. Check the discount against the invoice.",
+      );
+    }
+    const taxable = netSubtotal - d.billDiscountPaisa;
+    const vatPaisa = d.applyVat ? vatOf(taxable) : 0;
 
     const res = await createPurchase({
       supplierId: d.supplierId,
@@ -78,6 +88,8 @@ export async function createPurchaseAction(input: unknown): Promise<ActionResult
       dateBs: d.dateBs,
       dateAd: bsToAdIso(d.dateBs),
       vatPaisa,
+      billDiscountPaisa: d.billDiscountPaisa,
+      roundingPaisa: d.roundingPaisa,
       lines,
       userId: user.id,
     });

@@ -285,7 +285,9 @@ export async function salesRegister(
     dateBs: r.date_bs as string,
     patientName: (r.patient_name as string) ?? "",
     subtotalPaisa: Number(r.subtotal_paisa),
-    discountPaisa: Number(r.discount_paisa),
+    // Both discounts in one column: the register is a list of what was paid,
+    // not a copy of each supplier's own totals block (0021).
+    discountPaisa: Number(r.discount_paisa) + Number(r.bill_discount_paisa ?? 0),
     vatPaisa: Number(r.vat_paisa),
     totalPaisa: Number(r.total_paisa),
     paymentMethod: r.payment_method as string,
@@ -487,7 +489,7 @@ export async function vatSummary(
     args: [fromIso, toIso],
   });
   const purch = await db().execute({
-    sql: `SELECT IFNULL(SUM(subtotal_paisa - discount_paisa),0) AS taxable,
+    sql: `SELECT IFNULL(SUM(subtotal_paisa - discount_paisa - bill_discount_paisa),0) AS taxable,
                  IFNULL(SUM(vat_paisa),0) AS vat
           FROM purchases WHERE vat_paisa > 0 AND date_ad >= ? AND date_ad <= ?`,
     args: [fromIso, toIso],
