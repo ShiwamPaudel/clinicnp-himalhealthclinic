@@ -611,3 +611,39 @@ Two dead ends worth remembering. `looksLikeMoney` first missed `2754.26` — fou
 **Not done, deliberately.** A purchase line still requires a batch number and an expiry, so a supplier who prints neither (Navya Jyoti) means typing both off the pack; whether to relax that for Consumable and Other items is the owner's call and was left alone on a live system. Nothing remembers a supplier's wording between bills yet, so a name matched by hand this month is matched by hand again next month — that is the next worthwhile piece and needs a table of its own.
 
 **Gone from the repo.** `bill_photos_example/` was removed by the owner mid-session (it was untracked, so there is nothing to restore); the browser checks now run against the generated invoices in the scratchpad. The measured accuracy on the ten real bills stands in C-019 above, taken from the OCR text those photos produced.
+
+### C-021  ·  2083-06-08  ·  1,080 more medicines for the catalogue
+
+The owner: the shop keeps meeting products the software does not have, 938-odd
+is not enough, take it past 2,000 — real products only, nothing invented to pad
+the table, and nothing repeated.
+
+Built: `import-templates/pharmacy-items.EXTRA.csv`, **1,080 rows**, in the same
+shape the existing importer reads, so nothing in the software changed. Deduped
+against a **read-only list of production's own 939 brand names** and against
+the 932-row starter, by a key that ignores case, spacing and punctuation — 290
+of the names written were already held and were dropped rather than imported
+twice. Prices are all blank, as the starter's are: an unpriced item is created
+unsellable, which is the honest state for a catalogue that arrives before a
+price list. `controlled` is set from the molecule rather than by hand, so the
+benzodiazepines, zolpidem, tramadol, pethidine and phenobarbitone come in as
+`Yes` and force a patient's name onto the bill.
+
+Coverage: 927 medicines, 56 consumables, 97 other — the second and third brand
+of what a counter runs out of first, molecules by name and strength the way a
+prescription and a generic range are billed, the paediatric syrups and drops,
+the surgical and dressing shelf, rapid test kits, and the ayurvedic and
+over-the-counter shelf.
+
+Verified on a scratch database built from `0021`: starter imported (932), then
+this file — **1,080 read, 0 rejected, 0 collisions, 1,080 created, 2,012
+items, no duplicate brand name, 29 controlled**. Units land as intended
+(Tablet → Strip ×10 → Box ×100; one Vial, Tube or Piece for the rest).
+Production is at 939, so the same run there lands at **2,019**.
+
+Two things the owner has to accept as guesses, both flagged in the import
+README: **strip size is 10** unless the pack is not a strip, and a
+**manufacturer is left blank** wherever it was not certain rather than filled
+in with something plausible. The reliable way to match exactly what Himal's own
+distributors sell is still to import a supplier's price list through the same
+importer.

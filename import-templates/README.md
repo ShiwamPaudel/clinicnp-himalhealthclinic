@@ -44,6 +44,35 @@ Re-running the import is safe. A brand name already in the database is skipped
 whole — never re-priced, never re-shaped, never moved off its shelf — so you
 can add rows to the bottom of a file and run it again.
 
+## Also done for you: `pharmacy-items.EXTRA.csv`
+
+**1,080 more real products**, on top of the starter and on top of everything
+already in the shop's catalogue. It was built against a read-only list of the
+brand names the clinic already holds, so nothing in it is a repeat — the
+importer would skip a repeat anyway, but this file has none to skip.
+
+```
+pnpm db:import-items import-templates/pharmacy-items.EXTRA.csv          # shows what it would do
+pnpm db:import-items import-templates/pharmacy-items.EXTRA.csv --commit # does it
+```
+
+What is in it: the second and third brand of the things a counter runs out of
+first (Telma and Telista and Eritel, not just one of them), the molecules
+written by name and strength the way a prescription and a generic range are
+billed, the paediatric syrups and drops, the whole surgical and dressing
+shelf, the rapid test kits, and the ayurvedic and over-the-counter names
+people ask for by name. 927 medicines, 56 consumables, 97 other.
+
+Same rules as the starter, and the same two things worth spot-checking:
+
+- **Prices are all empty**, deliberately. Items → Set prices.
+- **Strip sizes are 10** unless the pack is not a strip at all. That is right
+  far more often than not, but it is a guess per product and yours are the
+  packs that count — fix them as you price each one.
+- **`controlled` is set from the molecule**, not by hand: the benzodiazepines,
+  zolpidem, tramadol, pethidine and phenobarbitone come in as `Yes`, which
+  forces a patient's name onto any bill carrying them.
+
 ## How to fill them
 
 Open in Excel or Google Sheets, type into the rows, then **Save As → CSV
