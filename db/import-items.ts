@@ -124,45 +124,65 @@ async function main(): Promise<void> {
 
   const now = new Date().toISOString();
   let created = 0;
-  for (const item of toCreate) {
-    const id = ulid();
-    await client.execute({
-      sql: `INSERT INTO items
-              (id, brand_name, generic_name, category, manufacturer,
-               min_stock_base_qty, controlled_flag, preferred_supplier_id,
-               active, shape, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)`,
-      args: [
-        id,
-        item.brandName,
-        item.genericName,
-        item.category,
-        item.manufacturer,
-        item.minStockBaseQty,
-        item.controlledFlag ? 1 : 0,
-        item.shape,
-        now,
-        now,
-      ],
-    });
-    for (const u of item.units) {
-      await client.execute({
-        sql: `INSERT INTO item_units
-                (id, item_id, level, name, factor_to_base, selling_rate_paisa, is_default_selling)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+
+  /**
+   * Written in batches, and the batch size is the point. A catalogue of a
+   * thousand products is three thousand statements; sent one at a time over
+   * the network that is thousands of round trips, which is slow enough that a
+   * real import was cut off part way through. A batch is one round trip and
+   * one transaction: it either lands whole or not at all, and a medicine can
+   * never end up in the catalogue without its units.
+   *
+   * It stays safe to re-run: only names that are not already there are sent,
+   * so finishing an import that stopped half way is the same command again.
+   */
+  const PER_BATCH = 50;
+  for (let from = 0; from < toCreate.length; from += PER_BATCH) {
+    const slice = toCreate.slice(from, from + PER_BATCH);
+    const statements = [];
+    for (const item of slice) {
+      const id = ulid();
+      statements.push({
+        sql: `INSERT INTO items
+                (id, brand_name, generic_name, category, manufacturer,
+                 min_stock_base_qty, controlled_flag, preferred_supplier_id,
+                 active, shape, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)`,
         args: [
-          ulid(),
           id,
-          u.level,
-          u.name,
-          u.factorToBase,
-          u.sellingRatePaisa,
-          u.isDefaultSelling ? 1 : 0,
+          item.brandName,
+          item.genericName,
+          item.category,
+          item.manufacturer,
+          item.minStockBaseQty,
+          item.controlledFlag ? 1 : 0,
+          item.shape,
+          now,
+          now,
         ],
       });
+      for (const u of item.units) {
+        statements.push({
+          sql: `INSERT INTO item_units
+                  (id, item_id, level, name, factor_to_base, selling_rate_paisa, is_default_selling)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            ulid(),
+            id,
+            u.level,
+            u.name,
+            u.factorToBase,
+            u.sellingRatePaisa,
+            u.isDefaultSelling ? 1 : 0,
+          ],
+        });
+      }
     }
-    created++;
+    await client.batch(statements, "write");
+    created += slice.length;
+    process.stdout.write(`\r  written ${created} of ${toCreate.length}…`);
   }
+  if (created > 0) process.stdout.write("\r");
 
   console.log(`Created ${created} medicine${created === 1 ? "" : "s"}.`);
   if (unpriced > 0) {

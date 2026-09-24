@@ -73,6 +73,29 @@ Same rules as the starter, and the same two things worth spot-checking:
   zolpidem, tramadol, pethidine and phenobarbitone come in as `Yes`, which
   forces a patient's name onto any bill carrying them.
 
+## And a third: `pharmacy-items.EXTRA2.csv`
+
+**3,181 more**, again checked against every name the shop already holds, so
+nothing in it is a repeat. Together with the starter and EXTRA this takes the
+catalogue past **five thousand products**.
+
+```
+pnpm db:import-items import-templates/pharmacy-items.EXTRA2.csv --commit
+```
+
+It is deliberately weighted to the pharmacy rather than the surgical shelf:
+2,646 medicines, 527 other, 8 consumables. What is in it — whole brand families
+in every strength they are sold in (Telma 20/40/80, Aztor 5 to 80, Thyronorm
+across its eight strengths), molecules written by name and strength the way a
+prescription and a generic range are billed, the same molecules in their other
+forms (the syrup, the dispersible, the injection, the drops), the paediatric
+range, the ayurvedic and homeopathy shelves, and the over-the-counter front of
+the shop.
+
+The same two caveats as the others: **every price is blank**, and **strip size
+is 10** unless the pack is not a strip. `controlled` is set from the molecule,
+so 53 of these come in as `Yes`.
+
 ## How to fill them
 
 Open in Excel or Google Sheets, type into the rows, then **Save As → CSV

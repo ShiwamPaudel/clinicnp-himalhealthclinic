@@ -647,3 +647,49 @@ README: **strip size is 10** unless the pack is not a strip, and a
 in with something plausible. The reliable way to match exactly what Himal's own
 distributors sell is still to import a supplier's price list through the same
 importer.
+
+### C-022  ·  2083-06-09  ·  A search box on Items, and the catalogue past 5,000
+
+Three things the owner asked for at once: a search box on Items; an explanation
+of why the Items tab showed ~1,180 when C-021 had claimed 2,019; and 5,000 real
+pharmacy products, weighted away from the surgical shelf. Also a standing
+instruction: **run the migrations and imports myself from now on**, leaving only
+`git add`, commit and push to the owner.
+
+**Why the count was short.** The importer wrote one statement at a time — for
+1,080 products that is about 3,200 round trips to Turso, and the run was cut off
+after 221 of them. Nothing was corrupt, because it only ever creates; it had
+simply not finished. `db/import-items.ts` now writes in batches of 50 in a
+single transaction each, which is one round trip per batch and makes a medicine
+impossible to create without its units. Re-running is still the way to finish an
+import that stopped, and that is how production was brought to 2,019.
+
+**The search box** (`src/components/app/items-table.tsx`). The Items page used
+to render every row; at 5,000 products that is a page nobody can open or type
+into. It is now a client list with a box in front of it that matches brand,
+generic and maker, ignoring case, spaces and punctuation, and it draws at most
+200 rows at a time and says so. `useDeferredValue` keeps typing smooth. The page
+itself stays a server component and passes a plain stock list, because a Map
+does not survive the trip to the browser. One trap worth remembering: importing
+`isUnpriced` from the items repo pulled `server-only` into the client bundle and
+broke the build — the client uses `hasNoPrice` from `lib/units` instead.
+
+**The catalogue** (`import-templates/pharmacy-items.EXTRA2.csv`, 3,181 rows).
+Built from compact lists expanded by a script, so a brand family is one line and
+the strengths it is really sold in are enumerated by hand rather than generated.
+Deduped against a read-only export of production's own names. Production now
+holds **5,200 items** — 4,218 medicines, 778 other, 204 consumables — with no
+duplicate name, no item missing its units, and 82 controlled.
+
+**Verified.** Dry run then commit on a scratch database built from `0021`
+(5,193 items, 0 duplicates, 0 orphans), then the same file on production;
+typecheck, 504 tests, audit, a production build, and 14 browser checks against a
+5,195-item catalogue: the page opens in 3.4s, draws 200 rows, "telma" narrows to
+8, "telmisartan" finds 49 including brands whose names do not contain it, and
+typing a whole word takes 1.3s.
+
+**Still the honest gap.** These are real products to the best of my knowledge of
+the Indian and Nepali market, not Himal's distributors' actual range. A price
+list from Remedies, Surya, K.B. or Navya Jyoti run through the same importer
+would be their names, their pack sizes and their spellings — and would match the
+invoice reader first time.
