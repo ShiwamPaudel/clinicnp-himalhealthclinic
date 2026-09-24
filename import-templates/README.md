@@ -96,6 +96,37 @@ The same two caveats as the others: **every price is blank**, and **strip size
 is 10** unless the pack is not a strip. `controlled` is set from the molecule,
 so 53 of these come in as `Yes`.
 
+## And a fourth: `pharmacy-items.REF.csv`
+
+**1,446 products taken from a working pharmacy's own list** (`items_ref.xlsx`,
+sent by the owner). Only the **Prodname** column was read — the stock, batches,
+dates and amounts in that file belong to another shop and none of it came
+across.
+
+```
+pnpm db:import-items import-templates/pharmacy-items.REF.csv --commit
+```
+
+The sheet held 1,571 distinct product names. 52 were already in the catalogue
+spelled the same way, and another 72 were the same product spelled differently
+— `PANTOP-40MG` against `Pantop 40`, `FLEXON TAB.` against `Flexon Tablet` — so
+124 were dropped and 1,446 created.
+
+Three things to know about these rows:
+
+- **The names are kept exactly as that pharmacy writes them**, in capitals.
+  That looks different from the rest of the catalogue on screen, but it is what
+  a supplier's invoice prints, so it is what the invoice reader will match.
+- **There is no generic name and no manufacturer** on any of them, because only
+  the Prodname column was read. Search still finds them by brand name.
+- **The pack shape is read off the name itself** — `SYRUP`, `INJ.`, `CREAM`,
+  `DROPS`, `SUPPOSITORIES`, or a volume in millilitres. Anything with no such
+  word is treated as a tablet in strips of 10, which is what most of a
+  pharmacy's list is. Worth an eye as each one is priced.
+
+The sheet's own `Unit` column (TAB, SYP, TUBE…) would set those shapes exactly;
+say the word and it can be re-read from that instead.
+
 ## How to fill them
 
 Open in Excel or Google Sheets, type into the rows, then **Save As → CSV

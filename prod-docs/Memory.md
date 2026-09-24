@@ -693,3 +693,42 @@ the Indian and Nepali market, not Himal's distributors' actual range. A price
 list from Remedies, Surya, K.B. or Navya Jyoti run through the same importer
 would be their names, their pack sizes and their spellings — and would match the
 invoice reader first time.
+
+### C-023  ·  2083-06-09  ·  A real pharmacy's own item list
+
+The owner sent `items_ref.xlsx` — a stock report out of the software another
+Kathmandu pharmacy runs — with one instruction: read the **Prodname column
+only**, add what is missing, repeat nothing. The stock, batch numbers, purchase
+dates and amounts in that file are that shop's, not Himal's, and none of them
+were read.
+
+The sheet is a batch-level stock report, not an item list: 4,970 rows where
+`Sn` marks what each row is — 1 a supplier heading, 3 a product's batch, 4 and 5
+subtotals. Taking `Prodname` from the `Sn = 3` rows and collapsing the repeats
+gave **1,571 distinct products**.
+
+**Two passes of dedupe, because one was not enough.** The exact key (upper case,
+punctuation stripped) caught only 52 — that pharmacy writes `PANTOP-40MG` where
+the catalogue says `Pantop 40`. A looser key that drops the words for the form
+(TAB, CAP, TABLET…) and a bare `MG` after a number caught **72 more**, every one
+of them checked by eye and genuine. `ML` and `GM` are deliberately *not*
+dropped: 40 ml and 40 mg of the same brand are two different products. 124
+dropped, **1,446 created**.
+
+Shapes are read off the product's own name, since no other column was read —
+`INJ.` is a vial, `SUSP.` a bottle, `CREAM` a tube, `SUPPOSITORIES` a piece, a
+volume in millilitres pours, and everything else is a tablet in strips of 10.
+`controlled` is matched on **stems, not whole words**, which is what the sheet
+needs: it writes `CLONAZ-0.5MG`, not `Clonazepam`, and the first attempt with
+whole-word matching flagged nothing at all.
+
+Production now holds **6,646 items** — 5,664 medicines, 778 other, 204
+consumables — no duplicate name, no item missing its units, 84 controlled, and
+the 24 batches, 11 bills and 1 purchase untouched. Rehearsed first on a scratch
+database built from `0021` with all four catalogue files in order (6,639 items,
+0 rejected, 0 duplicates, 0 orphans).
+
+**Left on the table:** the sheet's `Unit` column (TAB, SYP, TUBE…) would set
+every pack shape exactly rather than by guessing from the name. It was not read
+because the instruction was Prodname only; it is one flag away if the owner
+wants it.
