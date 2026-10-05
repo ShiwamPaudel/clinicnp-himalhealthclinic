@@ -17,7 +17,11 @@
  * than sharpened — hard thresholding wiped dot-matrix text out completely.
  */
 
-/** Longest side to aim for before reading. Small photos are scaled up to it. */
+/**
+ * Longest side to read at. Small photos are scaled up to it and large ones
+ * down: a full-size camera photo read at its own size lost two to three rows
+ * of a thirteen-row bill that the same photo read whole at this size.
+ */
 const TARGET_LONGEST_SIDE = 1800;
 /** Never blow a photo up past this, or the read gets slower with no gain. */
 const MAX_UPSCALE = 3;
@@ -29,11 +33,12 @@ const MODEL = {
 };
 
 type Service = { recognize: (image: ArrayBuffer) => Promise<{ text: string }> };
+type Canvas = Awaited<ReturnType<typeof import("ppu-ocv/web").CanvasProcessor.prepareCanvas>>;
 
 let service: Promise<Service> | null = null;
 
 /**
- * Flatten the photo and scale it up, then hand it over as PNG bytes.
+ * Find the sheet of paper in the photo and flatten it.
  *
  * Straightening is not a nicety. A bill photographed flat gives back every row
  * it has; the same bill photographed at the angle a person actually holds a
@@ -45,7 +50,7 @@ let service: Promise<Service> | null = null;
  * too small to be the page, the photo is read as it came. A wrong crop would
  * lose lines silently, which is worse than a crooked read the person can see.
  */
-async function prepare(file: File | Blob): Promise<ArrayBuffer> {
+async function straighten(file: File | Blob): Promise<Canvas> {
   const raw = await file.arrayBuffer();
   const { ImageProcessor, CanvasProcessor, Contours, cv, setPlatform, webPlatform } =
     await import("ppu-ocv/web");
@@ -79,11 +84,36 @@ async function prepare(file: File | Blob): Promise<ArrayBuffer> {
   } catch {
     // The paper could not be found. Read the photo as it came.
   }
+  return page;
+}
 
+/**
+ * The page turned a quarter at a time, clockwise. A bill photographed with the
+ * phone on its side reads as nothing at all the right way up, so a read that
+ * finds nothing is tried again turned (see readPhotoText).
+ */
+async function turn(page: Canvas, quarters: number): Promise<Canvas> {
+  if (quarters % 4 === 0) return page;
+  const { webPlatform } = await import("ppu-ocv/web");
+  const sideways = quarters % 2 === 1;
+  const out = webPlatform.createCanvas(
+    sideways ? page.height : page.width,
+    sideways ? page.width : page.height,
+  );
+  const ctx = out.getContext("2d");
+  ctx.translate(out.width / 2, out.height / 2);
+  ctx.rotate((quarters * Math.PI) / 2);
+  ctx.drawImage(page, -page.width / 2, -page.height / 2);
+  return out;
+}
+
+/** Scale to the size that reads best, then hand over as PNG bytes. */
+async function toBytes(page: Canvas): Promise<ArrayBuffer> {
+  const { ImageProcessor, CanvasProcessor } = await import("ppu-ocv/web");
   const longest = Math.max(page.width, page.height);
-  const scale = Math.min(MAX_UPSCALE, Math.max(1, TARGET_LONGEST_SIDE / longest));
+  const scale = Math.min(MAX_UPSCALE, TARGET_LONGEST_SIDE / longest);
   const processor = new ImageProcessor(page);
-  if (scale !== 1) {
+  if (Math.abs(scale - 1) > 0.01) {
     processor.execute("resize", {
       width: Math.round(page.width * scale),
       height: Math.round(page.height * scale),
@@ -124,23 +154,45 @@ async function getService(): Promise<Service> {
   }
 }
 
-export type ReadStage = "opening" | "loading" | "reading";
+export type ReadStage = "opening" | "loading" | "reading" | "turning";
 
 /**
  * The text of one invoice photo. Throws with a message meant for the person,
  * not for a log — this runs on a counter, not a console.
+ *
+ * `score` says how much of a bill a text is (the rows the parser found). When
+ * it is given and the photo the right way up scores nothing, the photo is
+ * read again on its side both ways, then upside down, and the best read is
+ * returned. A bill held the right way, which is nearly every bill, is read
+ * once, exactly as before.
  */
 export async function readPhotoText(
   file: File | Blob,
   onStage?: (stage: ReadStage) => void,
+  score?: (text: string) => number,
 ): Promise<string> {
   onStage?.("opening");
-  const image = await prepare(file);
+  const page = await straighten(file);
   onStage?.("loading");
   const svc = await getService();
   onStage?.("reading");
-  const result = await svc.recognize(image);
-  return result.text ?? "";
+  const read = async (quarters: number) =>
+    (await svc.recognize(await toBytes(await turn(page, quarters)))).text ?? "";
+
+  let best = await read(0);
+  if (!score || score(best) > 0) return best;
+
+  onStage?.("turning");
+  let bestScore = 0;
+  for (const quarters of [1, 3, 2]) {
+    const text = await read(quarters);
+    const s = score(text);
+    if (s > bestScore) {
+      best = text;
+      bestScore = s;
+    }
+  }
+  return best;
 }
 
 /** Whether the model has already been fetched and set up in this tab. */

@@ -62,6 +62,85 @@ ROUNDING : -0.31
 HET TOTAL : 18,008.00
 `;
 
+// Sohan Medicine Distributors (C-024): the same dot-matrix layout, printed
+// tighter. A row wrapped onto two lines, FREE came back as "EREE", one free
+// row was charged for, and on the crooked photo the next row's name was read
+// onto the row above.
+const SOHAN = `
+Invoice No.: CASR0001739
+Transaction Date: 2083/05/29
+S.N. HS CODE: ITEM DESCRIPTION: PACK: BATCH: EXP.DATE QTY: CC/RATE: AMOUNT: M.R.P.
+1.
+ CALIN LOTION 100ML 1 CN20826
+2028/07 10 112.07 1,120.70 130.00
+- do - 1 CN20826 2028/07 2 FREE 0.00% 0.00 130.00
+CYCLOPAM DROPS 26050431 2028/10 5 74.99 374.95 54.25
+CLAVAM -625 MG TAB TAB 26441494 2027/09 8 271.90 2,175.20 196.88
+ ANOMYCETIN- EYE OINT - do - 10 TAB 26441494 2027/09 2 EREE 7.51% 40.84 196.88
+AAM56-6 2027/10 1 345.85 345.85 400.00
+SINAREST TAB SCT2504 2028/10 4 39.30 157.20 28.14
+do- SCT2504 2028/10 1 39.30 39.30 28.14
+6. ALDACTONE 25 NG TAB 02A25042 2028/08 2 48.30 96.60 34.90
+7. Z0XAFEN FORTE TAB 10 2910 2028/05 5 112.60 563.00 130.00
+-do- 10 2910 2028/05 1 FREE 0.00% 0.00 130.00
+8. CODOPAR TAB 10 TAB 06641 2027/09 10 56.90 569.00 65.00
+9. QUADRAJEL 15GM ITUBE P0226 2028/04 5 117.45 587.25 85.00
+10. FORTIPLEX-M DROP 1PH FM3606 2027/11 2 83.00 166.00 83.00
+do - 1PH FM3606 2027/11 1 83.00 83.00 83.00
+一一
+6,318.89
+OFFICE COPY TOTAL
+LESS DISCOUNT : 264.93
+ROUNDING : 0.04
+NEI TOTAL 6,054.00
+Inwords Rs.t cis Thousand Fifty-fotr only.
+`;
+
+// The same bill photographed at full size: the rows came apart in other places.
+const SOHAN_FULL_SIZE = `
+S.N. HS CODE: ITEM DESCRIPTION: PACK: BATCH: EXP.DATE QTY: CC/RATE: AMOUNT: M.R.P.
+1.
+ CALIN LOTION 100ML 1 CN20826
+2028/07 10 112.07 1,120.70 130.00
+- do - 1 CN20826 2028/07 2 FREE 0.00% 0.00 130.00
+CYCLOPAM DROPS 26050431 2028/10 5 74.99 374.95 54.25
+CLAVAM -625 MG TAB TAB 26441494 2027/09 8 271.90 2,175.20 196.88
+ - do - TAB 26441494 2027/09 2.EREE 7.51% 40.84 196.88
+ANOMYCETIN- EYE 0INT 10 AAM56-6 2027/10 1 345.85 345.85 400.00
+SINAREST TAB SCT2504 2028/10 4 39.30 157.20 28.14
+do- SCT2504 2028/10 1 39.30 39.30 28.14
+6. ALDACTONE 25 NG TAB 02A25042 2028/08 2 48.30 96.60 34.90
+7. Z0XAFEN FORTE TAB 10 2910 2028/05 5 112.60 563.00 130.00
+-do - 10 2910 2028/05 1 FREE 0.00% 0.00 130.00
+8. CODOPAR TAB 10 TAB 06641 2027/09 10 56.90 569.00 65.00
+9. QUADRAJEL 15GM ITUBE P0226 2028/04 5 117.45 587.25 85.00
+10. FORTIPLEX-M DROP 1PH FM3606 2027/11 .2 83.00 166.00 83.00
+do - 1PH FM3606 2027/11 1 83.00 83.00 83.00
+OFFICE COPY TOTAL
+6,318.89
+LESS DISCOUNT : 264.93
+ROUNDING : 0.04
+NE TOTAL 6,054.00
+Inwords Rs.t cis Thousand Fifty-fotr only.
+`;
+
+/** What the paper says, row by row: name, batch, qty, free, rate in paisa. */
+const SOHAN_ON_PAPER: [string, string, number, number, number][] = [
+  ["CALIN LOTION 100ML", "CN20826", 10, 2, 11207],
+  ["CYCLOPAM DROPS", "26050431", 5, 0, 7499],
+  ["CLAVAM -625 MG TAB", "26441494", 8, 0, 27190],
+  ["CLAVAM -625 MG TAB", "26441494", 2, 0, 2042], // the 2 "free", charged 40.84
+  ["ANOMYCETIN- EYE", "AAM56-6", 1, 0, 34585],
+  ["SINAREST TAB", "SCT2504", 4, 0, 3930],
+  ["SINAREST TAB", "SCT2504", 1, 0, 3930],
+  ["ALDACTONE 25 NG TAB", "02A25042", 2, 0, 4830],
+  ["Z0XAFEN FORTE TAB", "2910", 5, 1, 11260],
+  ["CODOPAR TAB", "06641", 10, 0, 5690],
+  ["QUADRAJEL 15GM", "P0226", 5, 0, 11745],
+  ["FORTIPLEX-M DROP", "FM3606", 2, 0, 8300],
+  ["FORTIPLEX-M DROP", "FM3606", 1, 0, 8300],
+];
+
 const NAVYA = `
 TAXINVOICE
 oL250ML12MP UREEXTRAVIRGINCNO:BABY 5002 PCS 487:4a 10 0.00
@@ -174,6 +253,44 @@ describe("a printed invoice, as OCR gave it back", () => {
 
     const grand = parseInvoiceText("Grand Total 1,234.50");
     expect(grand.netTotalPaisa).toBe(123450);
+  });
+
+  it("reads Sohan row for row as the paper prints it, from either photo", () => {
+    for (const text of [SOHAN, SOHAN_FULL_SIZE]) {
+      const r = parseInvoiceText(text);
+      expect(r.lines).toHaveLength(SOHAN_ON_PAPER.length);
+      SOHAN_ON_PAPER.forEach(([name, batch, qty, free, rate], i) => {
+        const l = r.lines[i]!;
+        expect(l.printedName.startsWith(name)).toBe(true);
+        expect(l).toMatchObject({ batchNo: batch, qty, freeQty: free, unitCostPaisa: rate });
+        expect(l.amountDisagrees).toBe(false);
+      });
+      // Every line together is the bill's own TOTAL, so nothing was lost.
+      expect(r.lines.reduce((s, l) => s + l.amountPaisa, 0)).toBe(631889);
+      expect(r.totalPaisa).toBe(631889); // its figure printed on the line next to it
+      expect(r.billDiscountPaisa).toBe(26493);
+      expect(r.roundingPaisa).toBe(4);
+      expect(r.netTotalPaisa).toBe(605400); // "NEI TOTAL" and "NE TOTAL"
+    }
+    expect(parseInvoiceText(SOHAN).invoiceNo).toBe("CASR0001739");
+  });
+
+  it("puts back together a row read as two lines", () => {
+    const calin = parseInvoiceText(SOHAN).lines[0]!;
+    expect(calin).toMatchObject({ printedName: "CALIN LOTION 100ML", expiryAdMonth: "2028-07", qty: 10 });
+  });
+
+  it("gives a row back the name OCR read onto the row above it", () => {
+    const anomycetin = parseInvoiceText(SOHAN).lines.find((l) => l.batchNo === "AAM56-6")!;
+    expect(anomycetin.printedName).toBe("ANOMYCETIN- EYE OINT");
+  });
+
+  it("keeps a strength at the end of a name and drops a repeated pack", () => {
+    const names = parseInvoiceText(SOHAN).lines.map((l) => l.printedName);
+    expect(names).toContain("CODOPAR TAB"); // printed "CODOPAR TAB 10 TAB"
+    expect(names).toContain("CLAVAM -625 MG TAB"); // printed "... TAB TAB"
+    // while a number straight after a name is its strength, and stays
+    expect(parseInvoiceText(KB).lines.map((l) => l.printedName)).toContain("ACNETRATE 10");
   });
 
   it("keeps nothing it cannot identify off a bill it could not read", () => {

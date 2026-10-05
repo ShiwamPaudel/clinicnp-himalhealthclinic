@@ -11,7 +11,12 @@ import { DatePickerBS } from "@/components/ui/date-picker-bs";
 import { useToast } from "@/components/ui/toast";
 import { InvoicePhotoButton } from "@/components/app/invoice-photo";
 import { createPurchaseAction } from "@/app/(app)/purchases/actions";
-import { toPaisa, formatPaisa, vatOf } from "@/lib/money";
+import { toPaisa, formatPaisa, vatOf, paisaToRupees } from "@/lib/money";
+import {
+  defaultExpiryBs,
+  effectiveUnitCostPaisa,
+  marginPercent,
+} from "@/lib/purchase-entry";
 import { clampPercent, resolveBillDiscount, type DiscountMode } from "@/lib/discount";
 import { bsToDbText, today } from "@/lib/bs";
 import type { Draft } from "@/lib/invoice-read/draft";
@@ -30,6 +35,11 @@ interface LineState {
   costRupees: string;
   discountRupees: string;
   /**
+   * The selling price of the pack bought. Starts at the item's current price;
+   * a different figure becomes the item's price when the purchase is saved.
+   */
+  sellRupees: string;
+  /**
    * Only set on lines that came off a photo: the medicine's name as the
    * supplier printed it, and whether the row's own arithmetic disagreed with
    * the printed amount. Both are shown beside the boxes and neither is saved.
@@ -44,13 +54,48 @@ function blankLine(): LineState {
     unitLevel: 0,
     batchNo: "",
     mfgDateBs: "",
-    expiryDateBs: "",
+    // Four years on, to be changed to what the pack says. Starting near the
+    // real year saves paging through the calendar from today.
+    expiryDateBs: defaultExpiryBs(),
     qty: "1",
     freeQty: "0",
     costRupees: "0",
     discountRupees: "0",
+    sellRupees: "",
   };
 }
+
+/** The item's current selling price for one pack, as the box shows it. */
+function priceOf(item: Item | undefined, level: number): string {
+  const paisa = item?.units.find((u) => u.level === level)?.sellingRatePaisa ?? 0;
+  return paisa > 0 ? String(paisaToRupees(paisa)) : "";
+}
+
+/** "Margin 20.0%" under the selling price, or why there is none. */
+function MarginNote({ line }: { line: LineState }) {
+  const sell = toPaisa(Number(line.sellRupees) || 0);
+  const cost = effectiveUnitCostPaisa(
+    Number(line.qty) || 0,
+    Number(line.freeQty) || 0,
+    toPaisa(Number(line.costRupees) || 0),
+    toPaisa(Number(line.discountRupees) || 0),
+  );
+  const margin = sell > 0 && cost > 0 ? marginPercent(cost, sell) : null;
+  if (margin === null) return null;
+  const below = margin < 0;
+  return (
+    <p
+      className={
+        "absolute left-0 top-full mt-1 whitespace-nowrap text-[12px] " +
+        (below ? "font-medium text-danger-600" : "text-sage-600")
+      }
+    >
+      {below ? "Below cost" : "Margin"} {Math.abs(margin).toFixed(1)}%
+    </p>
+  );
+}
+
+type PaidNow = "credit" | "full" | "part";
 
 export function PurchaseForm({
   items,
@@ -78,6 +123,10 @@ export function PurchaseForm({
   // What a photo said the bill came to, kept only so the form can say whether
   // the two agree. It is never what gets saved — the lines are.
   const [billNetTotalPaisa, setBillNetTotalPaisa] = useState<number | null>(null);
+  // Paid to the supplier with this purchase. Nothing, as before, unless chosen.
+  const [paidNow, setPaidNow] = useState<PaidNow>("credit");
+  const [paidNowRupees, setPaidNowRupees] = useState("");
+  const [paidNowMethod, setPaidNowMethod] = useState<"cash" | "bank" | "cheque">("cash");
 
   const itemsById = useMemo(
     () => new Map(items.map((i) => [i.id, i])),
@@ -115,6 +164,7 @@ export function PurchaseForm({
         qty: l.qty,
         freeQty: l.freeQty,
         costRupees: l.costRupees,
+        sellRupees: priceOf(itemsById.get(l.itemId), l.unitLevel),
         printedName: l.printedName,
         amountDisagrees: l.amountDisagrees,
       })),
@@ -127,7 +177,7 @@ export function PurchaseForm({
     const topLevel = item
       ? Math.max(...item.units.map((u) => u.level))
       : 0;
-    setLine(i, { itemId, unitLevel: topLevel });
+    setLine(i, { itemId, unitLevel: topLevel, sellRupees: priceOf(item, topLevel) });
   }
 
   const totals = useMemo(() => {
@@ -173,6 +223,13 @@ export function PurchaseForm({
     roundingRupees,
   ]);
 
+  const paidNowPaisa =
+    paidNow === "full"
+      ? totals.total
+      : paidNow === "part"
+        ? toPaisa(Number(paidNowRupees) || 0)
+        : 0;
+
   /** Lines a photo filled in but could not find a medicine for. */
   const unmatched = lines.filter((l) => l.printedName && !l.itemId).length;
 
@@ -209,6 +266,14 @@ export function PurchaseForm({
       toast.error("A discount cannot be more than 100%.");
       return;
     }
+    if (paidNow === "part" && paidNowPaisa <= 0) {
+      toast.error("Enter how much was paid, or choose On credit.");
+      return;
+    }
+    if (paidNowPaisa > totals.total) {
+      toast.error("The amount paid is more than the bill.");
+      return;
+    }
     setBusy(true);
     const res = await createPurchaseAction({
       supplierId,
@@ -217,6 +282,8 @@ export function PurchaseForm({
       applyVat,
       billDiscountPaisa: totals.billDiscount,
       roundingPaisa: totals.rounding,
+      paidNowPaisa,
+      paidNowMethod,
       lines: lines.map((l) => ({
         itemId: l.itemId,
         batchNo: l.batchNo.trim(),
@@ -227,6 +294,7 @@ export function PurchaseForm({
         freeQty: Number(l.freeQty) || 0,
         unitCostPaisa: toPaisa(Number(l.costRupees) || 0),
         discountPaisa: toPaisa(Number(l.discountRupees) || 0),
+        sellingRatePaisa: toPaisa(Number(l.sellRupees) || 0) || undefined,
       })),
     });
     setBusy(false);
@@ -354,9 +422,10 @@ export function PurchaseForm({
                   <Field label="Unit">
                     <Select
                       value={String(l.unitLevel)}
-                      onChange={(e) =>
-                        setLine(i, { unitLevel: Number(e.target.value) })
-                      }
+                      onChange={(e) => {
+                        const level = Number(e.target.value);
+                        setLine(i, { unitLevel: level, sellRupees: priceOf(item, level) });
+                      }}
                     >
                       {(item?.units ?? [])
                         .sort((a, b) => b.level - a.level)
@@ -376,10 +445,10 @@ export function PurchaseForm({
                 </div>
                 <div
                   className={
-                    "mt-3 grid gap-3 sm:items-end " +
+                    "mt-3 grid gap-3 pb-5 sm:items-end " +
                     (showBonus
-                      ? "sm:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]"
-                      : "sm:grid-cols-[1fr_1fr_1fr_1fr_auto]")
+                      ? "sm:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto]"
+                      : "sm:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]")
                   }
                 >
                   <Field label="Mfg date (optional)">
@@ -424,6 +493,19 @@ export function PurchaseForm({
                       value={l.costRupees}
                       onChange={(e) => setLine(i, { costRupees: e.target.value })}
                     />
+                  </Field>
+                  <Field label="Selling price/unit (रू)">
+                    <div className="relative">
+                      <Input
+                        numeric
+                        inputMode="decimal"
+                        placeholder="Not priced"
+                        aria-label="Selling price per unit"
+                        value={l.sellRupees}
+                        onChange={(e) => setLine(i, { sellRupees: e.target.value })}
+                      />
+                      <MarginNote line={l} />
+                    </div>
                   </Field>
                   <div className="flex h-10 items-center">
                     {lines.length > 1 && (
@@ -564,6 +646,80 @@ export function PurchaseForm({
             )}
           </p>
         )}
+        <div className="flex w-full flex-col items-end gap-1.5 border-t border-line pt-3">
+          <div className="mb-0.5 text-[12px] font-semibold uppercase tracking-wide text-sage-500">
+            Paid to the supplier now
+          </div>
+          <div
+            role="group"
+            aria-label="Paid to the supplier now"
+            className="inline-flex rounded-[8px] border border-line bg-cream-100 p-0.5"
+          >
+            <ModeChip
+              active={paidNow === "credit"}
+              onClick={() => setPaidNow("credit")}
+              label="On credit, nothing paid now"
+            >
+              On credit
+            </ModeChip>
+            <ModeChip
+              active={paidNow === "part"}
+              onClick={() => setPaidNow("part")}
+              label="Part paid now"
+            >
+              Part paid
+            </ModeChip>
+            <ModeChip
+              active={paidNow === "full"}
+              onClick={() => setPaidNow("full")}
+              label="Paid in full now"
+            >
+              Paid in full
+            </ModeChip>
+          </div>
+          {paidNow !== "credit" && (
+            <div className="flex items-center gap-2">
+              {paidNow === "part" && (
+                <Input
+                  numeric
+                  inputMode="decimal"
+                  className="w-28 text-right"
+                  aria-label="Amount paid now, rupees"
+                  placeholder="Amount"
+                  value={paidNowRupees}
+                  onChange={(e) => setPaidNowRupees(e.target.value)}
+                />
+              )}
+              <Select
+                aria-label="Paid by"
+                className="w-28"
+                value={paidNowMethod}
+                onChange={(e) =>
+                  setPaidNowMethod(e.target.value as "cash" | "bank" | "cheque")
+                }
+              >
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+                <option value="cheque">Cheque</option>
+              </Select>
+            </div>
+          )}
+          <Row label="Paid now" value={formatPaisa(paidNowPaisa)} />
+          <Row
+            label="Left owing"
+            value={formatPaisa(Math.max(0, totals.total - paidNowPaisa))}
+          />
+          {paidNowPaisa > totals.total && (
+            <p className="text-[12px] font-medium text-danger-600">
+              That is more than the bill.
+            </p>
+          )}
+          <p className="max-w-[320px] text-right text-[12px] text-sage-500">
+            What is left owing goes on the supplier&apos;s account. Later
+            payments are recorded on the supplier&apos;s page.
+          </p>
+        </div>
+
         <div className="mt-2 flex gap-2">
           <Button variant="secondary" onClick={() => router.push("/purchases")}>
             {strings.cancel}

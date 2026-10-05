@@ -39,9 +39,12 @@ export interface PosConfig {
 export function BillTable({
   config,
   onOpenBatch,
+  onLeaveLine,
 }: {
   config: PosConfig;
   onOpenBatch: (lineId: string) => void;
+  /** Enter or Esc in a quantity box: back to the search for the next item. */
+  onLeaveLine: () => void;
 }) {
   const lines = useBillStore((s) => s.lines);
   const serviceLines = useBillStore((s) => s.serviceLines);
@@ -74,12 +77,15 @@ export function BillTable({
           </tr>
         </thead>
         <tbody>
-          {lines.map((line) => (
+          {lines.map((line, i) => (
             <BillLineRow
               key={line.lineId}
               line={line}
               config={config}
               onOpenBatch={onOpenBatch}
+              onLeaveLine={onLeaveLine}
+              prevLineId={lines[i - 1]?.lineId ?? null}
+              nextLineId={lines[i + 1]?.lineId ?? null}
             />
           ))}
         </tbody>
@@ -92,10 +98,16 @@ function BillLineRow({
   line,
   config,
   onOpenBatch,
+  onLeaveLine,
+  prevLineId,
+  nextLineId,
 }: {
   line: BillLine;
   config: PosConfig;
   onOpenBatch: (lineId: string) => void;
+  onLeaveLine: () => void;
+  prevLineId: string | null;
+  nextLineId: string | null;
 }) {
   const {
     setQty,
@@ -109,6 +121,13 @@ function BillLineRow({
   } = useBillStore();
 
   const qtyRef = useRef<HTMLInputElement>(null);
+  const rowRef = useRef<HTMLTableRowElement>(null);
+  // The quantity as typed, so the box can be empty for a moment while a new
+  // number goes in. The bill itself never holds less than 1.
+  const [qtyStr, setQtyStr] = useState(String(line.qty));
+  useEffect(() => {
+    setQtyStr((typed) => (typed === "" ? typed : String(line.qty)));
+  }, [line.qty]);
   const [rateStr, setRateStr] = useState(String(paisaToRupees(line.ratePaisa)));
   const [discStr, setDiscStr] = useState(
     line.discountPaisa ? String(paisaToRupees(line.discountPaisa)) : "",
@@ -119,9 +138,14 @@ function BillLineRow({
     setRateStr(String(paisaToRupees(line.ratePaisa)));
   }, [line.ratePaisa]);
 
-  // focus qty when this line becomes active (just added / resumed)
+  // Focus qty when this line becomes active (just added, resumed, or reached
+  // with the arrow keys). Not when the cursor is already somewhere in this
+  // row: clicking a line's rate box makes the line active, and pulling the
+  // cursor away from the box just clicked is what made rates feel stuck.
   useEffect(() => {
-    if (activeLineId === line.lineId) qtyRef.current?.focus();
+    if (activeLineId !== line.lineId) return;
+    if (rowRef.current?.contains(document.activeElement)) return;
+    qtyRef.current?.focus();
   }, [activeLineId, line.lineId]);
 
   const preview = linePreview(line, config.todayIso);
@@ -150,6 +174,7 @@ function BillLineRow({
 
   return (
     <tr
+      ref={rowRef}
       className={cn(
         "border-b border-line align-top",
         line.overrideBatchId && "border-l-2 border-l-magenta-600",
@@ -191,11 +216,18 @@ function BillLineRow({
         <input
           ref={qtyRef}
           inputMode="numeric"
-          value={line.qty}
-          onChange={(e) =>
-            setQty(line.lineId, Number(e.target.value.replace(/\D/g, "")) || 1)
-          }
+          value={qtyStr}
+          // Selected on the way in, so typing 5 makes it 5 and not 15.
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, "");
+            setQtyStr(digits);
+            const n = Number(digits);
+            if (n > 0) setQty(line.lineId, n);
+          }}
+          onBlur={() => setQtyStr(String(line.qty))}
           onKeyDown={(e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
             if (e.key === "u" || e.key === "U") {
               e.preventDefault();
               cycleUnit(line.lineId);
@@ -205,6 +237,20 @@ function BillLineRow({
             } else if (e.key === "Delete") {
               e.preventDefault();
               removeLine(line.lineId);
+              // The cursor goes to the next line, else the one before, else
+              // back to the search, rather than being lost with the row.
+              const to = nextLineId ?? prevLineId;
+              if (to) setActiveLine(to);
+              else onLeaveLine();
+            } else if (e.key === "ArrowUp" && prevLineId) {
+              e.preventDefault();
+              setActiveLine(prevLineId);
+            } else if (e.key === "ArrowDown" && nextLineId) {
+              e.preventDefault();
+              setActiveLine(nextLineId);
+            } else if (e.key === "Enter" || e.key === "Escape") {
+              e.preventDefault();
+              onLeaveLine();
             }
           }}
           className="h-9 w-16 rounded-[8px] border border-line bg-cream-50 px-2 text-right text-[15px] tnum focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-700"

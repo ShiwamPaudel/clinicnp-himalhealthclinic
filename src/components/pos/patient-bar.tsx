@@ -322,7 +322,7 @@ export function PatientBar({
             >
               <UserPlus className="h-4 w-4" />
               Attach patient
-              <kbd className="ml-1 rounded-[4px] bg-sage-150 px-1 text-[11px]">P</kbd>
+              <kbd className="ml-1 rounded-[4px] bg-sage-150 px-1 text-[11px]">F4</kbd>
             </button>
           </>
         )}

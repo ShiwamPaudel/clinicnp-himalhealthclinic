@@ -23,7 +23,13 @@ const STAGE_TEXT: Record<ReadStage, string> = {
   opening: "Opening the photo…",
   loading: "Getting the reader ready…",
   reading: "Reading the bill…",
+  turning: "Turning the photo and reading again…",
 };
+
+/** How much of a bill a text is: the rows the parser can find in it. */
+function rowsIn(text: string): number {
+  return parseInvoiceText(text).lines.length;
+}
 
 export function InvoicePhotoButton({
   items,
@@ -39,11 +45,11 @@ export function InvoicePhotoButton({
   async function onPick(file: File) {
     setStage("opening");
     try {
-      const text = await readPhotoText(file, setStage);
+      const text = await readPhotoText(file, setStage, rowsIn);
       const read = parseInvoiceText(text);
       if (read.lines.length === 0) {
         toast.error(
-          "Nothing could be read off that photo. Try a straighter, brighter one — or enter this bill by hand.",
+          "No item rows could be read off that photo, even turned round. Take it again from straight above, with the whole bill in the frame and no shadow across it — or enter this bill by hand.",
         );
         return;
       }

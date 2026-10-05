@@ -38,6 +38,13 @@ export interface PurchaseInput {
   roundingPaisa?: number;
   lines: PurchaseLineInput[];
   userId: string;
+  /**
+   * New selling prices set from this purchase's lines, written in the same
+   * batch so a purchase never lands without the prices it was saved with.
+   */
+  priceUpdates?: { itemId: string; rates: { level: number; sellingRatePaisa: number }[] }[];
+  /** paid to the supplier with this purchase; becomes a supplier payment */
+  paidNow?: { amountPaisa: number; method: string };
 }
 
 export interface PurchaseTotals {
@@ -185,6 +192,47 @@ export async function createPurchase(
         l.freeQty,
         l.unitCostPaisa,
         l.discountPaisa,
+      ],
+    });
+  }
+
+  for (const p of input.priceUpdates ?? []) {
+    for (const r of p.rates) {
+      stmts.push({
+        sql: `UPDATE item_units SET selling_rate_paisa = ?
+              WHERE item_id = ? AND level = ?`,
+        args: [r.sellingRatePaisa, p.itemId, r.level],
+      });
+    }
+    // The counter's cached catalogue is keyed on this (see setUnitRates).
+    stmts.push({
+      sql: "UPDATE items SET updated_at = ? WHERE id = ?",
+      args: [now, p.itemId],
+    });
+  }
+
+  // Paid at the time of purchase, in part or in full. It is an ordinary
+  // supplier payment, dated with the purchase, so the ledger needs nothing new
+  // to show it; what is not paid stays owed exactly as before.
+  const paid = input.paidNow?.amountPaisa ?? 0;
+  if (paid > 0) {
+    if (paid > totals.totalPaisa) {
+      throw new Error("paid now is more than the purchase total");
+    }
+    stmts.push({
+      sql: `INSERT INTO supplier_payments
+              (id, supplier_id, date_ad, date_bs, amount_paisa, method, note, user_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        ulid(),
+        input.supplierId,
+        input.dateAd,
+        input.dateBs,
+        paid,
+        input.paidNow!.method,
+        `Paid with purchase ${purchaseNo}`,
+        input.userId,
+        now,
       ],
     });
   }

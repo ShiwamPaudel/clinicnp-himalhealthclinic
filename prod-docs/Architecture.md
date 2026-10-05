@@ -198,6 +198,14 @@ ALTER TABLE purchases ADD COLUMN bill_discount_paisa INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE purchases ADD COLUMN rounding_paisa INTEGER NOT NULL DEFAULT 0;
 ```
 
+*(C-024, no schema change.)* `createPurchase` can carry two more writes in the
+same batch as the purchase: a **payment made with it** — an ordinary
+`supplier_payments` row dated with the purchase, noted `Paid with purchase
+PI-…`, never more than its total (D-152) — and **new selling prices** set from
+its lines, written to `item_units` with the item's `updated_at` bumped so
+counters re-sync, every pack worked out in proportion from the one bought
+(D-150). Either both land with the purchase or none of it does.
+
 ### 3.3 New tables
 
 ```sql

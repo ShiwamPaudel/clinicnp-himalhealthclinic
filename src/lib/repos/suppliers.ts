@@ -178,16 +178,18 @@ export async function supplierLedger(supplierId: string): Promise<{
   }
 
   const payments = await db().execute({
-    sql: `SELECT date_ad, date_bs, amount_paisa, method
+    sql: `SELECT date_ad, date_bs, amount_paisa, method, note
           FROM supplier_payments WHERE supplier_id = ?`,
     args: [supplierId],
   });
   for (const p of payments.rows) {
+    const note = ((p.note as string | null) ?? "").trim();
     rows.push({
       dateAd: p.date_ad as string,
       dateBs: p.date_bs as string,
       kind: "payment",
-      description: `Payment (${p.method})`,
+      // The note says which purchase a payment made at the time belongs to.
+      description: note ? `Payment (${p.method}) · ${note}` : `Payment (${p.method})`,
       deltaPaisa: -Number(p.amount_paisa),
     });
   }

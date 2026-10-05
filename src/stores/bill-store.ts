@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { ulid } from "ulid";
 import type { PosItem, PosService } from "@/lib/pos-types";
-import type { HeldLine } from "@/lib/pos-types";
+import type { HeldLine, HeldServiceLine } from "@/lib/pos-types";
 import {
   defaultUnit,
   unitByLevel,
@@ -94,7 +94,18 @@ interface BillState {
   setBillDiscountMode: (mode: DiscountMode) => void;
   setBillDiscountPercent: (percent: number) => void;
   reset: () => void;
-  loadLines: (lines: BillLine[], patientName: string) => void;
+  /**
+   * Put a held bill back on the counter: its medicines, its services and its
+   * patient. Whatever was on the counter is replaced, so the caller holds it
+   * first if it was not empty.
+   */
+  loadHeld: (bill: {
+    lines: BillLine[];
+    serviceLines: ServiceLine[];
+    patient: AttachedPatient | null;
+    patientName: string;
+    visitId: string | null;
+  }) => void;
 }
 
 function makeLine(item: PosItem): BillLine {
@@ -324,10 +335,13 @@ export const useBillStore = create<BillState>((set) => ({
       activeLineId: null,
     }),
 
-  loadLines: (lines, patientName) =>
+  loadHeld: ({ lines, serviceLines, patient, patientName, visitId }) =>
     set({
       lines,
-      patientName,
+      serviceLines,
+      patient,
+      visitId,
+      patientName: patient?.name ?? patientName,
       paymentMethod: "cash",
       tenderedPaisa: 0,
       paidNowPaisa: 0,
@@ -357,4 +371,37 @@ export function linesFromHeld(held: HeldLine[], items: PosItem[]): BillLine[] {
     });
   }
   return out;
+}
+
+/**
+ * Rebuild ServiceLines from a held bill using the current service list. A
+ * service taken off the list since the bill was held cannot come back, and
+ * is reported by name so the counter can say so.
+ */
+export function serviceLinesFromHeld(
+  held: HeldServiceLine[],
+  services: PosService[],
+): { lines: ServiceLine[]; missing: number } {
+  const byId = new Map(services.map((s) => [s.id, s]));
+  const lines: ServiceLine[] = [];
+  let missing = 0;
+  for (const h of held) {
+    const svc = byId.get(h.serviceId);
+    if (!svc) {
+      missing += 1;
+      continue;
+    }
+    lines.push({
+      ...makeServiceLine(svc),
+      qty: h.qty,
+      ratePaisa: h.ratePaisa,
+      rateOverridden: h.rateOverridden,
+      discountPaisa: h.discountPaisa,
+      doctorId: h.doctorId,
+      labPartnerId: h.labPartnerId,
+      followupApplied: h.followupApplied,
+      followupNote: h.followupNote,
+    });
+  }
+  return { lines, missing };
 }

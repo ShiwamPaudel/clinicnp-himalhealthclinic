@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ulid } from "ulid";
 import Link from "next/link";
 import { ArrowLeft, HelpCircle, PauseCircle, PlayCircle } from "lucide-react";
-import { useBillStore, linesFromHeld } from "@/stores/bill-store";
+import {
+  useBillStore,
+  linesFromHeld,
+  serviceLinesFromHeld,
+} from "@/stores/bill-store";
 import { counterTotals } from "@/lib/discount";
 import {
   linePreview,
@@ -73,6 +77,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
   const [lang, setLang] = useState<"en" | "np">("en");
 
   const searchRef = useRef<SearchBoxHandle>(null);
+  const savingRef = useRef(false);
   const paymentRef = useRef<PaymentPaneHandle>(null);
 
   const store = useBillStore();
@@ -175,6 +180,10 @@ export function PosScreen({ config }: { config: PosConfig }) {
   }, [config.todayIso]);
 
   const doSave = useCallback(async () => {
+    // F9 pressed twice, or Enter held down in the amount box, must not make
+    // two bills. The state flag is too slow for that: both presses read it
+    // before React has re-rendered.
+    if (savingRef.current) return;
     const s = useBillStore.getState();
     if (s.lines.length === 0 && s.serviceLines.length === 0) return;
 
@@ -294,6 +303,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
       );
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     const id = ulid();
     const nowIso = new Date().toISOString();
@@ -430,6 +440,7 @@ export function PosScreen({ config }: { config: PosConfig }) {
 
     store.reset();
     await refreshItems();
+    savingRef.current = false;
     setSaving(false);
     searchRef.current?.focus();
 
@@ -437,14 +448,16 @@ export function PosScreen({ config }: { config: PosConfig }) {
     void flushOutbox();
   }, [config, store, toast, refreshItems, services, doctors]);
 
-  const doHold = useCallback(async () => {
+  /** The bill on the counter as a held bill, ready for the tray. */
+  const heldFromCounter = useCallback((): HeldBill | null => {
     const s = useBillStore.getState();
-    if (s.lines.length === 0 && s.serviceLines.length === 0) return;
-    const bill: HeldBill = {
+    if (s.lines.length === 0 && s.serviceLines.length === 0) return null;
+    return {
       id: ulid(),
       heldAt: new Date().toISOString(),
       patientName: s.patientName,
       patientId: s.patient?.id,
+      attachedPatient: s.patient ?? undefined,
       // Carried only when this person may not have reached the server yet, so
       // the bill can bring them with it (Architecture §2.1 Path B).
       patient: s.patient?.snapshot
@@ -481,38 +494,125 @@ export function PosScreen({ config }: { config: PosConfig }) {
         overrideBatchId: l.overrideBatchId,
       })),
     };
-    const ok = await holdBill(bill);
-    if (!ok) {
-      toast.error(`You can hold up to ${MAX_HELD} bills.`);
-      return;
-    }
-    store.reset();
-    await refreshHeld();
-    toast.success("Bill held");
-    searchRef.current?.focus();
-  }, [store, toast, refreshHeld]);
+  }, [config.todayIso]);
 
-  const doResume = useCallback(
-    async (heldId: string) => {
-      const bill = await resumeHeld(heldId);
-      if (!bill) return;
-      const lines = linesFromHeld(bill.lines, items);
-      useBillStore.getState().loadLines(lines, bill.patientName);
+  /**
+   * Park the bill on the counter. Returns whether the counter is now clear,
+   * so starting a new bill can refuse rather than throw a bill away when the
+   * tray is full.
+   */
+  const doHold = useCallback(
+    async (message = "Bill held"): Promise<boolean> => {
+      const bill = heldFromCounter();
+      if (!bill) return true;
+      const ok = await holdBill(bill);
+      if (!ok) {
+        toast.error(
+          `You can hold up to ${MAX_HELD} bills. Finish or resume one first (F8).`,
+        );
+        return false;
+      }
+      useBillStore.getState().reset();
       await refreshHeld();
-      setShowHeld(false);
+      toast.success(message);
+      searchRef.current?.focus();
+      return true;
     },
-    [items, refreshHeld],
+    [heldFromCounter, toast, refreshHeld],
   );
 
-  // global keyboard shortcuts
+  /**
+   * F2. A bill already on the counter is held, never thrown away: the key may
+   * have been pressed by mistake, or the customer may come back.
+   */
+  const startNewBill = useCallback(async () => {
+    setShowHeld(false);
+    setBatchLineId(null);
+    setShowShortcuts(false);
+    const cleared = await doHold("The bill you were on is held. F8 brings it back.");
+    if (!cleared) return;
+    // An empty bill can still carry a patient or a typed name.
+    useBillStore.getState().reset();
+    searchRef.current?.focus();
+  }, [doHold]);
+
+  /**
+   * Bring a held bill back. If another bill is on the counter the two swap
+   * places, rather than the one on the counter being overwritten. The chosen
+   * one leaves the tray first, so there is always room for the swap.
+   */
+  const doResume = useCallback(
+    async (heldId: string) => {
+      const current = heldFromCounter();
+      const bill = await resumeHeld(heldId);
+      if (!bill) return;
+      if (current) await holdBill(current);
+
+      const lines = linesFromHeld(bill.lines, items);
+      const svc = serviceLinesFromHeld(bill.serviceLines ?? [], services);
+      useBillStore.getState().loadHeld({
+        lines,
+        serviceLines: svc.lines,
+        patient: bill.attachedPatient ?? null,
+        patientName: bill.patientName,
+        visitId: bill.visitId ?? null,
+      });
+      await refreshHeld();
+      setShowHeld(false);
+
+      const lost = bill.lines.length - lines.length + svc.missing;
+      if (lost > 0) {
+        toast.error(
+          `${lost} line${lost === 1 ? " is" : "s are"} no longer on the list and could not come back.`,
+        );
+      } else if (
+        !bill.attachedPatient &&
+        bill.patientId &&
+        (bill.serviceLines?.length ?? 0) > 0
+      ) {
+        toast.error("Attach the patient again before saving (F4).");
+      } else if (current) {
+        toast.success("Swapped. The bill you were on is held.");
+      }
+      if (lines.length === 0) searchRef.current?.focus();
+    },
+    [heldFromCounter, items, services, refreshHeld, toast],
+  );
+
+  const patientBarShown = services.length > 0 || config.clinicOn;
+
+  // F5 or Ctrl+R reloads the page, and the bill being made lives only on this
+  // screen. While there is one, the browser asks before it lets go of it.
+  useEffect(() => {
+    function onUnload(e: BeforeUnloadEvent) {
+      const s = useBillStore.getState();
+      if (s.lines.length === 0 && s.serviceLines.length === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, []);
+
+  // Counter shortcuts. Function keys work wherever the cursor is. Letter keys
+  // work when the cursor is not in a box that takes words, so P can be
+  // pressed from the quantity box but never steals the P of "Paracetamol".
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const target = e.target as HTMLElement;
-      const typing =
-        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+      const fn = /^F\d{1,2}$/.test(e.key);
+      // A held-down function key repeats; one press is one action.
+      if (fn && e.repeat) {
+        e.preventDefault();
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const words = takesWords(target);
       if (e.key === "F2") {
         e.preventDefault();
-        searchRef.current?.focus();
+        void startNewBill();
+      } else if (e.key === "F4" && patientBarShown) {
+        e.preventDefault();
+        setPatientOpenSignal((n) => n + 1);
       } else if (e.key === "F7") {
         e.preventDefault();
         void doHold();
@@ -522,17 +622,21 @@ export function PosScreen({ config }: { config: PosConfig }) {
       } else if (e.key === "F9") {
         e.preventDefault();
         void doSave();
-      } else if ((e.key === "p" || e.key === "P") && !typing) {
+      } else if (e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      } else if ((e.key === "p" || e.key === "P") && !words && patientBarShown) {
         e.preventDefault();
         setPatientOpenSignal((n) => n + 1);
-      } else if (e.key === "?" && !typing) {
+      } else if (e.key === "?" && (!words || isEmptyBox(target))) {
+        // Nothing is ever searched for by a question mark, so it opens the
+        // help even from the empty search box, where the cursor usually is.
         e.preventDefault();
         setShowShortcuts(true);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doHold, doSave]);
+  }, [startNewBill, doHold, doSave, patientBarShown]);
 
   const batchLine = batchLineId
     ? store.lines.find((l) => l.lineId === batchLineId)
@@ -630,7 +734,11 @@ export function PosScreen({ config }: { config: PosConfig }) {
               services={services}
               canEditRate={config.canEditRate}
             />
-            <BillTable config={config} onOpenBatch={(id) => setBatchLineId(id)} />
+            <BillTable
+              config={config}
+              onOpenBatch={(id) => setBatchLineId(id)}
+              onLeaveLine={() => searchRef.current?.focus()}
+            />
           </div>
           <UnitPanel
             line={activeLine}
@@ -697,6 +805,31 @@ function HeldTray({
   held: HeldBill[];
   onResume: (id: string) => void;
 }) {
+  const firstRef = useRef<HTMLButtonElement>(null);
+
+  // Driven from the keyboard like the rest of the counter: the first held
+  // bill takes the cursor, a number key resumes that bill, Esc closes.
+  useEffect(() => {
+    if (open) firstRef.current?.focus();
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= held.length) {
+        e.preventDefault();
+        onResume(held[n - 1]!.id);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, held, onClose, onResume]);
+
   if (!open) return null;
   return (
     <div
@@ -709,6 +842,11 @@ function HeldTray({
       >
         <h2 className="mb-2 text-[15px] font-semibold text-sage-900">
           Held bills
+          {held.length > 0 && (
+            <span className="ml-2 text-[12px] font-normal text-sage-500">
+              press a number to resume · Esc to close
+            </span>
+          )}
         </h2>
         {held.length === 0 ? (
           <p className="py-6 text-center text-[14px] text-sage-500">
@@ -716,14 +854,18 @@ function HeldTray({
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {held.map((h) => (
+            {held.map((h, i) => (
               <li key={h.id}>
                 <button
+                  ref={i === 0 ? firstRef : undefined}
                   onClick={() => onResume(h.id)}
-                  className="flex w-full items-center justify-between rounded-[8px] border border-line bg-cream-50 px-3 py-2.5 text-left hover:bg-cream-200"
+                  className="flex w-full items-center justify-between rounded-[8px] border border-line bg-cream-50 px-3 py-2.5 text-left hover:bg-cream-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-700"
                 >
-                  <span className="text-[14px] text-sage-900">
-                    {h.patientName || `${h.lines.length} item${h.lines.length === 1 ? "" : "s"}`}
+                  <span className="flex items-center gap-2 text-[14px] text-sage-900">
+                    <kbd className="rounded-[4px] border border-line bg-cream-100 px-1.5 text-[11px] font-semibold text-sage-700">
+                      {i + 1}
+                    </kbd>
+                    {h.patientName || heldSummary(h)}
                   </span>
                   <PlayCircle className="h-4 w-4 text-sage-600" />
                 </button>
@@ -734,4 +876,29 @@ function HeldTray({
       </div>
     </div>
   );
+}
+
+/** A box that takes words, where a letter key must stay a letter. */
+function takesWords(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  if (el.tagName === "TEXTAREA" || el.tagName === "SELECT") return true;
+  if (el.tagName !== "INPUT") return false;
+  const input = el as HTMLInputElement;
+  // Quantity, rate, discount and money boxes only ever take numbers.
+  return input.inputMode !== "numeric" && input.inputMode !== "decimal";
+}
+
+function isEmptyBox(el: HTMLElement | null): boolean {
+  return el?.tagName === "INPUT" && (el as HTMLInputElement).value === "";
+}
+
+/** "3 items, 1 service" for a held bill with no name on it. */
+function heldSummary(h: HeldBill): string {
+  const parts: string[] = [];
+  if (h.lines.length > 0)
+    parts.push(`${h.lines.length} item${h.lines.length === 1 ? "" : "s"}`);
+  const svc = h.serviceLines?.length ?? 0;
+  if (svc > 0) parts.push(`${svc} service${svc === 1 ? "" : "s"}`);
+  return parts.join(", ") || "Empty bill";
 }

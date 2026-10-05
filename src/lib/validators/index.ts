@@ -111,6 +111,11 @@ export const purchaseLineSchema = z
     freeQty: z.number().int().min(0),
     unitCostPaisa: z.number().int().min(0),
     discountPaisa: z.number().int().min(0),
+    /**
+     * The selling price of the pack bought, as typed on the line. Absent or 0
+     * leaves the price alone; a new figure becomes the item's price.
+     */
+    sellingRatePaisa: z.number().int().min(0).optional(),
   })
   // Both are zero-padded BS text, so comparing the strings compares the dates.
   .refine((l) => !l.mfgDateBs || l.mfgDateBs <= l.expiryDateBs, {
@@ -132,6 +137,9 @@ export const purchaseSchema = z.object({
     .max(1000, "Rounding that big is not rounding")
     .default(0),
   lines: z.array(purchaseLineSchema).min(1, "Add at least one item"),
+  /** paid to the supplier with this purchase; the rest stays owed on their ledger */
+  paidNowPaisa: z.number().int().min(0, "A payment cannot be less than nothing").default(0),
+  paidNowMethod: z.enum(["cash", "bank", "cheque"]).default("cash"),
 });
 export type PurchaseFormInput = z.infer<typeof purchaseSchema>;
 

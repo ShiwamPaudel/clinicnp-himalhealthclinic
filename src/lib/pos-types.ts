@@ -156,7 +156,28 @@ export interface HeldBill {
   patientId?: string;
   /** carried for a patient who may not have reached the server yet */
   patient?: InlinePatient;
+  /**
+   * The patient exactly as the patient bar showed them, so a resumed bill
+   * comes back with them attached. Absent on bills held before it existed;
+   * those come back with the name only.
+   */
+  attachedPatient?: HeldAttachedPatient;
   visitId?: string;
+}
+
+/** Structurally the bill store's AttachedPatient, which lives client-side. */
+export interface HeldAttachedPatient {
+  id: string;
+  patientNo: number | null;
+  name: string;
+  sex: string;
+  ageShort: string;
+  snapshot?: {
+    ageValue: number | null;
+    ageUnit: "y" | "m" | "d" | null;
+    phone: string;
+    address: string;
+  };
 }
 
 export interface HeldServiceLine {

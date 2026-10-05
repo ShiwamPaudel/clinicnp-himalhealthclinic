@@ -161,7 +161,43 @@ export function expiryFromToken(token: string): string {
 
 /* -------------------------------------------------------------------- pack */
 
-const PACK_WORDS = /^(1?(PH|ANP|AMP|TUBE?|TU8|VIAL|VIXD|PCS|BOX|JAR|STRIP|BTL|KIT))$/i;
+// The 1 of "1TUBE" comes back as an I or an l as often as a 1 (Sohan).
+const PACK_WORDS = /^([1Il]?(PH|ANP|AMP|TUBE?|TU8|VIAL|VIXD|PCS|BOX|JAR|STRIP|BTL|KIT))$/i;
+
+/** Words for what a medicine is, which some suppliers print twice over. */
+const FORM_WORDS = /^(TAB|TABS|TA8|CAP|CAPS|SYP|SYR|SUSP|INJ|[O0]INT|CREAM|GEL|LOTION|DROPS?|SOL|SACHET)$/i;
+/** A strength or size with its unit: 100ML, 15GM, 500MG. */
+const SIZED = /^\d+(\.\d+)?(ML|GM|G|MG|MCG|IU)$/i;
+
+/**
+ * The pack, printed again at the end of a name. Sohan prints the pack column
+ * hard against the description, so "CODOPAR TAB" with a pack of "10 TAB" comes
+ * back as "CODOPAR TAB 10 TAB", and "CALIN LOTION 100ML" with a pack of "1" as
+ * "CALIN LOTION 100ML 1". Trailing pack text is taken off; a number is only
+ * taken off when it follows a form or a size, because after anything else it
+ * is the strength ("ACNETRATE 10", "RAB 20") and must stay.
+ */
+function tidyName(name: string): string {
+  const t = name.split(/\s+/).filter(Boolean);
+  for (;;) {
+    const last = t[t.length - 1];
+    const prev = t[t.length - 2];
+    if (!last || !prev) break;
+    if (looksLikePack(last)) {
+      t.pop();
+    } else if (/^\d{1,3}$/.test(last) && (FORM_WORDS.test(prev) || SIZED.test(prev))) {
+      t.pop();
+    } else if (
+      FORM_WORDS.test(last) &&
+      t.slice(0, -1).some((w) => w.toUpperCase() === last.toUpperCase())
+    ) {
+      t.pop();
+    } else {
+      break;
+    }
+  }
+  return t.join(" ");
+}
 
 function looksLikePack(token: string): boolean {
   if (/^\d{1,3}\s*[xX*]\s*\d{1,3}$/.test(token)) return true; // 1X10, 1X15
@@ -172,6 +208,53 @@ function looksLikePack(token: string): boolean {
 }
 
 /* -------------------------------------------------------------------- rows */
+
+/**
+ * The word FREE, however OCR spelled it: "EREE" and "FRFE" are the same dot-
+ * matrix letters misread, and a free row read as a paid one takes the MRP for
+ * its amount.
+ */
+function isFreeWord(token: string): boolean {
+  return /^FREE/i.test(token) || /^[FE][RP][EF][EF]$/i.test(token);
+}
+
+/**
+ * Pull apart what OCR ran together: a quantity stuck to FREE ("2.EREE",
+ * "LFREE" for 1 FREE), and a stray mark in front of a quantity (".2").
+ */
+function separate(tokens: string[]): string[] {
+  const out: string[] = [];
+  for (const t of tokens) {
+    const glued = /^([\dlI|]{1,3})[.,]?([A-Za-z]{4})$/.exec(t);
+    if (glued && isFreeWord(glued[2]!)) {
+      out.push(digitsOnly(glued[1]!), glued[2]!);
+    } else if (/^[.,'`](\d{1,4})$/.test(t)) {
+      out.push(t.slice(1));
+    } else {
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/**
+ * Where a "- do -" sits among a row's words, as [first, last] index. It is
+ * usually at the start, but OCR can read a crooked row together with the name
+ * of the row below it ("ANOMYCETIN- EYE OINT - do - TAB 26441494 ..."), which
+ * puts the marker in the middle.
+ */
+function dittoSpan(tokens: string[]): [number, number] | null {
+  const dash = (t: string | undefined) => !!t && /^[-–—]+$/.test(t);
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!;
+    if (!/^[-–—]*do[-–—]*$/i.test(t)) continue;
+    const before = dash(tokens[i - 1]);
+    const after = dash(tokens[i + 1]);
+    if (!/[-–—]/.test(t) && !before && !after) continue;
+    return [before ? i - 1 : i, after ? i + 1 : i];
+  }
+  return null;
+}
 
 /** A continuation row: the same medicine again, as free goods or a second batch. */
 function isDitto(line: string): boolean {
@@ -251,7 +334,7 @@ function readLeft(left: string[]): { name: string; pack: string; batchNo: string
   if (packAt === -1) {
     // No pack column read: the batch is the last token, the name is the rest.
     return {
-      name: t.slice(0, -1).join(" ").replace(/[:;,]+$/, "").trim(),
+      name: tidyName(t.slice(0, -1).join(" ").replace(/[:;,]+$/, "").trim()),
       pack: "",
       batchNo: cleanBatch([t[t.length - 1]!]),
     };
@@ -264,7 +347,7 @@ function readLeft(left: string[]): { name: string; pack: string; batchNo: string
     nameEnd = packAt - 1;
   }
   return {
-    name: t.slice(0, nameEnd).join(" ").replace(/[:;,]+$/, "").trim(),
+    name: tidyName(t.slice(0, nameEnd).join(" ").replace(/[:;,]+$/, "").trim()),
     pack,
     batchNo: cleanBatch(t.slice(packAt + 1)),
   };
@@ -297,13 +380,27 @@ function readRight(right: string[]): {
   unitCostPaisa: number;
   amountPaisa: number;
 } | null {
-  const free = right.some((t) => /^FREE/i.test(t));
+  const free = right.some(isFreeWord);
   const counts = right.filter(looksLikeCount);
   const monies = right.filter((t) => looksLikeMoney(t) && !t.includes("%"));
   const qty = counts.length ? Number(counts[0]) : 0;
   if (qty <= 0) return null;
   if (monies.length === 0) {
     return free ? { qty, free, unitCostPaisa: 0, amountPaisa: 0 } : null;
+  }
+  if (free) {
+    // A free row's rate column holds a percentage ("0.00%", "7.51%"), so the
+    // amounts left are the amount and the MRP. The amount is usually nothing;
+    // when it is not, the supplier charged for the "free" goods and the money
+    // has to stay on the bill.
+    const amountPaisa =
+      monies.length >= 2 ? (moneyToPaisa(monies[monies.length - 2]!) ?? 0) : 0;
+    return {
+      qty,
+      free,
+      unitCostPaisa: amountPaisa > 0 ? Math.round(amountPaisa / qty) : 0,
+      amountPaisa,
+    };
   }
   // Of rate / amount / MRP, drop the MRP when all three are there.
   const useful = monies.length >= 3 ? monies.slice(-3, -1) : monies.slice(0, 2);
@@ -325,20 +422,32 @@ function readTotals(lines: string[]): Pick<
   let netTotalPaisa: number | null = null;
   let hasVat = false;
 
-  for (const raw of lines) {
-    const line = raw.trim();
+  /** A line that is nothing but one amount. */
+  const lone = (l: string | undefined): string | undefined => {
+    const t = (l ?? "").trim().split(/\s+/);
+    return t.length === 1 && looksLikeMoney(t[0]!) && !t[0]!.includes("%") ? t[0] : undefined;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
     // "Taxable Amount" comes back as "TaableAmoumt" as often as not.
     if (/\bVAT\b|TA\w?ABLE\s*AM/i.test(line)) hasVat = true;
     // The figure on a totals line is the last money token on it.
     const tokens = line.split(/\s+/);
-    const money = [...tokens].reverse().find((t) => looksLikeMoney(t) && !t.includes("%"));
+    let money = [...tokens].reverse().find((t) => looksLikeMoney(t) && !t.includes("%"));
+    // OCR sometimes reads a label and its figure as two lines, either way
+    // round ("OFFICE COPY TOTAL" with 6,318.89 above or below it).
+    if (!money && /T[O0]TAL|DISC[O0]UNT|R[O0DB]UND/i.test(line)) {
+      money = lone(lines[i + 1]) ?? lone(lines[i - 1]);
+    }
     if (!money) continue;
     const paisa = moneyToPaisa(money);
     if (paisa === null) continue;
     const negative = /[-~]\s*\d|:\s*-/.test(line) && /R[O0DB]UND/i.test(line);
     // Suppliers close a bill every way there is: NET TOTAL on the dot-matrix
     // bills, Net Amount, Net Payable, Grand Total elsewhere.
-    if (/^[^A-Za-z]*(N[E3]T|HET|MET)\s*(T[O0]TAL|AM[O0]UNT|PAYA8?BLE)/i.test(line)) {
+    // NET comes back as NE, NEI and HET as well.
+    if (/^[^A-Za-z]*(N[E3][TIl1]?|HET|MET)\s*(T[O0]TAL|AM[O0]UNT|PAYA8?BLE)/i.test(line)) {
       netTotalPaisa ??= paisa;
     } else if (/GRAND\s*T[O0]TAL/i.test(line)) {
       netTotalPaisa ??= paisa;
@@ -432,21 +541,61 @@ function itemBand(lines: string[]): [number, number] {
   return [start, end];
 }
 
+/**
+ * Put back together a row OCR read as two lines: the description, pack and
+ * batch on one ("CALIN LOTION 100ML 1 CN20826") and the expiry and figures on
+ * the next ("2028/07 10 112.07 1,120.70 130.00"). Only a line that is not a
+ * row by itself is joined, and only to a line that has nothing left of its
+ * numbers, so two real rows are never run together.
+ */
+function rejoinWrapped(lines: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const here = lines[i]!;
+    const next = lines[i + 1];
+    if (next && /[A-Za-z]{3}/.test(here) && !splitRow(separate(here.split(/\s+/)))) {
+      const parts = splitRow(separate(next.split(/\s+/)));
+      if (parts && stripSerial(parts.left).length === 0) {
+        out.push(`${here} ${next}`);
+        i++;
+        continue;
+      }
+    }
+    out.push(here);
+  }
+  return out;
+}
+
 export function parseInvoiceText(text: string): ReadInvoice {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const [start, end] = itemBand(lines);
   const out: ReadLine[] = [];
+  // A name OCR read onto the row above, waiting for its own row (see dittoSpan).
+  let orphanName = "";
 
-  for (let i = start; i < end; i++) {
-    const line = lines[i]!;
-    const tokens = line.split(/\s+/).filter(Boolean);
+  for (const line of rejoinWrapped(lines.slice(start, end))) {
+    const tokens = separate(line.split(/\s+/).filter(Boolean));
     if (tokens.length < 4) continue;
+    const span = dittoSpan(tokens);
+    let ditto = isDitto(line) || span !== null;
+    if (span && span[0] > 0) {
+      const before = stripSerial(tokens.slice(0, span[0]));
+      if (before.some((t) => /[A-Za-z]{3}/.test(t))) {
+        orphanName = tidyName(before.join(" "));
+      } else if (before.length > 0) {
+        // Something other than words before the marker: not a ditto row.
+        ditto = isDitto(line);
+      }
+    }
     const parts = splitRow(tokens);
     if (!parts) continue;
     const right = readRight(parts.right);
     if (!right) continue;
-    const ditto = isDitto(line);
-    const left = readLeft(parts.left);
+    // A ditto row's own words are the pack and batch after the marker.
+    const left = readLeft(
+      ditto && span && span[1] < parts.left.length ? parts.left.slice(span[1] + 1) : parts.left,
+    );
+    if (ditto) left.name = "";
 
     // Free goods come as a continuation row: "- do -" and the same batch
     // again, priced at nothing. That is bonus stock on the row above, not a
@@ -454,13 +603,33 @@ export function parseInvoiceText(text: string): ReadInvoice {
     // "- do -" itself and leaves the row with no name at all.
     const previous = out[out.length - 1];
     if (right.free && previous && (ditto || !left.name)) {
-      previous.freeQty += right.qty;
+      if (right.amountPaisa <= 0) {
+        previous.freeQty += right.qty;
+        continue;
+      }
+      // "Free" goods the supplier charged for (Sohan's 7.51% rows). Folding
+      // them into the bonus would drop the money off the bill, so they become
+      // a line of their own at what was charged.
+      out.push({
+        printedName: previous.printedName,
+        pack: left.pack || previous.pack,
+        batchNo: left.batchNo || previous.batchNo,
+        expiryAdMonth: parts.expiry || previous.expiryAdMonth,
+        qty: right.qty,
+        freeQty: 0,
+        unitCostPaisa: right.unitCostPaisa,
+        amountPaisa: right.amountPaisa,
+        amountDisagrees: Math.abs(right.qty * right.unitCostPaisa - right.amountPaisa) > 50,
+      });
       continue;
     }
 
     // A "- do -" row that is not free is a second batch of the same medicine,
-    // so it becomes a line of its own carrying the name down.
-    const name = ditto && previous ? previous.printedName : left.name;
+    // so it becomes a line of its own carrying the name down. A row that lost
+    // its name to the row above gets it back.
+    let name = ditto && previous ? previous.printedName : left.name;
+    if (!ditto && !name && orphanName) name = orphanName;
+    if (!ditto) orphanName = "";
 
     // Two kinds of row are not rows at all, and are dropped rather than put in
     // front of the person to delete: one with neither a name nor a batch on

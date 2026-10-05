@@ -271,6 +271,13 @@
 | D-145 | **The invoice reader fills the purchase form and nothing else: it never saves, never picks the supplier, and leaves a box empty rather than guessing at it** | The owner's own description of how it should work — the photo fills the fields, the person tallies against the paper, amends, and only then records the purchase. So the reader writes to the same form the counter has always used, behind the same checks, and the Save button stays where it was. It does not touch the supplier: a name on a bill is not a supplier record, and the wrong one puts money on the wrong ledger. It fills no medicine it is not sure of, because a wrong medicine on a purchase is wrong stock, and it flags what it is unsure of instead — a row whose arithmetic does not close, a name it could not find, and the bill's own net total against what the lines come to |
 | D-146 | **The model, the WebAssembly runtime and OpenCV are served by this app, not by a CDN** | The clinic's line is not reliable, and the moment somebody presses "Fill from a photo" is the worst moment to be waiting on somebody else's server — or to discover it is blocked. The model (~6 MB) is committed under `public/ocr/`; the runtime is copied out of node_modules into `public/ort/` at install and build time, so a 14 MB binary is not carried in git. `onnxruntime-web` is aliased to its wasm-only build, which avoids serving a 28 MB WebGPU runtime the reader never asks for |
 | D-147 | **A photographed page is straightened before it is read** | Measured, not assumed: the same invoice photographed flat gave back all 12 of its rows and photographed at an angle gave back 1. OpenCV finds the sheet of paper and warps its corners square first. It costs a 13 MB lazy chunk, fetched once and cached, which is the price of the feature working on a photo taken by hand rather than on a scan |
+| D-148 | **F2 starts a new bill by holding the one on screen, never by throwing it away** | The sheet always promised "F2 Start a new bill" and the key only moved the cursor, and outside the counter it did nothing at all. Starting fresh has to clear the counter, and the only safe way to clear a bill somebody may still want is to park it: F2 holds it (with the same tray limit as F7) and says so. Elsewhere in the back office F2 opens the counter, for Admin and Staff only — an Accountant has no counter |
+| D-149 | **Resuming a held bill brings back its services and its patient, and swaps with a bill already on screen** | Resume restored the medicines and the typed name only: a held clinic bill came back without its consultation, and the bill on screen was overwritten without a word. Held bills now carry the attached patient as the patient bar showed them (`HeldBill.attachedPatient`, optional — older held bills come back with the name and a prompt to attach again), and resuming over a bill holds that one first. The chosen bill leaves the tray before the other goes in, so the swap never hits the tray limit |
+| D-150 | **A selling price typed on a purchase line becomes the item's price, with every other pack worked out from it in proportion; left as it was, it changes nothing** | Owner's decision (C-024). Prices live on the item, one per pack, not on the batch, so a price on the purchase can only mean the item's price. Scaling the other packs keeps Box / Strip / Tablet from contradicting each other (the Pricing screen refuses a bigger pack that costs less). A price left as pre-filled writes nothing, so a strip the shop priced by hand above the box rate is never flattened by a purchase that did not touch it. Written in the same batch as the purchase, checked against the server's prices, logged as `items.pricing` with the purchase number. Two lines of one item with two different prices are refused |
+| D-151 | **The margin shown is on the selling price, against what one unit really cost** | Owner's decision: (selling − cost) ÷ selling, the way a distributor quotes a retailer's margin. The cost counts the bonus units and the line discount in (`effectiveUnitCostPaisa`), because 10 at Rs 112 with 2 free is Rs 93 a unit, and a margin on the printed rate would overstate it |
+| D-152 | **Paying a supplier at the time of purchase is an ordinary supplier payment, not a new kind of record** | `supplier_payments` already held every payment and the ledger already netted them off; what was missing was a way to say "part of this bill was paid today". The purchase form records it in the same batch as the purchase, dated with it, noted `Paid with purchase PI-…`, and never more than the bill. No migration. A purchase saved without it is owed in full, exactly as before. Later payments stay on the supplier's page. Laboratories already had the same arrangement on the Lab partner statement |
+| D-153 | **A new purchase line's expiry starts four years from today** | Owner's instruction: it is to be changed to what the pack says, and starting near the real year saves paging through the calendar. Worked out on the English calendar and converted, since BS months differ in length from year to year. Lines filled from a photo keep the expiry the bill printed, and stay empty where the bill has none (the owner's earlier rule, D-145) |
+| D-154 | **The invoice reader reads every photo at 1,800 px on the long side, and turns a photo it can read nothing from** | Measured on the Sohan bill: the WhatsApp-sized copy read 13 of 13 rows, the same bill at full camera size 10 to 11, and the same bill on its side 0 — which is what "Fill from a photo got nothing" looks like. Large photos are now scaled down as small ones were already scaled up. A read that finds no rows is tried again a quarter-turn each way and upside down, keeping the best; a photo taken the right way up is still read once |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -732,3 +739,58 @@ database built from `0021` with all four catalogue files in order (6,639 items,
 every pack shape exactly rather than by guessing from the name. It was not read
 because the instruction was Prodname only; it is one flag away if the owner
 wants it.
+
+### C-024  ·  2083-06-19  ·  Counter shortcuts, purchase prices and payments, the Sohan bill
+
+**Shortcuts.** F2 only worked on the counter, and there it only moved the
+cursor. Now F2 opens the counter from any back-office screen and, on the
+counter, holds the bill on screen and starts a fresh one (D-148). Every key on
+the sheet was pressed in a browser and the sheet rewritten to list exactly what
+works, grouped by where the cursor is. Fixed on the way, all real:
+**F9 pressed twice, or Enter held in the amount box, could save the same bill
+twice** — the saving flag is state, and both presses read it before React
+re-rendered; a ref now guards it. **Resuming a held bill dropped its services
+and patient and overwrote the bill on screen** (D-149). **Typing a quantity
+appended to the 1 already there** (5 became 15); the box now selects itself
+and can be empty while a number goes in. **Clicking a line's rate box jumped
+the cursor to its quantity.** **With QR chosen, Enter on the empty search went
+nowhere**; it lands on Save. Added: F4 for Attach patient (P still works
+outside a box that takes words, and never inside the search, where it is the P
+of Paracetamol), Esc to clear the search, Enter/Esc in a quantity back to the
+search, ↑/↓ between lines, Del moving the cursor to the line left, 1–9 and Esc
+in the held tray, `?` from the empty search, and the browser asking before a
+reload throws away a bill on screen.
+
+**Purchase entry.** A *Selling price/unit* box on every line, pre-filled with
+the item's current price for the pack bought, with the margin under it (D-150,
+D-151). A *Paid to the supplier now* block — On credit / Part paid / Paid in
+full, by cash, bank or cheque — that becomes a supplier payment saved with the
+purchase (D-152); the supplier ledger now shows a payment's note. New lines
+start with an expiry four years on (D-153). No migration: production stays on
+21.
+
+**Why the Sohan bill read nothing.** The reader itself was fine on the copy the
+owner sent (13 of 13). Two things broke it on a real phone photo: a full-size
+photo was never scaled down and lost rows, and a photo on its side read nothing
+at all (D-154). Then the parser, against this supplier's layout, got several of
+its 13 rows wrong: a row wrapped onto two lines lost CALIN LOTION; `FREE` read
+as `EREE` / `2.EREE` turned free rows into paid ones priced at the MRP; one
+free row was charged Rs 40.84 (the `7.51%` column), which folding into bonus
+would have lost; a crooked row put ANOMYCETIN's name on the line above; packs
+printed against the name (`CODOPAR TAB 10 TAB`); `NEI TOTAL`; and a total
+printed on the line beside its label. All fixed narrowly; the bill now reads
+row for row as printed and its 13 lines come to its own TOTAL (6,318.89) and,
+after discount and rounding, its NET TOTAL (6,054.00) from both the small and
+the full-size photo. The Sohan text is pinned in `tests/invoice-read.test.ts`
+beside the other three suppliers, whose expectations did not change.
+
+**Verified:** typecheck clean; 45 files / 523 tests, which include the new
+`tests/purchase-entry.test.ts` and `tests/purchase-payments.integration.test.ts`;
+audit clean; sweep clean for every changed file (its 7 findings are in
+`.kilo/worktrees/` and `.pitch-build/`, untouched). Production build against a
+scratch DB, then in Chromium: purchase entry 21/21 (photo → 13 lines and
+"matches the net total", nothing saved by the photo; margin 15.3% → below cost →
+16.7%; Rs 300 of Rs 1,000 paid by bank recorded with its purchase number, Rs 700
+owing on the supplier page; Clavam re-priced 20 / 120 / 600; logged; the
+untouched expiry saved four years on) and the counter 27/27 (every key above,
+and three runs leaving exactly three bills).
