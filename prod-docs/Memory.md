@@ -278,6 +278,7 @@
 | D-152 | **Paying a supplier at the time of purchase is an ordinary supplier payment, not a new kind of record** | `supplier_payments` already held every payment and the ledger already netted them off; what was missing was a way to say "part of this bill was paid today". The purchase form records it in the same batch as the purchase, dated with it, noted `Paid with purchase PI-…`, and never more than the bill. No migration. A purchase saved without it is owed in full, exactly as before. Later payments stay on the supplier's page. Laboratories already had the same arrangement on the Lab partner statement |
 | D-153 | **A new purchase line's expiry starts four years from today** | Owner's instruction: it is to be changed to what the pack says, and starting near the real year saves paging through the calendar. Worked out on the English calendar and converted, since BS months differ in length from year to year. Lines filled from a photo keep the expiry the bill printed, and stay empty where the bill has none (the owner's earlier rule, D-145) |
 | D-154 | **The invoice reader reads every photo at 1,800 px on the long side, and turns a photo it can read nothing from** | Measured on the Sohan bill: the WhatsApp-sized copy read 13 of 13 rows, the same bill at full camera size 10 to 11, and the same bill on its side 0 — which is what "Fill from a photo got nothing" looks like. Large photos are now scaled down as small ones were already scaled up. A read that finds no rows is tried again a quarter-turn each way and upside down, keeping the best; a photo taken the right way up is still read once |
+| D-155 | **The side menu lays its items in two columns, and gains Payables** | Owner's design (C-025): Dashboard and New bill keep a full row each, every group after them is two columns, and Bills / Dues / Payables / Reports / Settings sit under a rule. The menu is 264 px wide open (was 232) so no label is cut short; folded to icons it is one column as before. Payables (Admin only) lists what is owed to each supplier and each outside laboratory, read from the supplier ledger and the laboratory statement so the figures cannot drift from theirs, with each row linking to where a payment is recorded. Each half shows only with its module on |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -794,3 +795,20 @@ scratch DB, then in Chromium: purchase entry 21/21 (photo → 13 lines and
 owing on the supplier page; Clavam re-priced 20 / 120 / 600; logged; the
 untouched expiry saved four years on) and the counter 27/27 (every key above,
 and three runs leaving exactly three bills).
+
+### C-025  ·  2083-06-19  ·  Two-column side menu, and Payables
+
+Built to the owner's picture (D-155). `nav.tsx` puts every group after
+Dashboard / New bill into a two-column grid with the last group under a rule;
+`sidebar.tsx` goes from 232 to 264 px open. New **Payables** page
+(`/payables`, Admin): totals owed in all, to suppliers and to laboratories,
+then a row per supplier and per laboratory with anything owing, linking to the
+supplier ledger and the laboratory statement. Read-only, no schema change.
+
+**Verified:** typecheck, audit (the page is guarded by `getModules`), sweep
+clean for changed files; 523 tests. Built against a scratch DB and checked in
+Chromium at 1440 and 1280 wide: no label truncated, the menu does not
+overflow, exactly one item active on /payables, /suppliers and /bills, the
+folded menu unchanged, and Payables showing Rs 700 owed to the one supplier
+with a part-paid purchase and the laboratory section's empty state.
+

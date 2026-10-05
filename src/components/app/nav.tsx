@@ -18,6 +18,7 @@ import {
   Stethoscope,
   FlaskConical,
   HandCoins,
+  Banknote,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/lib/repos/users";
@@ -80,6 +81,8 @@ const GROUPS: NavGroup[] = [
       // Medicine and services both go on dues, so it sits with Bills rather
       // than inside either module's group.
       { href: "/dues", label: "Dues", icon: HandCoins },
+      // What the clinic owes: suppliers and outside laboratories together.
+      { href: "/payables", label: "Payables", icon: Banknote, adminOnly: true },
       { href: "/reports", label: "Reports", icon: BarChart3 },
       { href: "/settings/company", label: "Settings", icon: Settings, adminOnly: true },
     ],
@@ -110,10 +113,26 @@ export function Nav({
   const labelledGroups = visible.filter((g) => g.module !== null).length;
   const showLabels = labelledGroups > 1;
 
+  // Opened out, every group after the first lays its items in two columns, so
+  // the whole menu fits on a laptop screen without scrolling. Dashboard and
+  // New bill keep a full row each: they are the two places people go most.
+  // Folded to icons, everything is one column as before.
+  const twoColumns = (gi: number) => !collapsed && gi > 0;
+
   return (
     <nav className="flex flex-col gap-1">
       {visible.map((group, gi) => (
-        <div key={group.module ?? `plain-${gi}`} className="flex flex-col gap-1">
+        <div
+          key={group.module ?? `plain-${gi}`}
+          className={cn(
+            "flex flex-col gap-1",
+            // The last plain group (Bills, Dues…) is set off by a rule.
+            !collapsed &&
+              gi > 0 &&
+              group.module === null &&
+              "mt-2 border-t border-cream-50/15 pt-3",
+          )}
+        >
           {group.module !== null &&
             showLabels &&
             (collapsed ? (
@@ -131,6 +150,11 @@ export function Nav({
               </div>
             ))}
 
+          <div
+            className={
+              twoColumns(gi) ? "grid grid-cols-2 gap-x-1 gap-y-1" : "flex flex-col gap-1"
+            }
+          >
           {group.items.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(item.href + "/");
@@ -141,18 +165,19 @@ export function Nav({
                 href={item.href}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-[8px] py-2 text-[14px] transition-colors",
-                  collapsed ? "justify-center px-2" : "px-3",
+                  "flex min-w-0 items-center rounded-[8px] py-2 text-[14px] transition-colors",
+                  collapsed ? "justify-center px-2" : twoColumns(gi) ? "gap-2 px-2.5" : "gap-3 px-3",
                   active
                     ? "bg-sage-700 text-cream-50"
                     : "text-cream-50/70 hover:bg-sage-700/40 hover:text-cream-50",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                {!collapsed && item.label}
+                {!collapsed && <span className="truncate">{item.label}</span>}
               </Link>
             );
           })}
+          </div>
         </div>
       ))}
     </nav>
