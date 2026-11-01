@@ -98,7 +98,8 @@
 - The dashboard still shows pharmacy panels when the pharmacy module is off.
 - 🟠 **Backups are kept only once a private store is connected** (C-016 fixed the code, D-138). Until then the nightly job keeps and records nothing, the close-year wizard requires a download from the last day (D-140), and Settings → Backup says "Automatic backups are off". The 14 old "Automatic" rows are kept and shown as *Not kept*.
 - **Restore still receives the whole archive as one request body**, and a Vercel function's request body stops at 4.5 MB (downloads are streamed and have no limit). Production's archive was 0.9 MB on 2083-06-06 — not urgent, but before it nears 4.5 MB Restore should read a kept copy on the server instead.
-- The opening-stock row's "optional" / "what you paid" hints push those two boxes up out of line with their neighbours on a wide screen. Cosmetic, pre-existing; the purchase form avoided it in C-016 by putting "(optional)" in the label.
+- The Stock tab strip (Current … Opening stock, Shelves) is wider than the screen below about 800 px, so every Stock page scrolls sideways on a phone or a narrow tablet. Pre-existing, seen in C-026, not fixed — the strip is shared by every Stock page.
+- **`cn()` joins classes, it does not merge them.** A width passed to `<Input className="w-24">` loses to the box's own `w-full`; size such a box with a wrapper (C-026 found the old opening-stock quantity box squeezing the unit out this way).
 - *(latent, not fixed)* `billRequestBody` in `offline/outbox.ts` drops the inline `patient` snapshot (`OUTBOX_ONLY_FIELDS` lists it, since fa88d88), although D-064 and `ingestBill` expect it. The patient queue drains first, and a bill that overtakes it fails on the foreign key and retries until the registration lands, so it self-heals — but D-064's "the bill can create the patient itself" is not what ships.
 - The per-line "Disc." boxes on medicine and service lines are still rupees only; only the bill discount has the `रू | %` switch (C-015).
 - Per-report recomputation beyond the `?fy=` range, and "refund a closed-year bill into the open year", remain unbuilt.
@@ -279,6 +280,9 @@
 | D-153 | **A new purchase line's expiry starts four years from today** | Owner's instruction: it is to be changed to what the pack says, and starting near the real year saves paging through the calendar. Worked out on the English calendar and converted, since BS months differ in length from year to year. Lines filled from a photo keep the expiry the bill printed, and stay empty where the bill has none (the owner's earlier rule, D-145) |
 | D-154 | **The invoice reader reads every photo at 1,800 px on the long side, and turns a photo it can read nothing from** | Measured on the Sohan bill: the WhatsApp-sized copy read 13 of 13 rows, the same bill at full camera size 10 to 11, and the same bill on its side 0 — which is what "Fill from a photo got nothing" looks like. Large photos are now scaled down as small ones were already scaled up. A read that finds no rows is tried again a quarter-turn each way and upside down, keeping the best; a photo taken the right way up is still read once |
 | D-155 | **The side menu lays its items in two columns, and gains Payables** | Owner's design (C-025): Dashboard and New bill keep a full row each, every group after them is two columns, and Bills / Dues / Payables / Reports / Settings sit under a rule. The menu is 264 px wide open (was 232) so no label is cut short; folded to icons it is one column as before. Payables (Admin only) lists what is owed to each supplier and each outside laboratory, read from the supplier ledger and the laboratory statement so the figures cannot drift from theirs, with each row linking to where a payment is recorded. Each half shows only with its module on |
+| D-156 | **The manufacture and expiry boxes on Opening stock and Purchases take a typed date, read as English (AD) the way packs print it; a month with no day is the first day for a manufacture date and the last day for an expiry** | Owner's request (C-026): "Nov 29" is 30 Nov 2029 on an expiry and 1 Nov 2029 on a manufacture date — the owner chose first-of-month for mfg when asked. English only, also chosen when asked: Nepali month names are not read. Accepted: `Nov 29`, `Nov 2029`, `11/29`, `11/2029`, `2029-11`, and full dates `30 Nov 2029`, `Nov 30 2029`, `30/11/2029`, `2029-11-30`; numbers alone are day/month/year. Refused, with a reason under the box, never guessed: a day with no year (`29 Nov`), a day the month lacks, a four-digit year from 2035 to 2100 (a Nepali year by habit — the calendar ends about March 2034 AD anyway). A refused entry puts the box back to the date it had, so the box always shows what will be saved. The calendar icon still opens the picker, and the result is BS text exactly as before (`lib/date-typing.ts`, `typeMonthAs` on `DatePickerBS`). Every other date box is unchanged |
+| D-157 | **The medicine on Opening stock and Purchases is chosen from one box that is both a list and a search** | Owner's request: a dropdown of 938 names cannot be used. Click or ↓ opens the whole list (alphabetical, 300 drawn, "keep typing" beyond that); typing narrows it, ranked like the counter — brand starts-with, then a word in the brand, then the generic, then contains, then every typed word anywhere. Enter or a click chooses; leaving the box chooses only an exact name or a sole match. Text that matches nothing chosen **empties the medicine and turns the box red** rather than keeping the old one — with rows copied from the row above, keeping it would save the wrong medicine silently. Esc puts back what was there (`components/app/item-picker.tsx`, `lib/item-search.ts`) |
+| D-158 | **On Opening stock, Add another medicine copies the whole row above — medicine, unit, batch, both dates, quantity and cost — and Save refuses two rows with the same medicine and batch** | Owner's request; "everything" chosen over "all but the medicine" when asked. The cursor lands in the new row's medicine box with the name selected, so typing replaces it. Because a copied row left unchanged would put one batch on the shelf twice, Save names both rows and refuses. A row counts as used once it has a medicine, batch or date (quantity and cost start filled, so they say nothing); a used row with no medicine is refused instead of being skipped silently, as the old form did. Messages number rows as the screen does ("Medicine 3"). Purchases' Add line still adds a blank line |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -811,4 +815,24 @@ Chromium at 1440 and 1280 wide: no label truncated, the menu does not
 overflow, exactly one item active on /payables, /suppliers and /bills, the
 folded menu unchanged, and Payables showing Rs 700 owed to the one supplier
 with a part-paid purchase and the laboratory section's empty state.
+
+### C-026  ·  2083-07-15  ·  Opening stock: typed dates, a searchable medicine box, rows that copy
+
+Owner asked for three things on `/stock/opening` (and, when asked, the first
+two on Purchases too): dates typed as the pack prints them (D-156), a medicine
+box that searches as well as drops down (D-157), and Add another medicine
+copying the row above (D-158). The row was relaid: labels only, no hints
+underneath, so the boxes sit level — medicine, batch, mfg, expiry on one line,
+quantity + unit, cost and a *Line value* on the next; two columns on a tablet,
+one on a phone. Row keys are now stable on both forms. No migration, nothing
+run on production.
+
+**Verified:** typecheck; 47 files / 543 tests (new `tests/date-typing.test.ts`,
+`tests/item-search.test.ts`); audit clean; sweep clean bar `.pitch-build/`;
+a11y clean on Opening stock; `pnpm build`. Chromium against a scratch DB with
+952 items, 43 checks: search, copy, Esc, both refusals, a bad date reverting,
+form fitting at 1440/1280/1024/768/390, and three rows saved with the typed
+dates read back (2024-11-01, 2029-11-30, 2030-11-30, 2028-03-15). 42 passed;
+the 43rd read a toast still on screen from an earlier step — the save it
+checks was confirmed from the database instead.
 

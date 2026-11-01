@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { DatePickerBS } from "@/components/ui/date-picker-bs";
 import { useToast } from "@/components/ui/toast";
 import { InvoicePhotoButton } from "@/components/app/invoice-photo";
+import { ItemPicker } from "@/components/app/item-picker";
 import { createPurchaseAction } from "@/app/(app)/purchases/actions";
 import { toPaisa, formatPaisa, vatOf, paisaToRupees } from "@/lib/money";
 import {
@@ -25,6 +26,8 @@ import type { Supplier } from "@/lib/repos/suppliers";
 import { strings } from "@/lib/strings";
 
 interface LineState {
+  /** Stable across adds and removes, so each row keeps its own boxes. */
+  key: number;
   itemId: string;
   unitLevel: number;
   batchNo: string;
@@ -48,8 +51,11 @@ interface LineState {
   amountDisagrees?: boolean;
 }
 
+let lastKey = 0;
+
 function blankLine(): LineState {
   return {
+    key: ++lastKey,
     itemId: "",
     unitLevel: 0,
     batchNo: "",
@@ -117,7 +123,7 @@ export function PurchaseForm({
   const [billDiscountRupees, setBillDiscountRupees] = useState("");
   const [billDiscountPercent, setBillDiscountPercent] = useState("");
   const [roundingRupees, setRoundingRupees] = useState("");
-  const [lines, setLines] = useState<LineState[]>([blankLine()]);
+  const [lines, setLines] = useState<LineState[]>(() => [blankLine()]);
   const [busy, setBusy] = useState(false);
   const [showBonus, setShowBonus] = useState(false);
   // What a photo said the bill came to, kept only so the form can say whether
@@ -368,7 +374,7 @@ export function PurchaseForm({
             const item = itemsById.get(l.itemId);
             return (
               <div
-                key={i}
+                key={l.key}
                 className="rounded-[8px] border border-line bg-cream-100 p-3"
               >
                 {l.amountDisagrees && (
@@ -379,18 +385,14 @@ export function PurchaseForm({
                   </p>
                 )}
                 <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
-                  <Field label="Item">
-                    <Select
+                  <Field label="Item" htmlFor={`item-${i}`}>
+                    <ItemPicker
+                      id={`item-${i}`}
+                      items={items}
                       value={l.itemId}
-                      onChange={(e) => onItemChange(i, e.target.value)}
-                    >
-                      <option value="">— Choose —</option>
-                      {items.map((it) => (
-                        <option key={it.id} value={it.id}>
-                          {it.brandName}
-                        </option>
-                      ))}
-                    </Select>
+                      onChange={(id) => onItemChange(i, id)}
+                      placeholder="Type a name, or pick from the list"
+                    />
                     {/* What the paper actually said, so the person can check
                         the guess — or find the medicine themselves when there
                         was no guess to make. */}
@@ -451,17 +453,23 @@ export function PurchaseForm({
                       : "sm:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]")
                   }
                 >
-                  <Field label="Mfg date (optional)">
+                  <Field label="Mfg date (optional)" htmlFor={`mfg-${i}`}>
                     <DatePickerBS
+                      id={`mfg-${i}`}
                       value={l.mfgDateBs}
                       onChange={(v) => setLine(i, { mfgDateBs: v })}
+                      placeholder="e.g. Nov 24"
+                      typeMonthAs="start"
                       clearable
                     />
                   </Field>
-                  <Field label="Expiry date *">
+                  <Field label="Expiry date *" htmlFor={`exp-${i}`}>
                     <DatePickerBS
+                      id={`exp-${i}`}
                       value={l.expiryDateBs}
                       onChange={(v) => setLine(i, { expiryDateBs: v })}
+                      placeholder="e.g. Nov 29"
+                      typeMonthAs="end"
                     />
                   </Field>
                   <Field label="Qty">

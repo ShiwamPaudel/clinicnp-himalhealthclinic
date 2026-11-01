@@ -320,6 +320,12 @@ Medicine packs and supplier bills print expiry in English dates ("EXP 06/2027");
 ### 4D.2 Manufacture date is optional on a purchase
 Many packs and supplier bills do not print one. The purchase line reads **Mfg date (optional)**; batch number and expiry stay required. A manufacture date that is given must be on or before the expiry (D-139). Opening stock already treated it as optional.
 
+### 4D.7 Typing a pack's dates, finding a medicine by name, copying a row *(added 2083-07-15)*
+Entering a shelf or a supplier bill is many rows of the same few boxes; three things made each row slower than it had to be.
+- **Mfg and expiry dates are typed as the pack prints them** — Opening stock and Purchases (D-156). Read as English dates: `Nov 29`, `11/2029`, `30/11/2029`, `2029-11-30`. A month with no day is the **last day** for an expiry (`Nov 29` → 30 Nov 2029) and the **first day** for a manufacture date (`Nov 24` → 1 Nov 2024). The day it will take is shown under the box, both ways, before it is taken. Anything it cannot read is refused with the reason and the box keeps the date it had. The calendar is still one click away; dates are still stored in BS.
+- **The medicine is found by typing** — Opening stock and Purchases (D-157). One box: click it to scroll the whole list, or type part of a brand or generic name and the list narrows, best match first. A name that matches nothing is not quietly ignored: the box is emptied and turns red until a medicine is chosen.
+- **Add another medicine copies the row above** — Opening stock only (D-158). Every box is copied; change only what differs. Two rows left with the same medicine and batch are refused on Save, naming both rows, and a started row with no medicine is refused rather than skipped.
+
 ### 4D.3 Backups are kept, not just counted
 Until 2083-06-06 the nightly "Automatic" backup and the close-year backup wrote a size into a list and kept no file (D-138).
 - Backups are kept only in **private** storage, the same store patient files use. With it connected: a full copy every night (the newest 30 kept), a copy of every **Back up now** (the newest 20), and the close-year copy kept for good. Each has a **Download** button that gives the same file Restore takes.
