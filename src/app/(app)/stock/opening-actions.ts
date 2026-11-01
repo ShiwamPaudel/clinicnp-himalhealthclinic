@@ -16,7 +16,7 @@ import { createBatchWithStock } from "@/lib/repos/batches";
 import { getItem } from "@/lib/repos/items";
 import { recordAudit } from "@/lib/repos/audit";
 import { adToIso, toAD, bsFromDbText } from "@/lib/bs";
-import { openingLineToBase } from "@/lib/units";
+import { groupOpeningRows, type OpeningRow } from "@/lib/opening-batches";
 
 export interface ActionResult {
   ok: boolean;
@@ -66,15 +66,7 @@ export async function recordOpeningStockAction(
 
     // Resolve every line before writing any of them. A half-entered shelf is
     // worse than a refused one: you cannot tell by looking which rows landed.
-    const resolved: {
-      itemId: string;
-      brandName: string;
-      batchNo: string;
-      mfgDateAd: string | null;
-      expiryDateAd: string;
-      baseQty: number;
-      costPaisaPerBase: number;
-    }[] = [];
+    const resolved: OpeningRow[] = [];
 
     for (const l of lines) {
       const item = await getItem(l.itemId);
@@ -95,25 +87,27 @@ export async function recordOpeningStockAction(
         );
       }
 
-      // Quantities and costs are stored per base unit, so a shelf counted in
-      // boxes is converted once here rather than everywhere it is read.
-      const { baseQty, costPaisaPerBase } = openingLineToBase(
-        l.qty,
-        l.costPaisaPerUnit,
-        unit.factorToBase,
-      );
       resolved.push({
         itemId: item.id,
         brandName: item.brandName,
         batchNo: l.batchNo,
+        unitLevel: unit.level,
+        unitName: unit.name,
+        factorToBase: unit.factorToBase,
+        qty: l.qty,
+        costPaisaPerUnit: l.costPaisaPerUnit,
         mfgDateAd,
         expiryDateAd,
-        baseQty,
-        costPaisaPerBase,
       });
     }
 
-    for (const r of resolved) {
+    // Quantities and costs are stored per base unit, and the strips and loose
+    // tablets of one batch become one batch (D-159), so this is converted and
+    // combined once here rather than everywhere it is read.
+    const grouped = groupOpeningRows(resolved);
+    if (!grouped.ok) return fail(grouped.reason);
+
+    for (const r of grouped.batches) {
       await createBatchWithStock({
         itemId: r.itemId,
         batchNo: r.batchNo,
@@ -131,7 +125,8 @@ export async function recordOpeningStockAction(
 
     await recordAudit(user.id, "stock.opening", {
       lines: resolved.length,
-      items: resolved.map((r) => r.brandName),
+      batches: grouped.batches.length,
+      items: grouped.batches.map((r) => r.brandName),
     });
 
     revalidatePath("/stock");
@@ -139,7 +134,7 @@ export async function recordOpeningStockAction(
     revalidatePath("/stock/low");
     revalidatePath("/stock/near-expiry");
     revalidatePath("/reports/valuation");
-    return { ok: true, count: resolved.length };
+    return { ok: true, count: grouped.batches.length };
   } catch (err) {
     if (err instanceof ModuleDisabledError) return fail(err.userMessage);
     if (err instanceof NotAuthorizedError) return fail(err.userMessage);

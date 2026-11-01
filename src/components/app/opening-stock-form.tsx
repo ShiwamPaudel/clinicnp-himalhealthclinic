@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/toast";
 import { ItemPicker } from "@/components/app/item-picker";
 import { recordOpeningStockAction } from "@/app/(app)/stock/opening-actions";
 import { toPaisa, formatPaisa } from "@/lib/money";
+import { sameBatchKey } from "@/lib/opening-batches";
 import { bsToDbText, today } from "@/lib/bs";
 import type { Item } from "@/lib/repos/items";
 
@@ -118,7 +119,7 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
     }
     // Rows are numbered as on screen, untouched ones included, so "Medicine 3"
     // in a message is the box labelled Medicine 3.
-    const seen = new Map<string, number>();
+    const seen = new Map<string, { n: number; line: LineState }[]>();
     for (const [i, l] of lines.entries()) {
       if (isUntouched(l)) continue;
       const n = i + 1;
@@ -144,18 +145,29 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
         toast.error(`${name}: enter how many.`);
         return;
       }
-      // A copied row left unchanged would put the same batch on the shelf
-      // twice, as two batches that each claim the full count.
-      const sameBatch = `${l.itemId}|${l.batchNo.trim().toLowerCase()}`;
-      const earlier = seen.get(sameBatch);
-      if (earlier !== undefined) {
-        toast.error(
-          `Medicines ${earlier} and ${n} are both ${item.brandName}, batch ${l.batchNo.trim()}. ` +
-            "Change the batch number, or remove one row and add its quantity to the other.",
-        );
-        return;
+      // The same batch may take a second row in a different unit — the full
+      // strips on one, the loose tablets on the next — and the two are saved
+      // as one batch (D-159). The same unit twice is a copied row left
+      // unchanged, and would count that stock twice; and a batch has one
+      // expiry and one manufacture date. The server refuses the same things.
+      const batchKey = sameBatchKey(l.itemId, l.batchNo);
+      const earlierRows = seen.get(batchKey) ?? [];
+      for (const e of earlierRows) {
+        const rows = `Medicines ${e.n} and ${n} are both ${item.brandName}, batch ${l.batchNo.trim()}`;
+        if (e.line.unitLevel === l.unitLevel) {
+          const unit = item.units.find((u) => u.level === l.unitLevel)?.name ?? "the same unit";
+          toast.error(
+            `${rows}, counted in ${unit}. Change one to the loose unit (such as tablets) ` +
+              "for what is left over, or put the whole count in one row.",
+          );
+          return;
+        }
+        if (e.line.expiryDateBs !== l.expiryDateBs || e.line.mfgDateBs !== l.mfgDateBs) {
+          toast.error(`${rows}, with different dates. One batch has one expiry and one manufacture date.`);
+          return;
+        }
       }
-      seen.set(sameBatch, n);
+      seen.set(batchKey, [...earlierRows, { n, line: l }]);
     }
 
     setBusy(true);
@@ -174,8 +186,12 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
     setBusy(false);
 
     if (res.ok) {
+      const batches = res.count ?? used.length;
       toast.success(
-        `Opening stock recorded for ${used.length} item${used.length === 1 ? "" : "s"}.`,
+        batches === used.length
+          ? `Opening stock recorded for ${used.length} item${used.length === 1 ? "" : "s"}.`
+          : // Say so when rows were combined, so nobody looks for two batches.
+            `Opening stock recorded: ${used.length} rows as ${batches} batch${batches === 1 ? "" : "es"} — rows of the same batch were added together.`,
       );
       setLines([blankLine()]);
       router.refresh();
@@ -215,7 +231,9 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
             2029, a manufacture date of{" "}
             <span className="font-medium text-sage-900">Nov 24</span> is 1 Nov
             2024. <span className="font-medium text-sage-900">Add another medicine</span>{" "}
-            copies the row above, so change only what is different.
+            copies the row above, so change only what is different. Loose
+            tablets of the same batch: keep the batch, change the unit and the
+            count — both rows are saved as one batch.
           </p>
         </div>
         <div className="w-full shrink-0 md:w-[220px]">
