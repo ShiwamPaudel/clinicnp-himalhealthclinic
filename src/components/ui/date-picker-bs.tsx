@@ -214,7 +214,9 @@ export function DatePickerBS({
               }
             }}
             className={cn(
-              "h-10 w-full rounded-[8px] border bg-cream-50 pl-3 pr-9 text-[14px] text-sage-950",
+              // Tight side padding so the longest date ("32 Baishakh 2088")
+              // fits whole in the opening-stock row's 162 px column.
+              "h-10 w-full rounded-[8px] border bg-cream-50 pl-2.5 pr-8 text-[14px] text-sage-950",
               "placeholder:text-sage-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-700",
               typeError ? "border-danger-600" : "border-line",
             )}
@@ -226,7 +228,7 @@ export function DatePickerBS({
             onClick={toggleOpen}
             aria-expanded={open}
             aria-label="Open the calendar"
-            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-sage-500 hover:text-sage-900"
+            className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-sage-500 hover:text-sage-900"
           >
             <Calendar className="h-4 w-4" />
           </button>

@@ -822,10 +822,12 @@ Owner asked for three things on `/stock/opening` (and, when asked, the first
 two on Purchases too): dates typed as the pack prints them (D-156), a medicine
 box that searches as well as drops down (D-157), and Add another medicine
 copying the row above (D-158). The row was relaid: labels only, no hints
-underneath, so the boxes sit level — medicine, batch, mfg, expiry on one line,
-quantity + unit, cost and a *Line value* on the next; two columns on a tablet,
-one on a phone. Row keys are now stable on both forms. No migration, nothing
-run on production.
+underneath, so the boxes sit level. Then, at the owner's ask, **one line per
+row** wherever the form has 1,038 px (a Tailwind container query on the rows,
+so folding the menu counts): fixed columns measured in Plex 14 px to hold the
+longest date and unit, medicine taking the rest — a 1366 screen with the menu
+open fits; 1280 with it open folds to two lines. Design.md has the widths.
+Row keys are now stable on both forms. No migration, nothing run on production.
 
 **Verified:** typecheck; 47 files / 543 tests (new `tests/date-typing.test.ts`,
 `tests/item-search.test.ts`); audit clean; sweep clean bar `.pitch-build/`;
@@ -834,5 +836,9 @@ a11y clean on Opening stock; `pnpm build`. Chromium against a scratch DB with
 form fitting at 1440/1280/1024/768/390, and three rows saved with the typed
 dates read back (2024-11-01, 2029-11-30, 2030-11-30, 2028-03-15). 42 passed;
 the 43rd read a toast still on screen from an earlier step — the save it
-checks was confirmed from the database instead.
+checks was confirmed from the database instead. The one-line layout: 48 more
+checks at 1920/1536/1440/1366 and 1280 (menu open and folded), 1024/768/390,
+all passing — one line exactly where expected, no date, unit or amount cut
+off (a Baishakh date and a 12,34,500.00 line value), labels unwrapped,
+nothing outside the form; the 43-check walk-through re-run on it.
 

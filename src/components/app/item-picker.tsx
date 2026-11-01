@@ -158,7 +158,8 @@ export const ItemPicker = forwardRef<HTMLInputElement, ItemPickerProps>(
           onBlur={settle}
           onKeyDown={onKeyDown}
           className={cn(
-            "h-10 w-full rounded-[8px] border bg-cream-50 pl-3 pr-9 text-[14px] text-sage-950",
+            // A long name in a narrow column ends in "…"; the list shows it whole.
+            "h-10 w-full text-ellipsis rounded-[8px] border bg-cream-50 pl-3 pr-9 text-[14px] text-sage-950",
             "placeholder:text-sage-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-700",
             unresolved ? "border-danger-600 text-danger-600" : "border-line",
           )}

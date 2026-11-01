@@ -225,7 +225,9 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
+      {/* Sized by the room the form actually has, not the screen, so opening
+          or folding the side menu changes the layout as it should. */}
+      <div className="@container flex flex-col gap-3">
         {lines.map((l, i) => {
           const item = itemsById.get(l.itemId);
           const isLast = i === lines.length - 1;
@@ -233,11 +235,24 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
             <div
               key={l.key}
               // Every box is a label over a control with nothing under it, so
-              // the boxes on a line sit level; the taller row gap leaves room
-              // for the note a date box floats beneath itself.
-              className="grid grid-cols-1 gap-x-3 gap-y-5 rounded-[10px] border border-line bg-cream-50 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]"
+              // the boxes on a line sit level; the row gap, and on one line the
+              // bottom padding, leave room for the note a date box floats
+              // beneath itself.
+              //
+              // One line wherever it fits: the fixed columns are measured to
+              // hold their longest real value — a date box takes "32 Baishakh
+              // 2088" whole, so a year is never cut off — and the medicine
+              // takes what is left. That fits a 1366 px screen with the menu
+              // open; with less room the row folds onto two lines.
+              className={
+                "grid grid-cols-1 items-end gap-x-3 gap-y-5 rounded-[10px] border border-line bg-cream-50 p-4 " +
+                "@min-[560px]:grid-cols-2 " +
+                "@min-[760px]:grid-cols-[minmax(0,2fr)_repeat(3,minmax(162px,1fr))] " +
+                "@min-[1038px]:grid-cols-[minmax(150px,1fr)_108px_162px_162px_164px_92px_96px_36px] " +
+                "@min-[1038px]:gap-x-1.5 @min-[1038px]:px-3 @min-[1038px]:pt-3 @min-[1038px]:pb-6"
+              }
             >
-              <div className="md:col-span-2 xl:col-span-1">
+              <div className="@min-[560px]:col-span-2 @min-[760px]:col-span-1">
                 <Field label={`Medicine ${i + 1}`} htmlFor={`item-${i}`}>
                   <ItemPicker
                     id={`item-${i}`}
@@ -255,7 +270,7 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
                   id={`batch-${i}`}
                   value={l.batchNo}
                   onChange={(e) => setLine(i, { batchNo: e.target.value })}
-                  placeholder="e.g. AMX-2201"
+                  placeholder="e.g. B-2201"
                 />
               </Field>
 
@@ -281,10 +296,10 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
               </Field>
 
               <Field label="How many" htmlFor={`qty-${i}`}>
-                <div className="flex gap-2">
+                <div className="flex gap-2 @min-[1038px]:gap-1.5">
                   {/* Sized by its wrapper: the box's own w-full would beat a
                       width class passed to it, and squeeze the unit out. */}
-                  <div className="w-24 shrink-0">
+                  <div className="w-24 shrink-0 @min-[1038px]:w-[60px]">
                     <Input
                       id={`qty-${i}`}
                       numeric
@@ -317,7 +332,7 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
                 </div>
               </Field>
 
-              <Field label="Cost paid, each (रू)" htmlFor={`cost-${i}`}>
+              <Field label="Cost each (रू)" htmlFor={`cost-${i}`}>
                 <Input
                   id={`cost-${i}`}
                   numeric
@@ -327,18 +342,24 @@ export function OpeningStockForm({ items }: { items: Item[] }) {
                 />
               </Field>
 
-              <div className="flex items-end justify-between gap-3 xl:col-span-2 xl:justify-end">
-                <div className="flex flex-col gap-1.5 xl:items-end">
-                  <span className="text-[13px] font-medium text-sage-900">Line value</span>
-                  <span className="flex h-10 items-center text-[15px] font-semibold text-sage-900 tnum">
-                    {item ? formatPaisa(lineCostPaisa(l)) : "—"}
+              {/* On one line this wrapper steps aside (display: contents), so
+                  the value and the remove button take a column each. */}
+              <div className="flex items-end justify-between gap-3 @min-[760px]:col-span-2 @min-[760px]:justify-end @min-[1038px]:contents">
+                <div className="flex flex-col gap-1.5 @min-[760px]:items-end">
+                  {/* रू lives in the label, so a value in the lakhs still fits
+                      its column on one line without running into the cost. */}
+                  <span className="whitespace-nowrap text-[13px] font-medium text-sage-900">
+                    Line value (रू)
+                  </span>
+                  <span className="flex h-10 items-center whitespace-nowrap text-[15px] font-semibold text-sage-900 tnum @min-[1038px]:text-[14px]">
+                    {item ? formatPaisa(lineCostPaisa(l), false) : "—"}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => removeLine(i)}
                   aria-label={`Remove medicine ${i + 1}`}
-                  className="flex h-10 w-10 items-center justify-center rounded-[8px] text-danger-600 hover:bg-danger-100"
+                  className="flex h-10 w-10 items-center justify-center self-end rounded-[8px] text-danger-600 hover:bg-danger-100 @min-[1038px]:w-9"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
