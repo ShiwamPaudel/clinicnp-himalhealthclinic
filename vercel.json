@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/files-gc",
       "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/cron/sms-reminders",
+      "schedule": "15 1 * * *"
     }
   ]
 }

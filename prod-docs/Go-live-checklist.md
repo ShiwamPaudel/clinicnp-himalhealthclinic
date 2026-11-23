@@ -32,6 +32,21 @@ patient numbering restarted at 1.
 | 🟡 | `company.pan_no` is empty — only the stock-out and refund slips use it | Settings → Company |
 | 🟡 | Invoice footer reads "ClincNP", missing an `i` | Settings → Company |
 
+**2083-08-07 — monthly SMS reminders (C-028, `0022`).** Pharmacy →
+Reminders. Before patients get anything:
+
+- [ ] `0022` run on production (Claude runs it — D-088), then the code pushed.
+- [ ] `SMS_AUTH_TOKEN` set in the Vercel project for Production.
+- [ ] The token's **Allowed IP** solved for the live site — the office address
+      used for the first test does not work from Vercel (Deploy.md, three ways).
+- [ ] Owner: Pharmacy → Reminders → *Send a test SMS* to their own phone, and it arrives.
+- [x] The shared message is Himal's Nepali one — "मासिक औषधि तयार छ। डेलिभरी
+      वा लिन फोन गर्नुहोस्।" / "हिमाल हेल्थ क्लिनिक": 68 characters, 1 SMS
+      a patient a month. Editable on the Reminders screen (owner).
+- [ ] Do **not** put 64.29.17.1 / 216.198.79.1 in the Allowed IP: that is
+      where visitors reach clinicnp-hhc.infobytesnepal.com, not where its
+      messages leave from.
+
 **2083-06-08 — 0019, 0020 and 0021 are all live. The invoice reader (C-020)
 needs no migration.** The note below is kept for the storage item,
 which is still open.

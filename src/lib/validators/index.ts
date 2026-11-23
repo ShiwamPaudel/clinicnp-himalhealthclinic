@@ -449,3 +449,32 @@ export const labPartnerPaymentSchema = z.object({
   method: z.enum(["cash", "bank", "cheque", "qr", "adjustment"]),
   note: z.string(),
 });
+
+// ---------------------------------------------------------------------------
+// Monthly SMS reminders (C-028)
+// ---------------------------------------------------------------------------
+
+/** One reminder: who, at what number, from which day, and its own words. */
+export const smsReminderSchema = z.object({
+  /** Minted by the browser, so a retry sets up one reminder and not two. */
+  id: z.string().optional(),
+  patientId: z.string().min(1, "Choose the patient"),
+  phone: z.string().min(1, "Enter a mobile number"),
+  firstDateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the first day"),
+  message: z.string().max(600, "That message is too long"),
+});
+
+export const smsReminderChangeSchema = z.object({
+  id: z.string().min(1),
+  phone: z.string().min(1, "Enter a mobile number"),
+  nextDateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick the next day"),
+  message: z.string().max(600, "That message is too long"),
+});
+
+export const smsSharedMessageSchema = z.object({
+  message: z.string().max(600, "That message is too long"),
+});
+
+export const smsTestSchema = z.object({
+  phone: z.string().min(1, "Enter a mobile number"),
+});

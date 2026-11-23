@@ -43,6 +43,9 @@ const CLINIC_SEGMENTS = [
   "reports/utilisation",
   "api/patients",
   "api/followup",
+  // monthly SMS reminders: in the Pharmacy menu, but they belong to patients
+  "reminders",
+  "api/cron/sms-reminders",
 ];
 
 /** Routes that are shared on purpose and decide per-module inside. */

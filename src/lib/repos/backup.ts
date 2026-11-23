@@ -80,6 +80,10 @@ const TABLES = [
   // what was sent to a doctor when somebody was booked in with them
   "alerts_sent",
 
+  // monthly SMS reminders to patients, and every message sent (0022)
+  "sms_reminders",
+  "sms_sent",
+
   "audit_log",
 ] as const;
 

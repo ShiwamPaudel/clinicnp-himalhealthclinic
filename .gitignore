@@ -23,3 +23,6 @@ backups/prod-*.json
 
 # the WebAssembly runtime for the invoice reader, copied out of node_modules
 public/ort/
+
+# the SMS provider's manual, kept only until the SMS reminders are live
+/api.pdf

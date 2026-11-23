@@ -240,6 +240,33 @@ export function bsMonthRange(
   return { startAd, endAd, startBs, endBs: toBS(endAd) };
 }
 
+/** How many days a BS month has: 29 to 32, and different from year to year. */
+export function bsDaysInMonth(year: number, month: number): number {
+  return bsMonthRange(year, month).endBs.day;
+}
+
+/** Nepal is UTC+5:45 all year round; it has no summer time. */
+const NEPAL_OFFSET_MINUTES = 5 * 60 + 45;
+
+/**
+ * Today in Nepal, whatever clock the machine running this keeps.
+ *
+ * `today()` reads the machine's own date, which is right on a counter in
+ * Bhaktapur and wrong on a hosted server running on UTC between midnight and
+ * 5:45 in the morning Nepal time. Anything that runs on a schedule on the
+ * server asks this instead.
+ */
+export function todayInNepal(now: Date = new Date()): BSDate {
+  const shifted = new Date(now.getTime() + NEPAL_OFFSET_MINUTES * 60_000);
+  return toBS(
+    new Date(
+      shifted.getUTCFullYear(),
+      shifted.getUTCMonth(),
+      shifted.getUTCDate(),
+    ),
+  );
+}
+
 /** Day of week for a BS date: 0 = Sunday … 6 = Saturday (Saturday is the Nepali weekend). */
 export function bsDayOfWeek(bs: BSDate): number {
   return toNepali(bs).getDay();

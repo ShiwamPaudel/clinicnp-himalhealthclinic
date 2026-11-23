@@ -19,6 +19,7 @@ import {
   FlaskConical,
   HandCoins,
   Banknote,
+  MessageSquareText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/lib/repos/users";
@@ -30,6 +31,8 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** A second module this item needs besides its group's own. */
+  alsoNeeds?: "clinic" | "pharmacy";
 }
 
 /**
@@ -72,6 +75,9 @@ const GROUPS: NavGroup[] = [
       { href: "/items", label: "Items", icon: Package, adminOnly: true },
       { href: "/purchases", label: "Purchases", icon: ShoppingCart, adminOnly: true },
       { href: "/suppliers", label: "Suppliers", icon: Truck, adminOnly: true },
+      // Monthly SMS reminders. They go to patients, so they need the Clinic
+      // module on as well (C-028).
+      { href: "/reminders", label: "Reminders", icon: MessageSquareText, alsoNeeds: "clinic" },
     ],
   },
   {
@@ -105,7 +111,8 @@ export function Nav({
     items: g.items.filter(
       (i) =>
         (!i.adminOnly || role === "admin") &&
-        (g.module === null || modules[g.module]),
+        (g.module === null || modules[g.module]) &&
+        (!i.alsoNeeds || modules[i.alsoNeeds]),
     ),
   })).filter((g) => g.items.length > 0);
 

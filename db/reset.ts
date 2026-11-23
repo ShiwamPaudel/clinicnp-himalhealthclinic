@@ -84,6 +84,8 @@ const TABLES_CHILD_FIRST = [
   "purchases",
 
   // clinic records
+  "sms_sent",
+  "sms_reminders",
   "alerts_sent",
   "appointments",
   "attachments",

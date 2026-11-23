@@ -39,6 +39,7 @@ const SCREENS = [
   ["/lab/reports", "reports waiting to be handed over"],
   ["/items/pricing", "setting prices"],
   ["/dues", "who owes money"],
+  ["/reminders", "monthly SMS reminders"],
 ];
 
 const findings = [];

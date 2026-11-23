@@ -196,6 +196,17 @@ ALTER TABLE company ADD COLUMN date_calendar TEXT NOT NULL DEFAULT 'bs'
 -- 0021_purchase_bill_discount.sql  (additive; the supplier's own totals block — D-143)
 ALTER TABLE purchases ADD COLUMN bill_discount_paisa INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE purchases ADD COLUMN rounding_paisa INTEGER NOT NULL DEFAULT 0;
+
+-- 0022_sms_reminders.sql  (additive; monthly SMS reminders — C-028, D-164 … D-170)
+ALTER TABLE company ADD COLUMN sms_message TEXT NOT NULL DEFAULT '';   -- '' = built-in wording
+CREATE TABLE sms_reminders (id, patient_id → patients, phone, day_of_month 1–32,
+  next_date_bs, next_date_ad, message ('' = shared), status active|stopped,
+  stopped_at, stopped_by → users, created_by → users, created_at, updated_at);
+CREATE TABLE sms_sent (id, reminder_id → sms_reminders (NULL = test message), due_date_bs,
+  phone, message, status sending|sent|failed|missed, detail, provider_id, credits,
+  attempts, can_retry, created_at, updated_at);
+CREATE UNIQUE INDEX idx_sms_sent_once ON sms_sent (reminder_id, due_date_bs)
+  WHERE reminder_id IS NOT NULL;   -- one message per reminder per month
 ```
 
 *(C-024, no schema change.)* `createPurchase` can carry two more writes in the
@@ -364,7 +375,7 @@ clinicnp/
 │   │   ├── patient-outbox.ts        # ★
 │   │   └── sw.ts
 │   └── stores/bill-store.ts         # + service lines, patient ref
-├── db/migrations/0006 … 0021
+├── db/migrations/0006 … 0022
 └── tests/                           # + clinic-calc, age, patient-no, modules, phases
 ```
 
@@ -487,6 +498,17 @@ Every date box is `DatePickerBS`, and its contract did not change: **BS text in,
 - `keepBackup(archive, purpose)` gzips the JSON (about 5×), writes it under `backups/clinicnp-backup-<utc stamp>-<nightly|manual|year-end>.json.gz`, **then** inserts the row — a row never points at nothing. `kind` stays `daily`/`manual` (the table's CHECK); the purpose is in the key.
 - `letGoOfOldBackups()` keeps the newest 30 nightly and 20 manual copies and every year-end copy; it deletes the file first and the row after, so a failure leaves a row the next run retries. Rows with `blob_url = 'download'` are never touched.
 - Callers: the nightly cron (keeps nothing and records nothing without storage), `/api/backup/download` (keeps a copy as a bonus; the download goes ahead if that fails), and `closeYearAction` (must keep one, or with no storage requires a `manual` row from the last 24 hours — D-140).
+
+### 5.10 Monthly SMS reminders — C-028, 0022
+
+Files: `lib/sms-text.ts` (pure: fill `{name}`/`{date}`/`{clinic}`, SMS size — 160/153 a part, 70/67 once anything outside the GSM alphabet is in it — mobile numbers), `lib/sms-schedule.ts` (pure but for `lib/bs.ts`: the day each month, `dueState`, Nepal clock), `lib/sms.ts` (server only: the one POST to the SMS service, never throws, sorts failures into retry / never), `lib/repos/sms-reminders.ts` (SQL), `lib/sms-run.ts` (the morning run, sender injected so tests use a stand-in), `/api/cron/sms-reminders`, `app/(app)/reminders/` (page + actions), `components/app/reminder-list.tsx`, `components/app/sms-message-panel.tsx`. `lib/bs.ts` gained `bsDaysInMonth` and `todayInNepal`.
+
+- **The day.** A reminder keeps the BS day it was set for (`day_of_month`) and its next date. Next month = same day, or that month's last day if it is shorter; the stored day brings it back to the 32nd when a month has one. A new date picked on Change sets a new day.
+- **Nepal's today.** The server runs on UTC; `todayInNepal(now)` shifts by +5:45 before converting, so a run at 01:15 UTC is the right day and a run at 18:14 UTC is not tomorrow.
+- **The run, once a day.** `due` = next date is today or yesterday; `missed` = older (written to `sms_sent` as missed and moved on, nothing sent late). Each due message is **claimed before sending** — an `INSERT … ON CONFLICT DO NOTHING` against the unique (reminder, month) index, or for a retryable failure a conditional `UPDATE … WHERE status='failed' AND can_retry=1 RETURNING id`. Only the claimer sends. Sent or refused-for-good → `advanceReminder`, conditional on the date the run saw, so two runs never skip a month. Retryable and it was today's → stays for tomorrow; yesterday's → `can_retry = 0`, moves on. 5 at a time, no new sends after 45 s (the function's `maxDuration` is 60, inside every plan); what is left is yesterday's tomorrow.
+- **The SMS service.** `POST auth_token, to, text` → `{error, message, data:{valid[], invalid[]}}` (`data` is `[]` on an error). `error:true` (bad token, address not allowed, no credit) → retry. Number in `invalid` → never. The service's own words go to the server log; the screen gets ours (Rules §1c); no number or name is logged (Rules §2.7). Measured 2083-08-07: a 319-character message cost **3 credits**, exactly `smsSize`'s 3 parts.
+- **Phone.** Kept on the reminder. Setting one up writes it to the patient only `WHERE TRIM(phone) = ''`, in the same batch. `mergePatients` moves reminders to the kept record.
+- **Guards.** Page and actions need **both** modules (`requireModulePage`/`requireModule` for pharmacy and clinic) — the menu item is in Pharmacy but reminders belong to patients; `NavItem.alsoNeeds` hides it otherwise. Admin and Staff manage (`assertCanBook`); the shared message and the test are Admin (`assertAdmin`); a doctor is sent to `/my` like every back-office page.
 
 ---
 

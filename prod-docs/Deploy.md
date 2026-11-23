@@ -18,6 +18,35 @@ changes behaviour on the fifth, which is why it is listed with the rest.
 | `CRON_SECRET` | what the nightly jobs present to prove they are the scheduler | the crons are refused |
 | `BLOB_STORE_ID` (or `BLOB_READ_WRITE_TOKEN`) | private storage for patient files **and backups** — set by Vercel when a private Blob store is connected to the project | **patient files are written to the machine's own disk instead** (they survive nothing, and a second instance cannot see them) and **no backup is kept anywhere** — Settings → Backup says "Automatic backups are off" |
 
+### SMS reminders (C-028) — optional, but nothing is sent without them
+
+| Variable | What it is | If it is missing |
+|---|---|---|
+| `SMS_AUTH_TOKEN` | the token from the SMS account (Aakash SMS → API Service → Token) | reminders are kept and nothing is sent; every message is recorded as "SMS sending is not set up yet" and the Reminders screen says so |
+| `SMS_API_URL` | *optional* — where messages are posted. Leave unset to post to the SMS service directly; set it only to send through a relay with a fixed address | the SMS service's own address is used |
+
+**The token is tied to one "Allowed IP"** — the address messages leave from.
+Anything else is refused with "The requested ip is not valid." A Vercel
+function has **no fixed address** ("Vercel doesn't publish a fixed range for
+you to allowlist"), so before go-live one of these has to be true:
+
+1. the SMS provider issues a token without the address check, or one that
+   accepts several addresses (ask them first — it costs nothing);
+2. Vercel **Static IPs** are switched on (Pro plan, $100 a month per project
+   plus data transfer; Settings → Networking → Advanced Networking → Static
+   IPs → pick a region, and put the two addresses it shows into the token);
+3. messages go through a small relay with a fixed address, named in
+   `SMS_API_URL` (no code change).
+
+On 2083-08-07 the token's Allowed IP was the owner's office line
+(113.199.225.24), set for the test message sent from the development PC
+(3 credits for a 319-character English message, NTC, sender `AT_Alert`). The
+token accepts several addresses separated by commas. **That address does not
+work for the live site**, and neither does the address the domain points at
+(clinicnp-hhc.infobytesnepal.com → 64.29.17.1, 216.198.79.1): that is where
+visitors come in, not where the site's messages go out. Pharmacy → Reminders → *Send a test SMS* (owner) is the way
+to prove the live site can send after whichever of the three is done.
+
 Generate the two secrets with `openssl rand -base64 32`. Set every one of them
 for Production *and* Preview, or a preview deployment will quietly write to
 whichever database it can reach.
@@ -158,6 +187,13 @@ is safe to run when there is nothing to do.
 |---|---|---|
 | `/api/cron/backup` | 18:00 UTC daily | keeps a full backup in the private store (gzipped) and lets go of nightly copies past the newest 30; with no private store it keeps nothing and records nothing |
 | `/api/cron/files-gc` | 18:30 UTC daily | permanently removes files deleted more than 30 days ago |
+| `/api/cron/sms-reminders` | 01:15 UTC daily (7:00 in Nepal) | sends every monthly SMS reminder due that day; one due yesterday that could not go is tried once more; older ones are recorded as missed (C-028) |
+
+Three daily jobs are within every plan's limit (100 per project). **Never
+schedule one more often than daily while the project is on Hobby** — Vercel
+refuses the whole deploy ("Hobby accounts are limited to daily cron jobs"). On
+Hobby a job lands anywhere within its hour, so the reminders go out between
+about 6:45 and 7:45; the run sends whatever is due that day whenever it lands.
 
 Both refuse anything that does not present `CRON_SECRET`, so they are safe to
 leave reachable. 18:00 UTC is a quarter to midnight in Nepal — after the clinic
@@ -305,6 +341,22 @@ existing purchase came back with both new columns at 0.
     pnpm db:migrate          # .env.local points at production
     pnpm db:check            # "schema is up to date (21 migrations)"
     git push                 # Vercel builds; db:check now lets it through
+
+## 0022 SMS reminders — migrate, then deploy
+
+`0022_sms_reminders.sql` is **additive only**: two new tables
+(`sms_reminders`, `sms_sent`), their indexes, and one column on `company`
+(`sms_message`, default empty). Nothing is rebuilt and no existing value
+changes. The code running before the deploy never names any of it, so
+migrating first is safe; `pnpm build` refuses until production has it.
+
+    (Settings -> Backup -> Back up now, and keep the file)
+    pnpm db:migrate          # .env.local points at production
+    pnpm db:check            # "schema is up to date (22 migrations)"
+    git push                 # Vercel builds; db:check now lets it through
+
+Then set `SMS_AUTH_TOKEN` in the Vercel project (Production) and solve the
+Allowed IP above before expecting a message to arrive.
 
 ## 0019 and 0020 together — one run
 

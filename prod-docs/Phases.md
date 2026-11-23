@@ -210,6 +210,17 @@ Work since the five phases is recorded session by session in Memory.md. Acceptan
 - [x] Downloads are streamed, so a backup past 4.5 MB still downloads.
 - [ ] **A private Blob store is connected** and a *Nightly* row with *Download* appears the next morning (owner — see Deploy.md).
 
+### Monthly SMS reminders (C-028, 0022)
+- [x] Pharmacy → **Reminders** appears only with both modules on; `/reminders` is a 404 with either off; a doctor is sent to their own screen.
+- [x] A reminder is set up for a patient on file or one registered in the form; the mobile number is required, ten digits starting with 9; a landline is refused.
+- [x] A patient with no number on file gets the typed one saved to their details; a number already on file is never replaced.
+- [x] The first date must be tomorrow or later; the form shows the next three dates and that a short month takes its last day.
+- [x] The shared message or the reminder's own; the form shows exactly what the patient gets and how many SMS it costs; `{name}`, `{date}`, `{clinic}` filled; anything else in braces refused.
+- [x] The morning run sends what is due once, even run twice at once; moves on to the same day next month; a failure that may come right is tried the next morning only; a refused number is not retried; a month gone by is recorded as missed.
+- [x] Change (number, message, next date) and Stop (final, kept on the Stopped list); Messages sent lists every message and why one did not go.
+- [x] A real message through the SMS service: 3 credits for a 319-character message, as the form predicts (2083-08-07, from the development PC).
+- [ ] **The live site can reach the SMS service** — the token's Allowed IP solved for Vercel (Deploy.md, three ways), `SMS_AUTH_TOKEN` set in the project, and *Send a test SMS* arrives (owner).
+
 ---
 
 ### Cross-phase rules

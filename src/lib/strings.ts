@@ -131,6 +131,24 @@ export const strings = {
   receivePayment: "Receive payment",
   nothingOwed: "Nobody owes anything. Every bill is paid up.",
   noPaymentsYet: "No dues have been paid back yet.",
+
+  // monthly SMS reminders
+  reminders: "Reminders",
+  smsReminders: "SMS reminders",
+  newReminder: "New reminder",
+  whoIsTheReminderFor: "Who is the reminder for?",
+  mobileForSms: "Mobile number for the SMS",
+  firstMessageOn: "First message on",
+  reminderSaved: "Reminder set up",
+  reminderChanged: "Reminder changed",
+  reminderStopped: "Reminder stopped",
+  sharedMessage: "Shared message",
+  ownMessage: "Own message",
+  sendTestSms: "Send a test SMS",
+  testSmsSent: "Test SMS sent. It should arrive in a minute or two.",
+  smsNotSetUp:
+    "SMS sending is not set up yet. Reminders can be set up now — their messages start going out once it is.",
+  remindersGoOutAt: "Messages go out at about 7 in the morning on their day.",
 } as const;
 
 /** Nepali labels for the core POS actions (toggleable later). */

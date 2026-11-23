@@ -357,6 +357,33 @@ Real invoices from Himal's distributors take their discount off the **whole bill
 
 ---
 
+## 4E — MONTHLY SMS REMINDERS *(Pharmacy menu, needs both modules; added 2083-08-07, C-028)*
+
+The owner's request: a patient on regular monthly medicines gets a text message on the same Nepali day every month — "your medicines are ready" — until the clinic stops it. Overturns the "no SMS" line in Rules §2.4 for this one purpose only (D-164).
+
+### 4E.1 Setting one up (Pharmacy → Reminders → New reminder; Admin and Staff)
+- **Patient**: search the patients on file, or register someone new on the spot — the same picker as booking a consultation.
+- **Mobile number for the SMS** — required. Filled from the patient's details; typed when they have none. Ten digits starting with 9 (`+977`, spaces and dashes are dropped); a landline is refused. When the patient has no number on file, the one typed is **saved to their details too**; a number already on file is never replaced (owner's choice).
+- **First message on** — a Nepali date, tomorrow or later. That day of the month is the reminder's day: picked Mangsir 10, it goes out Mangsir 10, Poush 10, Magh 10 … A day a shorter month lacks (the 31st, 32nd) goes on that month's last day, and comes back when a month has it.
+- **Message** — the shared message, or one written for this reminder only. `{name}`, `{date}` and `{clinic}` are filled in. The form shows exactly what the patient gets and how many SMS it costs.
+
+### 4E.2 When it goes out
+Once a day, at about **7:00 in the morning** Nepal time (owner's choice: one check a day is enough). Everything due that day goes out in that run. On a hosting plan that runs schedules "within the hour" it lands between about 6:45 and 7:45.
+- A message that could not go (no connection, no credit, the SMS account refusing) is **tried once more the next morning**, then the reminder moves on to its next month.
+- A number the SMS service refuses is not tried again.
+- A month that went by entirely unsent (the system down for days) is **written down as missed**; nothing is sent late.
+- No reminder is ever sent twice for the same month, even if the run is started twice.
+
+### 4E.3 The Reminders screen
+**Running** (by next date: patient, number, "Every month on the 10th", next date, last result, Change, Stop) · **Stopped** (who stopped it, when) · **Messages sent** (every message with its result, and why one did not go, in plain words). **Change** edits the number, the message and the next date (a new date sets a new day of the month). **Stop** is final; the reminder stays on the Stopped list. The Accountant sees the lists only.
+
+Owner only, beside the list: the **shared message** (with a warning and a one-click fix for curly quotes, which more than double what each message costs) and **Send a test SMS** to any number.
+
+### 4E.4 Not built
+Anything else by SMS (Rules §2.4): booking confirmations, dues reminders, birthday or marketing messages, sending to a list of patients at once, reading replies, delivery reports from the network. Reminders are not shown on the patient card yet. A stopped reminder cannot be restarted — a new one is set up instead.
+
+---
+
 ## 5. Non-Functional Requirements
 
 | Area | Requirement |
@@ -378,7 +405,7 @@ Real invoices from Himal's distributors take their discount off the **whole bill
 
 - **Laboratory results, reports, reference ranges, sample tracking, analyser integration.** ClinicNP bills the test and files the report it receives. Lab information management is a different product (Infobytes Nepal's **Nidanyo**); a future export of a dispatch slip to Nidanyo is a nice-to-have, not v2 scope.
 - **EMR / EHR**: no structured clinical notes, ICD coding, prescription printing, drug-interaction checks, or clinical decision support.
-- **Appointments and scheduling**, SMS/notification sending, patient portal, telemedicine.
+- **Appointments and scheduling**, SMS/notification sending, patient portal, telemedicine. *(Since overturned in part: booked consultations, C-014 · §4B, and monthly SMS reminders, C-028 · §4E. Nothing else on this line.)*
 - Customer profiles or loyalty on the pharmacy side (unchanged from v1).
 - Insurance, Bipanna/social-security claim processing, government reporting beyond IRD CBMS.
 - Multi-branch sync; payment-gateway processing (QR recorded, not processed); barcode label printing; full double-entry accounting.

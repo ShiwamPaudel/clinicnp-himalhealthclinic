@@ -50,11 +50,17 @@ export function PatientPicker({
   draft,
   onChoose,
   onDraftChange,
+  label = strings.whoIsThisFor,
+  askPhone = true,
 }: {
   chosen: FoundPatient | null;
   draft: DraftPatient | null;
   onChoose: (p: FoundPatient | null) => void;
   onDraftChange: (d: DraftPatient | null) => void;
+  /** The question above the box; the counter's wording when not given. */
+  label?: string;
+  /** False when the screen asks for the phone number in a box of its own. */
+  askPhone?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<FoundPatient[]>([]);
@@ -98,7 +104,7 @@ export function PatientPicker({
   // ---- already picked ----
   if (chosen) {
     return (
-      <Field label={strings.whoIsThisFor}>
+      <Field label={label}>
         <div className="flex items-center gap-3 rounded-[8px] border border-clinic-150 bg-clinic-75 px-3 py-2.5">
           <span className="font-mono text-[12px] text-clinic-700">
             {chosen.patientNo != null ? formatPatientNo(chosen.patientNo) : "New"}
@@ -195,14 +201,16 @@ export function PatientPicker({
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={strings.phone}>
-            <Input
-              inputMode="tel"
-              value={draft.phone}
-              onChange={(e) => onDraftChange({ ...draft, phone: e.target.value })}
-            />
-          </Field>
+        <div className={askPhone ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
+          {askPhone && (
+            <Field label={strings.phone}>
+              <Input
+                inputMode="tel"
+                value={draft.phone}
+                onChange={(e) => onDraftChange({ ...draft, phone: e.target.value })}
+              />
+            </Field>
+          )}
           <Field label={strings.address}>
             <Input
               value={draft.address}
@@ -218,7 +226,7 @@ export function PatientPicker({
 
   // ---- searching ----
   return (
-    <Field label={strings.whoIsThisFor} hint={strings.searchPatientHint}>
+    <Field label={label} hint={strings.searchPatientHint}>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sage-500" />
         <Input

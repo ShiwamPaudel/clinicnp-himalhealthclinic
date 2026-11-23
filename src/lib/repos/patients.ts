@@ -380,6 +380,12 @@ export async function mergePatients(
       sql: "UPDATE attachments SET patient_id = ? WHERE patient_id = ?",
       args: [keepId, mergeId],
     });
+    // Monthly SMS reminders follow the person to the record that is kept
+    // (0022). They keep their own phone number either way.
+    await tx.execute({
+      sql: "UPDATE sms_reminders SET patient_id = ?, updated_at = ? WHERE patient_id = ?",
+      args: [keepId, now, mergeId],
+    });
 
     await tx.execute({
       sql: `UPDATE patients
