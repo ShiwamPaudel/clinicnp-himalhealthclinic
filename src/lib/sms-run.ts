@@ -1,7 +1,7 @@
 /**
  * sms-run.ts — the morning run: send every reminder due today. Server only.
  *
- * Called once a day by the scheduler at about 7:00 Nepal time. For each
+ * Called once a day by the scheduler at about 6:00 Nepal time. For each
  * running reminder whose date has come:
  *
  *  1. Months older than yesterday are written down as missed and skipped —

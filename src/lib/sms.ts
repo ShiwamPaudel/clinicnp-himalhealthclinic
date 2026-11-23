@@ -47,6 +47,26 @@ const TURNED_DOWN =
   "The SMS service turned the message down. The SMS account may be out of credit, or not set up to accept messages from this system.";
 const BAD_NUMBER = "The SMS service would not accept this number.";
 
+/**
+ * Our own sentence for a refusal the SMS service explains. Its message is
+ * matched, never shown (Rules §1c): "The requested ip is not valid." is what
+ * it says when messages come from an address the token does not allow —
+ * seen for real on 2083-08-07.
+ */
+export function explainRefusal(providerMessage: unknown): string {
+  const m = String(providerMessage ?? "").toLowerCase();
+  if (/\bip\b/.test(m)) {
+    return "The SMS account does not accept messages from this system's address. Add the address in the SMS account's token settings.";
+  }
+  if (/credit|balance|insufficient/.test(m)) {
+    return "The SMS account is out of credit. Top it up, and tomorrow morning's messages go out.";
+  }
+  if (/token/.test(m)) {
+    return "The SMS account did not recognise this system. Check the token it was set up with.";
+  }
+  return TURNED_DOWN;
+}
+
 interface ProviderEntry {
   id?: number | string;
   mobile?: string;
@@ -91,7 +111,7 @@ export const sendSms: SmsSender = async (to, text) => {
     // A bad token, a wrong allowed address, an empty balance: all things
     // somebody can put right, so tomorrow's run tries again.
     console.error("[sms] turned down:", String(answer.message ?? "").slice(0, 200));
-    return { ok: false, retry: true, detail: TURNED_DOWN };
+    return { ok: false, retry: true, detail: explainRefusal(answer.message) };
   }
 
   const data =

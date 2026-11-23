@@ -77,7 +77,7 @@ function refresh() {
 function checkFutureDate(dateBs: string): string | null {
   const today = bsToDbText(todayInNepal());
   if (dateBs <= today) {
-    return "Pick tomorrow or a later day. Reminders go out at 7 in the morning.";
+    return "Pick tomorrow or a later day. Reminders go out at 6 in the morning.";
   }
   return null;
 }

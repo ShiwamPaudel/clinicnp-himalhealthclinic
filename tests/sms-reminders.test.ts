@@ -99,6 +99,20 @@ describe("what a message costs", () => {
   });
 });
 
+describe("a refusal from the SMS service, in our words", () => {
+  it("names the address problem, credit and the token; anything else stays general", async () => {
+    const { explainRefusal } = await import("@/lib/sms");
+    // The service's real answer, seen on 2083-08-07.
+    expect(explainRefusal("The requested ip is not valid.")).toMatch(/does not accept messages from this system's address/);
+    expect(explainRefusal("Insufficient credit.")).toMatch(/out of credit/);
+    expect(explainRefusal("The provided Auth Token is not valid.")).toMatch(/did not recognise this system/);
+    expect(explainRefusal("Something new")).toMatch(/turned the message down/);
+    expect(explainRefusal(undefined)).toMatch(/turned the message down/);
+    // "description" contains "ip" inside a word and must not count.
+    expect(explainRefusal("bad description")).toMatch(/turned the message down/);
+  });
+});
+
 describe("the number", () => {
   it("takes the number the way people type it", () => {
     expect(normalizeMobile("98-4123 4567")).toBe("9841234567");
@@ -191,8 +205,8 @@ describe("Nepal's today, on a server that keeps UTC", () => {
     expect(after).toEqual(toBS(new Date(2026, 10, 24)));
   });
 
-  it("is already Nepal's date at 01:15 UTC, when the morning run starts", () => {
-    expect(todayInNepal(new Date("2026-11-24T01:15:00Z"))).toEqual(
+  it("is already Nepal's date at 00:15 UTC, when the 6 AM run starts", () => {
+    expect(todayInNepal(new Date("2026-11-24T00:15:00Z"))).toEqual(
       toBS(new Date(2026, 10, 24)),
     );
   });

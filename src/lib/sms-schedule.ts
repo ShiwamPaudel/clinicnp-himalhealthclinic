@@ -6,7 +6,7 @@
  * few dates before anything is saved, and the morning run, which moves a
  * reminder on once its message has gone.
  *
- * A reminder goes out once a day, in the morning: one scheduled run at 7:00
+ * A reminder goes out once a day, in the morning: one scheduled run at 6:00
  * Nepal time sends everything due that day (owner's choice, C-028).
  */
 import {

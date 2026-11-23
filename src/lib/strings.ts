@@ -148,7 +148,7 @@ export const strings = {
   testSmsSent: "Test SMS sent. It should arrive in a minute or two.",
   smsNotSetUp:
     "SMS sending is not set up yet. Reminders can be set up now — their messages start going out once it is.",
-  remindersGoOutAt: "Messages go out at about 7 in the morning on their day.",
+  remindersGoOutAt: "Messages go out at about 6 in the morning on their day.",
 } as const;
 
 /** Nepali labels for the core POS actions (toggleable later). */

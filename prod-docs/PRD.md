@@ -368,7 +368,7 @@ The owner's request: a patient on regular monthly medicines gets a text message 
 - **Message** — the shared message, or one written for this reminder only. `{name}`, `{date}` and `{clinic}` are filled in. The form shows exactly what the patient gets and how many SMS it costs.
 
 ### 4E.2 When it goes out
-Once a day, at about **7:00 in the morning** Nepal time (owner's choice: one check a day is enough). Everything due that day goes out in that run. On a hosting plan that runs schedules "within the hour" it lands between about 6:45 and 7:45.
+Once a day, at about **6:00 in the morning** Nepal time (owner's choice: one check a day is enough; first set at 7:00, moved to 6:00 the same day). Everything due that day goes out in that run. On a hosting plan that runs schedules "within the hour" it lands between about 5:45 and 6:45.
 - A message that could not go (no connection, no credit, the SMS account refusing) is **tried once more the next morning**, then the reminder moves on to its next month.
 - A number the SMS service refuses is not tried again.
 - A month that went by entirely unsent (the system down for days) is **written down as missed**; nothing is sent late.

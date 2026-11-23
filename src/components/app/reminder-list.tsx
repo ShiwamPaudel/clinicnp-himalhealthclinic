@@ -148,7 +148,7 @@ export function ReminderList({
   const newMessage = useOwn ? ownText : "";
   const newDateProblem =
     firstBs && firstBs <= todayBs
-      ? "Pick tomorrow or a later day. Reminders go out at 7 in the morning."
+      ? "Pick tomorrow or a later day. Reminders go out at 6 in the morning."
       : null;
   const newMessageProblem = messageProblem(newMessage);
   const canSubmitNew =
@@ -199,7 +199,7 @@ export function ReminderList({
   const chDateChanged = changing ? chNextBs !== changing.nextDateBs : false;
   const chDateProblem =
     chDateChanged && chNextBs <= todayBs
-      ? "Pick tomorrow or a later day. Reminders go out at 7 in the morning."
+      ? "Pick tomorrow or a later day. Reminders go out at 6 in the morning."
       : null;
   const chMessage = chUseOwn ? chText : "";
   const chMessageProblem = messageProblem(chMessage);

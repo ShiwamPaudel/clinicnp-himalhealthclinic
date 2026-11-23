@@ -187,13 +187,13 @@ is safe to run when there is nothing to do.
 |---|---|---|
 | `/api/cron/backup` | 18:00 UTC daily | keeps a full backup in the private store (gzipped) and lets go of nightly copies past the newest 30; with no private store it keeps nothing and records nothing |
 | `/api/cron/files-gc` | 18:30 UTC daily | permanently removes files deleted more than 30 days ago |
-| `/api/cron/sms-reminders` | 01:15 UTC daily (7:00 in Nepal) | sends every monthly SMS reminder due that day; one due yesterday that could not go is tried once more; older ones are recorded as missed (C-028) |
+| `/api/cron/sms-reminders` | 00:15 UTC daily (6:00 in Nepal) | sends every monthly SMS reminder due that day; one due yesterday that could not go is tried once more; older ones are recorded as missed (C-028) |
 
 Three daily jobs are within every plan's limit (100 per project). **Never
 schedule one more often than daily while the project is on Hobby** — Vercel
 refuses the whole deploy ("Hobby accounts are limited to daily cron jobs"). On
 Hobby a job lands anywhere within its hour, so the reminders go out between
-about 6:45 and 7:45; the run sends whatever is due that day whenever it lands.
+about 5:45 and 6:45; the run sends whatever is due that day whenever it lands.
 
 Both refuse anything that does not present `CRON_SECRET`, so they are safe to
 leave reachable. 18:00 UTC is a quarter to midnight in Nepal — after the clinic

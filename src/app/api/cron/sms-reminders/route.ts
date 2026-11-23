@@ -8,9 +8,9 @@ import { runSmsReminders } from "@/lib/sms-run";
 /**
  * GET /api/cron/sms-reminders — sends the day's monthly SMS reminders.
  *
- * Scheduled once a day at 01:15 UTC, which is 7:00 in the morning in Nepal
+ * Scheduled once a day at 00:15 UTC, which is 6:00 in the morning in Nepal
  * (vercel.json). On a plan that runs schedules "within the hour" it lands
- * between about 6:45 and 7:45; the run sends everything due on the day
+ * between about 5:45 and 6:45; the run sends everything due on the day
  * whenever it lands, so the minute does not matter.
  *
  * Like the other scheduled jobs it refuses anything that does not present
