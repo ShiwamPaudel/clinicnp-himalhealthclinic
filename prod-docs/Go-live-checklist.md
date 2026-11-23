@@ -35,11 +35,12 @@ patient numbering restarted at 1.
 **2083-08-07 — monthly SMS reminders (C-028, `0022`).** Pharmacy →
 Reminders. Before patients get anything:
 
-- [ ] `0022` run on production (Claude runs it — D-088), then the code pushed.
-- [ ] `SMS_AUTH_TOKEN` set in the Vercel project for Production.
-- [ ] The token's **Allowed IP** solved for the live site — the office address
-      used for the first test does not work from Vercel (Deploy.md, three ways).
-- [ ] Owner: Pharmacy → Reminders → *Send a test SMS* to their own phone, and it arrives.
+- [x] `0022` run on production (Claude, D-088), then the code pushed (owner, 6a67d57 and 4709267).
+- [x] `SMS_AUTH_TOKEN` set in the Vercel project for Production.
+- [x] The token's **Allowed IP** solved for the live site: the owner removed the
+      IP rule on the token (2083-08-07).
+- [x] Owner: Pharmacy → Reminders → *Send a test SMS* from the live site arrives (1 credit each).
+- [ ] After 6:45 on 2083-08-08: *Messages sent* shows the first two reminders **Sent**.
 - [x] The shared message is Himal's Nepali one — "मासिक औषधि तयार छ। डेलिभरी
       वा लिन फोन गर्नुहोस्।" / "हिमाल हेल्थ क्लिनिक": 68 characters, 1 SMS
       a patient a month. Editable on the Reminders screen (owner).

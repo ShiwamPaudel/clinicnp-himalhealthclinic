@@ -885,3 +885,30 @@ pre-import copy — all 112 stock lines exact, 289 batch ledgers balance,
 every prior batch, item and unit unchanged except the 14 top-ups and 6 fixes.
 `to-import-once/` deleted on the owner's request.
 
+### C-028  ·  2083-08-07  ·  Monthly SMS reminders (Pharmacy → Reminders)
+
+Owner asked for a Pharmacy tab tied to SMS (Aakash SMS, `api.pdf`, gitignored
+until live): a patient (on file or registered there), a mobile number (from the
+patient, asked for when missing, required), a Nepali date — then an SMS on that
+day every month until stopped. Rules §2.4 rewritten (D-164). Name: **Reminders**.
+Built: `0022` (`sms_reminders`, `sms_sent`, `company.sms_message`), `lib/sms-text.ts`,
+`lib/sms-schedule.ts`, `lib/sms.ts`, `lib/sms-run.ts`, `lib/repos/sms-reminders.ts`,
+`/reminders` (page + actions), `/api/cron/sms-reminders` (`15 0 * * *` = 6:00 Nepal),
+two components; `bs.ts` + `bsDaysInMonth`/`todayInNepal`; picker `label`/`askPhone`;
+nav `alsoNeeds`; reminders in backup, reset, merge, audit, a11y lists.
+Decisions: D-164 – D-170. Owner's answers moved the time 7 AM/4 PM → 7 AM → **6 AM once**,
+and the message English (3 credits measured) → **Nepali, 1 SMS, no name**.
+Production: fresh read-only copy, rehearsal on a replica, then `0022` run by Claude —
+only `_migrations` changed; Himal's shared message set. Owner committed (6a67d57,
+4709267) and pushed; live: route 401 without the secret, 200 with it (dry run,
+nothing due). Aakash refused the deploy's address until **the owner removed the
+IP rule on the token**; live tests then sent at **1 credit each**.
+Verified: typecheck, audit, sweep (only the old `.pitch-build/` findings), 585 tests
+(the one failure is the known flaky phase-5 timing test), 35 SMS tests incl. a
+mutation check, `pnpm build` (`/reminders` 132 kB; `/billing` 149 kB — imports
+nothing new). Tomorrow's run simulated on a fresh copy of production: both live
+reminders sent once, a second run sent nothing, both moved to 2083-09-08.
+**Not done:** the scripted browser walk got 5 checks in (menu, SMS-off banner, empty
+state, Nepali message panel, active item) before the dev server was stopped by a
+session restart; the rest of the screen was exercised by the owner on the live site.
+Next: after 6:45 on 2083-08-08, *Messages sent* should show two **Sent** rows.

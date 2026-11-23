@@ -41,8 +41,10 @@ you to allowlist"), so before go-live one of these has to be true:
 On 2083-08-07 the token's Allowed IP was the owner's office line
 (113.199.225.24), set for the test message sent from the development PC
 (3 credits for a 319-character English message, NTC, sender `AT_Alert`). The
-token accepts several addresses separated by commas. **That address does not
-work for the live site**, and neither does the address the domain points at
+token accepts several addresses separated by commas. **On 2083-08-07 the owner removed the IP rule from the token, and the live
+site's test messages went through** (1 credit each). The notes below are kept
+for the day a new token is issued with the rule on. A fixed office address does
+not work for the live site, and neither does the address the domain points at
 (clinicnp-hhc.infobytesnepal.com → 64.29.17.1, 216.198.79.1): that is where
 visitors come in, not where the site's messages go out. Pharmacy → Reminders → *Send a test SMS* (owner) is the way
 to prove the live site can send after whichever of the three is done.
