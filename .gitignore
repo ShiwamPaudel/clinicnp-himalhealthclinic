@@ -26,3 +26,6 @@ public/ort/
 
 # the SMS provider's manual, kept only until the SMS reminders are live
 /api.pdf
+
+# the website developer's integration manual: it carries the live API key
+/WEBSITE-INTEGRATION-MANUAL.md
