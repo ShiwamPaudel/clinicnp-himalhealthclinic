@@ -19,11 +19,14 @@ export function Sidebar({
   switchable,
   appName,
   modules,
+  pendingRequests = 0,
 }: {
   user: { name: string; role: Role };
   switchable: SwitchableUser[];
   appName: string;
   modules: ModuleFlags;
+  /** Website requests waiting, for the bubble on the Requests tab. */
+  pendingRequests?: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
@@ -95,7 +98,12 @@ export function Sidebar({
         </button>
       </div>
 
-      <Nav role={user.role} modules={modules} collapsed={collapsed} />
+      <Nav
+        role={user.role}
+        modules={modules}
+        collapsed={collapsed}
+        pendingRequests={pendingRequests}
+      />
 
       <div className="mt-auto flex flex-col gap-1 border-t border-sage-700/50 pt-3">
         {!collapsed && (

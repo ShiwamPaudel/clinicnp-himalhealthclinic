@@ -57,6 +57,8 @@ const TABLES = [
   "patients",
   "visits",
   "appointments",
+  // consultations asked for on the website (0023); points at all three above
+  "web_booking_requests",
 
   // money
   "bills",

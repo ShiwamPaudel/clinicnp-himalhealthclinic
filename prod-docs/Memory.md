@@ -21,9 +21,11 @@
 
 ## CURRENT STATE  *(edit in place — the only mutable section)*
 
-*Last rewritten 2083-05-26 (C-014); production figures re-read 2083-06-06 (C-016). Everything below is verified against production, not remembered.*
+*Last rewritten 2083-05-26 (C-014); production figures re-read 2083-06-06 (C-016); migration state updated 2083-08-11 (C-029). Everything below is verified against production, not remembered.*
 
-> **Production has run 0022** (C-028, 2083-08-07: run by Claude after a fresh read-only copy, `backups/prod-before-0022-2026-11-23T09-03-37Z.json`, 43 tables / 23,162 rows, and a rehearsal on a replica of it; read back: only `_migrations` 21 → 22, all 21 company fields unchanged, both new tables empty). Himal's shared SMS message was then set on `company.sms_message`. **SMS reaches patients only once `SMS_AUTH_TOKEN` is in the Vercel project and the token's Allowed IP covers where Vercel sends from** (Deploy.md, "SMS reminders").
+> **Production has run 0023** (C-029, 2083-08-11: run by Claude after a fresh read-only copy, `backups/prod-before-0023-2026-11-27T13-34-15Z.json`, 45 tables / 23,246 rows, and a rehearsal on a replica of it; read back: only `_migrations` 22 → 23, all 22 company fields unchanged, `web_booking_requests` empty, `web_booking_on = 1`, `web_confirm_sms_on = 0`, `appointments.source` present). **The website cannot book until `WEBSITE_API_KEY` is in the Vercel project** (it is in `.env.local`; the owner copies it) and the website's developer has it and `prod-docs/Website-API.md`. Confirmation texts are off until the owner switches them on in Settings → Online booking.
+>
+> Before that: **production had run 0022** (C-028, 2083-08-07: run by Claude after a fresh read-only copy, `backups/prod-before-0022-2026-11-23T09-03-37Z.json`, 43 tables / 23,162 rows, and a rehearsal on a replica of it; read back: only `_migrations` 21 → 22, all 21 company fields unchanged, both new tables empty). Himal's shared SMS message was then set on `company.sms_message`. **SMS reaches patients only once `SMS_AUTH_TOKEN` is in the Vercel project and the token's Allowed IP covers where Vercel sends from** (Deploy.md, "SMS reminders").
 >
 > Before that: **production had run 0021** (read-only check 2083-06-08: `_migrations` ends at `0021_purchase_bill_discount.sql`, 21 applied), after the owner's commit `a18215b purchase entry with bill photos`. Previously: **production ran 0019 and 0020** (read-only check 2083-06-06, C-017: `_migrations` ends at `0020_date_calendar.sql`), after the owner's commits `700f797 migration` and `869869f migration and auto backup changes`. **One thing is still the owner's: connect a private Blob store** (Deploy.md, "The storage has to be a private store"). On the same check `backups` had 16 rows and **no kept copy**, so either the store is not connected yet or no nightly run has happened since — until a *Nightly* row with *Download* appears, nothing is backed up on its own.
 
@@ -107,12 +109,12 @@
 - *(latent, not fixed)* `billRequestBody` in `offline/outbox.ts` drops the inline `patient` snapshot (`OUTBOX_ONLY_FIELDS` lists it, since fa88d88), although D-064 and `ingestBill` expect it. The patient queue drains first, and a bill that overtakes it fails on the foreign key and retries until the registration lands, so it self-heals — but D-064's "the bill can create the patient itself" is not what ships.
 - The per-line "Disc." boxes on medicine and service lines are still rupees only; only the bill discount has the `रू | %` switch (C-015).
 - Per-report recomputation beyond the `?fy=` range, and "refund a closed-year bill into the open year", remain unbuilt.
-- *(seen in C-028, not fixed)* `mergePatients` moves visits, bills, files and now SMS reminders — **not `appointments`**, so a merged-away patient's bookings stay on the old record. `bookConsultationAction` with a new patient registers them before the idempotent booking insert, so a retried submit can register the same person twice (the reminders action checks its id first). Several server pages call `today()`, which is the server's UTC date — wrong between midnight and 5:45 Nepal time; `todayInNepal()` exists now for anything that needs it.
+- *(seen in C-028; first two fixed in C-029)* ~~`mergePatients` does not move `appointments`~~ — it now moves appointments and website requests. ~~A retried `bookConsultationAction` can register a new patient twice~~ — the new patient now takes the booking's own id, so a retry finds them. **Still open:** several server pages call `today()`, which is the server's UTC date — wrong between midnight and 5:45 Nepal time; `todayInNepal()` exists now for anything that needs it.
 - *(flaky, pre-existing)* `tests/phase5-concurrency.integration.test.ts` fails some runs on a busy machine (5-second test timeouts, the "2,000 patients under 100 ms" timing). It passed 7/7 twice in isolation in C-028; nothing it exercises changed.
 
 **Requested but deliberately NOT built** *(keep this list; it is the scope fence)*
 - Lab result entry / report generation / reference ranges — belongs to Nidanyo, not ClinicNP (Rules.md §2.2).
-- EMR features, prescription printing, appointments, SMS, patient portal. *(Booked consultations since built, D-115; monthly SMS reminders since built, D-164 — SMS for anything else is still out: booking confirmations, dues chasing, marketing, bulk send.)*
+- EMR features, prescription printing, appointments, SMS, patient portal. *(Booked consultations since built, D-115; monthly SMS reminders since built, D-164; booking requests from the clinic's website and one confirmation text, D-171 — SMS for anything else is still out: decline/cancel texts, visit reminders, dues chasing, marketing, bulk send. No patient login, no cancelling or moving from the website, no doctors' rosters.)*
 - A print-format setting. One bill, on A4, letterhead across the top (D-102, D-103).
 - Any maker's badge, version string or support number on a screen behind the login. The sign-in screen is the only place ClinicNP or Infobytes Nepal is named (D-108).
 - Dues extras nobody asked for: interest, due dates, reminders or SMS, credit limits, advance/deposit balances, a payment receipt slip, a dues export. The Dues screen is who owes, what, since when, and taking the money.
@@ -302,6 +304,13 @@
 | D-168 | **The phone number lives on the reminder; a patient with none on file gets it saved to their details, never overwriting one** | Owner's choice when asked. The number checked at the desk is the one used, so a later edit to the patient never redirects a reminder; `UPDATE … WHERE TRIM(phone) = ''` in the same batch |
 | D-169 | **One shared message (on `company.sms_message`, empty = built-in) plus an optional message per reminder; `{name}`, `{date}`, `{clinic}`** | Owner's choice: "Shared + optional override". The owner's first English message ("Namaste {name} Ji, Your regular monthly medicines are ready! … Shazan Raut Singh, Himal Health Clinic Pvt. Ltd., Katunje") cost **3 credits** (measured, a real send). They then asked for **Nepali, one SMS, no name**: Himal's shared message is `मासिक औषधि तयार छ। डेलिभरी वा लिन फोन गर्नुहोस्।` + new line + `हिमाल हेल्थ क्लिनिक` — 68 characters, 1 SMS (Nepali script: 70 a message; owner asked under 69). Signed in English it is also 68: once any Nepali letter is in, English letters cost the same. The built-in wording is the same text **unsigned** with `तपाईंको`, so no clinic is hard-coded (Rules §0.4). A curly apostrophe in an English message would move it to the 70-a-message alphabet — the panel warns and straightens |
 | D-170 | **The SMS token and send address are configuration (`SMS_AUTH_TOKEN`, optional `SMS_API_URL`), never stored in the database** | It is a secret, and the provider ties it to one Allowed IP. Vercel functions have no fixed address, so the live site needs a token without the IP check, Vercel Static IPs ($100/month, Pro), or a relay named in `SMS_API_URL` — the owner is asking the provider first (Deploy.md) |
+| D-171 | **Booking requests from the clinic's own website are built, overturning Rules §2.4's "no patient-facing booking"** | The owner asked directly (C-029): the website (another developer's Next.js site) shows doctors and times, a visitor gives their details, and the entry is seen in ClinicNP. Built as a key-protected API (`/api/public/v1`) the website's **server** calls, never the visitor's browser. Rules §2.4 rewritten; everything else on that line stands — no patient login, no booking that skips the desk, no cancel/move from the website |
+| D-172 | **A website request waits in its own table and becomes an appointment only when the desk confirms it** | Owner's choice ("wait in a Website Requests list"). `appointments.patient_id` is NOT NULL and a public form must not mint lifetime patient numbers (D-028) or put strangers' spam on a doctor's phone. On confirm the desk matches the person to a record already on file (`findPossibleDuplicates`, a human choice — Rules §2.8) or registers them |
+| D-173 | **A waiting request holds its slot against everyone, the desk included; it expires when its time comes** | Otherwise the desk could book over a request the patient believes is in, and confirming it would then fail. One function, `occupantsOn`, says what holds a slot, for the website, the desk and moves. Expiry is lazy (no cron): written when the list, a slot list or a booking is read; the menu count leaves passed ones out without writing |
+| D-174 | **The new patient and the appointment take the request's own id; only the call that moved the request to confirmed sends the text** | Both inserts are idempotent on id, so a double press or a dropped connection books, registers and texts exactly once. Same trick fixes the desk's old double-registration on retry (`bookConsultationAction` now passes the booking's id to `createPatient`) |
+| D-175 | **Website times: 06:00–21:45 quarter hours, every day, at least 3 hours from now (Nepal clock), up to 30 days; no doctors' hours; every active doctor listed** | Owner's rules ("6 AM to 10 PM", "3 hours past from now", "doctor's hours not needed", "add all doctors on the API"). 15-minute visits so the last starts at 9:45. 30 days and quarter hours were the recommended defaults the owner accepted. The desk is bound by none of it |
+| D-176 | **Clash check and write are one write transaction (`writeTransaction` in `lib/db.ts`), retried on "busy" and always closed** | Two strangers can press Book on one slot in the same second; the old check-then-insert would have booked both. Pinned by a test. The local SQLite driver in rollback-journal mode leaves a read lock behind after such a race (found by that test); Turso runs in WAL, where it does not, so the test database runs in WAL too |
+| D-177 | **One confirmation SMS, English, off until the owner turns it on, editable in Settings → Online booking; nothing on decline** | Owner's choice: "patient should get a SMS once confirmed… turn on or off from settings… keep it English". Built-in wording ~125 characters = 1 SMS; `{name} {doctor} {date} {date_ad} {time} {ref} {clinic}`. Uses the same `SMS_AUTH_TOKEN`. Limits on the website: 240 calls/min on the key, 10 requests/hour per visitor (`X-Visitor-IP`), 5/day and 3 waiting per mobile number |
 
 *(Add D-036+ as they happen. Assumptions use the `ASSUMPTION:` prefix.)*
 
@@ -912,3 +921,41 @@ reminders sent once, a second run sent nothing, both moved to 2083-09-08.
 state, Nepali message panel, active item) before the dev server was stopped by a
 session restart; the rest of the screen was exercised by the owner on the live site.
 Next: after 6:45 on 2083-08-08, *Messages sent* should show two **Sent** rows.
+
+### C-029  ·  2083-08-11  ·  Online booking from the clinic's website (Clinic → Requests)
+
+Owner asked how the website (himalhealthclinic.com.np, another developer, Next.js) could
+book doctors in ClinicNP; plan first, then built on their answers: requests **wait in a
+list** with a number bubble on the tab; times are **3 hours ahead, 6 AM–10 PM**, no doctors'
+hours; **every active doctor** on the API; a **confirmation SMS** on booking, English,
+switchable in Settings; the key in `.env.local` for the owner to copy to Vercel; a contract
+document for the website's developer. Rules §2.4 rewritten (D-171).
+Built: `0023` (`web_booking_requests`; `company.web_booking_on` / `web_confirm_sms_on` /
+`web_confirm_sms`; `appointments.source`), `lib/web-booking-slots.ts`, `lib/web-booking-text.ts`,
+`lib/web-booking.ts`, `lib/public-api.ts`, `lib/repos/web-bookings.ts`, `lib/booking-alerts.ts`
+(`tellTheDoctor` moved out of a `"use server"` file), `writeTransaction` in `lib/db.ts`,
+`occupantsOn` in `repos/appointments.ts`; routes `api/public/v1/{doctors, doctors/[id]/slots,
+bookings, bookings/[ref]}`, `api/web-requests/count`; `/requests` (page, actions,
+`components/clinic/web-requests.tsx`), `/settings/online-booking` (page, actions,
+`components/app/online-booking-panel.tsx`); nav `bookersOnly` + the bubble; tab in Settings;
+backup, reset, audit, a11y lists. **`prod-docs/Website-API.md`** is for the website's developer.
+Fixed on the way: `mergePatients` now moves appointments (and requests); a retried desk booking
+no longer registers a new patient twice; desk booking/moving now also run in one transaction.
+Decisions: D-171 – D-177.
+Production: fresh read-only copy (45 tables, 23,246 rows), rehearsal on a replica (guard refused
+→ migrate → passed; only `_migrations` and the new empty table changed), then `0023` run by
+Claude and read back identically. Owner commits and pushes; `WEBSITE_API_KEY` goes into Vercel.
+Verified: typecheck; audit clean (104 routes); sweep (only the old `.pitch-build/` findings);
+**623 tests / 52 files green** — 18 new pure tests on the owner's time examples and 18
+integration tests (idempotency, slot held from website and desk, two simultaneous requests →
+one 201 + one 409, no patient number until confirm, confirm twice = once incl. the text,
+matching an existing patient, decline/expiry free the slot, SMS switch/wording/failure,
+merge). `pnpm build` clean (`/requests` 135 kB, `/billing` 149 kB unchanged). Against the
+built app on a scratch copy: every endpoint by curl (401 without key, 201 then 200 same id,
+409 same slot, slots empty after 7 PM, status by code, 400 bad JSON); signed in as staff
+(count 1, bubble 1, settings refused); a Playwright walk as owner at 1440 and 390 px —
+bubble 2 → Book it → three plain toasts → bubble 1, the booking on the doctor's day, the
+settings page, no horizontal scroll, no page errors.
+Next: owner puts `WEBSITE_API_KEY` in Vercel (Production), commits, pushes; gives the key and
+`Website-API.md` to the website's developer privately; turns on the confirmation text once SMS
+is confirmed working on the live site (Send a test).

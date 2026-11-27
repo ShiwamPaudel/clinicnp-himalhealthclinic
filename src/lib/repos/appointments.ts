@@ -11,12 +11,17 @@
  */
 import "server-only";
 import { ulid } from "ulid";
-import { db } from "@/lib/db";
-import type { Row } from "@/lib/db";
+import { db, writeTransaction } from "@/lib/db";
+import type { Row, InStatement } from "@/lib/db";
+import type { ResultSet } from "@libsql/client";
 import type { AppointmentStatus } from "@/lib/appointment-types";
 import { overlaps } from "@/lib/appointment-types";
+import { hasPassed } from "@/lib/web-booking-slots";
 
 export type { AppointmentStatus };
+
+/** Where a booking came from: typed in at the desk, or asked for online (0023). */
+export type AppointmentSource = "desk" | "web";
 
 export interface Appointment {
   id: string;
@@ -31,6 +36,7 @@ export interface Appointment {
   cancelReason: string;
   visitId: string | null;
   bookedBy: string | null;
+  source: AppointmentSource;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +68,7 @@ function mapAppointment(r: Row): Appointment {
     cancelReason: (r.cancel_reason as string) ?? "",
     visitId: (r.visit_id as string | null) ?? null,
     bookedBy: (r.booked_by as string | null) ?? null,
+    source: r.source === "web" ? "web" : "desk",
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -112,6 +119,74 @@ export interface NewAppointmentInput {
   durationMin: number;
   reason: string;
   bookedBy: string;
+  /** Defaults to the desk. */
+  source?: AppointmentSource;
+  /**
+   * The website request this booking confirms, whose own hold on the slot
+   * must not count as a clash with itself.
+   */
+  fromRequestId?: string;
+}
+
+/** Anything that can run a statement: the client, or an open transaction. */
+interface Exec {
+  execute(stmt: InStatement): Promise<ResultSet>;
+}
+
+export interface Occupant {
+  timeHhmm: string;
+  durationMin: number;
+  /** Said to the front desk when it collides — staff only, never the public. */
+  who: string;
+}
+
+/**
+ * Everything holding a slot with this doctor on this day: bookings still
+ * expected to happen, and website requests still waiting for somebody to
+ * confirm them (0023). A cancelled booking gives its slot back (D-119), and so
+ * does a request that was declined or whose time has gone by.
+ */
+export async function occupantsOn(
+  exec: Exec,
+  doctorId: string,
+  dateAd: string,
+  except: { appointmentId?: string; requestId?: string } = {},
+  now: Date = new Date(),
+): Promise<Occupant[]> {
+  const booked = await exec.execute({
+    sql: `SELECT a.id, a.time_hhmm, a.duration_min, p.name AS patient_name
+            FROM appointments a
+            JOIN patients p ON p.id = a.patient_id
+           WHERE a.doctor_id = ? AND a.date_ad = ?
+             AND a.status IN ('booked', 'arrived')`,
+    args: [doctorId, dateAd],
+  });
+  const held = await exec.execute({
+    sql: `SELECT id, time_hhmm, duration_min
+            FROM web_booking_requests
+           WHERE doctor_id = ? AND date_ad = ? AND status = 'pending'`,
+    args: [doctorId, dateAd],
+  });
+
+  const out: Occupant[] = [];
+  for (const r of booked.rows) {
+    if (except.appointmentId && r.id === except.appointmentId) continue;
+    out.push({
+      timeHhmm: r.time_hhmm as string,
+      durationMin: Number(r.duration_min),
+      who: (r.patient_name as string) ?? "somebody",
+    });
+  }
+  for (const r of held.rows) {
+    if (except.requestId && r.id === except.requestId) continue;
+    if (hasPassed(dateAd, r.time_hhmm as string, now)) continue;
+    out.push({
+      timeHhmm: r.time_hhmm as string,
+      durationMin: Number(r.duration_min),
+      who: "a website request (waiting under Requests)",
+    });
+  }
+  return out;
 }
 
 /**
@@ -119,6 +194,10 @@ export interface NewAppointmentInput {
  *
  * Idempotent on the id, so a retry from a phone with a bad connection books
  * one consultation and not two (Rules §1.8).
+ *
+ * The clash check and the insert are one write transaction (C-029). Two
+ * people at the desk rarely book the same doctor in the same second; two
+ * strangers on a website can, and only one of them may get the slot.
  */
 export async function createAppointment(
   input: NewAppointmentInput,
@@ -128,39 +207,38 @@ export async function createAppointment(
   const existing = await getAppointment(id);
   if (existing) return existing;
 
-  // Two people cannot be with the same doctor at the same moment. Only
-  // bookings still expected to happen count — a cancelled one frees its slot.
-  const sameDay = await appointmentsForDoctorOn(input.doctorId, input.dateAd);
-  const clash = sameDay.find(
-    (a) =>
-      (a.status === "booked" || a.status === "arrived") &&
-      overlaps(
-        { timeHhmm: a.timeHhmm, durationMin: a.durationMin },
-        { timeHhmm: input.timeHhmm, durationMin: input.durationMin },
-      ),
-  );
-  if (clash) throw new DoubleBookedError(clash.patientName);
-
   const now = new Date().toISOString();
-  await db().execute({
-    sql: `INSERT INTO appointments
-            (id, doctor_id, patient_id, date_ad, date_bs, time_hhmm,
-             duration_min, reason, status, cancel_reason, visit_id,
-             booked_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'booked', '', NULL, ?, ?, ?)`,
-    args: [
-      id,
-      input.doctorId,
-      input.patientId,
-      input.dateAd,
-      input.dateBs,
-      input.timeHhmm,
-      input.durationMin,
-      input.reason,
-      input.bookedBy,
-      now,
-      now,
-    ],
+  await writeTransaction(async (tx) => {
+    // Two people cannot be with the same doctor at the same moment.
+    const occupants = await occupantsOn(tx, input.doctorId, input.dateAd, {
+      requestId: input.fromRequestId,
+    });
+    const clash = occupants.find((o) =>
+      overlaps(o, { timeHhmm: input.timeHhmm, durationMin: input.durationMin }),
+    );
+    if (clash) throw new DoubleBookedError(clash.who);
+
+    await tx.execute({
+      sql: `INSERT INTO appointments
+              (id, doctor_id, patient_id, date_ad, date_bs, time_hhmm,
+               duration_min, reason, status, cancel_reason, visit_id,
+               booked_by, source, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'booked', '', NULL, ?, ?, ?, ?)`,
+      args: [
+        id,
+        input.doctorId,
+        input.patientId,
+        input.dateAd,
+        input.dateBs,
+        input.timeHhmm,
+        input.durationMin,
+        input.reason,
+        input.bookedBy,
+        input.source ?? "desk",
+        now,
+        now,
+      ],
+    });
   });
 
   const made = await getAppointment(id);
@@ -303,31 +381,29 @@ export async function rescheduleAppointment(
   const current = await getAppointment(id);
   if (!current) throw new Error("appointment not found");
 
-  const sameDay = await appointmentsForDoctorOn(current.doctorId, next.dateAd);
-  const clash = sameDay.find(
-    (a) =>
-      a.id !== id &&
-      (a.status === "booked" || a.status === "arrived") &&
-      overlaps(
-        { timeHhmm: a.timeHhmm, durationMin: a.durationMin },
-        { timeHhmm: next.timeHhmm, durationMin: next.durationMin },
-      ),
-  );
-  if (clash) throw new DoubleBookedError(clash.patientName);
+  await writeTransaction(async (tx) => {
+    const occupants = await occupantsOn(tx, current.doctorId, next.dateAd, {
+      appointmentId: id,
+    });
+    const clash = occupants.find((o) =>
+      overlaps(o, { timeHhmm: next.timeHhmm, durationMin: next.durationMin }),
+    );
+    if (clash) throw new DoubleBookedError(clash.who);
 
-  await db().execute({
-    sql: `UPDATE appointments
-             SET date_ad = ?, date_bs = ?, time_hhmm = ?, duration_min = ?,
-                 updated_at = ?
-           WHERE id = ?`,
-    args: [
-      next.dateAd,
-      next.dateBs,
-      next.timeHhmm,
-      next.durationMin,
-      new Date().toISOString(),
-      id,
-    ],
+    await tx.execute({
+      sql: `UPDATE appointments
+               SET date_ad = ?, date_bs = ?, time_hhmm = ?, duration_min = ?,
+                   updated_at = ?
+             WHERE id = ?`,
+      args: [
+        next.dateAd,
+        next.dateBs,
+        next.timeHhmm,
+        next.durationMin,
+        new Date().toISOString(),
+        id,
+      ],
+    });
   });
 }
 

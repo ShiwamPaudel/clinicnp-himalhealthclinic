@@ -207,6 +207,19 @@ CREATE TABLE sms_sent (id, reminder_id → sms_reminders (NULL = test message), 
   attempts, can_retry, created_at, updated_at);
 CREATE UNIQUE INDEX idx_sms_sent_once ON sms_sent (reminder_id, due_date_bs)
   WHERE reminder_id IS NOT NULL;   -- one message per reminder per month
+
+-- 0023_web_booking.sql  (additive; online booking from the website — C-029, D-171 … D-177)
+ALTER TABLE company ADD COLUMN web_booking_on INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE company ADD COLUMN web_confirm_sms_on INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE company ADD COLUMN web_confirm_sms TEXT NOT NULL DEFAULT '';  -- '' = built-in
+ALTER TABLE appointments ADD COLUMN source TEXT NOT NULL DEFAULT 'desk';  -- desk | web
+CREATE TABLE web_booking_requests (id, ref UNIQUE (W + 7 Crockford chars),
+  request_id UNIQUE (the website's idempotency key), doctor_id → doctors,
+  date_ad, date_bs, time_hhmm, duration_min 15, name, phone (10 digits), sex,
+  age_value, age_unit, address, reason, status pending|confirmed|declined|expired,
+  decline_reason, patient_id → patients, appointment_id → appointments,
+  reviewed_by → users, reviewed_at, sms_status ''|sent|failed|off, sms_detail,
+  created_at, updated_at);
 ```
 
 *(C-024, no schema change.)* `createPurchase` can carry two more writes in the
@@ -510,12 +523,26 @@ Files: `lib/sms-text.ts` (pure: fill `{name}`/`{date}`/`{clinic}`, SMS size — 
 - **Phone.** Kept on the reminder. Setting one up writes it to the patient only `WHERE TRIM(phone) = ''`, in the same batch. `mergePatients` moves reminders to the kept record.
 - **Guards.** Page and actions need **both** modules (`requireModulePage`/`requireModule` for pharmacy and clinic) — the menu item is in Pharmacy but reminders belong to patients; `NavItem.alsoNeeds` hides it otherwise. Admin and Staff manage (`assertCanBook`); the shared message and the test are Admin (`assertAdmin`); a doctor is sent to `/my` like every back-office page.
 
+### 5.11 Online booking from the website — C-029, 0023
+
+The website's server calls `/api/public/v1/*` with `Authorization: Bearer <WEBSITE_API_KEY>`; the contract is `prod-docs/Website-API.md`. Files: `lib/web-booking-slots.ts` (pure: Nepal clock, 06:00–21:45 quarter hours, 3-hour lead, 30-day horizon, `freeSlots`, `slotProblem`, `hasPassed`), `lib/web-booking-text.ts` (pure: the confirmation text and its placeholders), `lib/web-booking.ts` (server: submit / confirm / decline, no sign-in checks so it is tested directly, SMS sender injected), `lib/public-api.ts` (key check in constant time, `openDoor` = key → Clinic module → rate limit, `visitorIp`), `lib/repos/web-bookings.ts`, `lib/booking-alerts.ts` (`tellTheDoctor`, moved out of `doctors/actions.ts` because anything exported from a `"use server"` file is callable by a browser), routes `api/public/v1/{doctors, doctors/[id]/slots, bookings, bookings/[ref]}` and `api/web-requests/count` (session; the menu bubble), `app/(app)/requests/` (page + actions), `app/(app)/settings/online-booking/` (page + actions), `components/clinic/web-requests.tsx`, `components/app/online-booking-panel.tsx`.
+
+- **A request is not an appointment.** `appointments.patient_id` is NOT NULL and a public form must not mint patient numbers (D-028), so requests live in their own table and become an appointment only on confirm (D-172).
+- **Holding a slot.** `occupantsOn(exec, doctor, day)` in `repos/appointments.ts` is the one list of what occupies a slot: `booked`/`arrived` appointments plus `pending` requests whose time has not passed. The website's slot list, a new request, a desk booking and a move all use it, so a waiting request blocks the desk too (D-173). The desk is told who has it; the public only "taken".
+- **Races.** `createAppointment`, `rescheduleAppointment` and `createWebRequest` do the clash check and the write inside `writeTransaction` (`lib/db.ts`): one write transaction, always closed, retried with a growing pause (about 2 s in all) when the database answers busy. Two visitors pressing Book on one slot get one request and one `409` — pinned by a test. The test database runs in WAL mode like Turso: the local driver in rollback-journal mode leaves a read lock behind after such a race, which production does not (D-176).
+- **Idempotency.** `request_id` UNIQUE (the website resends its id). Confirm uses the request's own id for the new patient and the appointment — both inserts are idempotent on id — and only the call whose conditional `UPDATE … WHERE status IN ('pending','expired')` moved it sends the text, so a double press books, registers and texts once (D-174).
+- **Expiry.** No cron: `expireStaleWebRequests` (an `UPDATE`) runs when the Requests page, the slot list, a booking or a status check is read; the menu's count is a plain read that leaves passed ones out.
+- **Limits.** `WEBSITE_API` 240/min on the key; `WEBSITE_BOOKING_VISITOR` 10/hour per `X-Visitor-IP`; `WEBSITE_BOOKING_PHONE` 5/day per number; 3 pending per number. All in `rate_limits` (D-177).
+- **Merge.** `mergePatients` now also moves `appointments` and `web_booking_requests` (it moved neither before).
+- **Guards.** Public routes: `openDoor` (401 wrong key, 404 Clinic off, 429). Requests page and actions: Clinic module + `canBook`/`assertCanBook`. Settings: `requireAdmin`/`assertAdmin` + Clinic. `scripts/audit.mjs` treats `openDoor(` as a module guard.
+
 ---
 
 ## 6. Security & multi-device
 
 - Every server entry point: **session → role → module → Zod → repo.** No SQL outside `lib/repos/`.
 - `/api/bills` and `/api/patients` idempotent on ULID; two devices cannot double-create.
+- `/api/public/v1/*` is the only door not behind a session: the website's key (constant-time compare, refused below 32 characters), then the module, then a rate limit. Answers never carry a patient's name or number (C-029).
 - Patient files: authenticated stream only; blob keys never exposed to the client.
 - Audit log covers: rate and service-rate overrides, follow-up overrides, bill cancels, refunds, patient edits/merges/deactivations, file deletions, stock-out entries, module toggles, fiscal-year closes, restores.
 - Turso token, Blob token and CBMS credentials are server-side env vars only; the client never touches Turso or Blob directly.

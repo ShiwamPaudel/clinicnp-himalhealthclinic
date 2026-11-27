@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -20,6 +21,7 @@ import {
   HandCoins,
   Banknote,
   MessageSquareText,
+  Globe,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/lib/repos/users";
@@ -33,6 +35,10 @@ interface NavItem {
   adminOnly?: boolean;
   /** A second module this item needs besides its group's own. */
   alsoNeeds?: "clinic" | "pharmacy";
+  /** Only for the people who can book consultations: Admin and Staff. */
+  bookersOnly?: boolean;
+  /** Shows the number of website requests waiting, as a bubble on the icon. */
+  showsWebRequests?: boolean;
 }
 
 /**
@@ -64,6 +70,8 @@ const GROUPS: NavGroup[] = [
       { href: "/patients", label: "Patients", icon: Users },
       { href: "/visits", label: "Visits", icon: Stethoscope },
       { href: "/doctors", label: "Doctors", icon: CalendarCheck },
+      // Consultations asked for on the website, waiting for the desk (C-029).
+      { href: "/requests", label: "Requests", icon: Globe, bookersOnly: true, showsWebRequests: true },
       { href: "/lab", label: "Laboratory", icon: FlaskConical },
     ],
   },
@@ -95,22 +103,69 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
+/**
+ * How many website requests are waiting. Starts from what the server counted
+ * when the page was drawn, then asks again every minute, on every change of
+ * page and whenever the window comes back into focus — a request that arrives
+ * while the desk is in the middle of a bill still gets noticed.
+ */
+function usePendingRequests(initial: number, enabled: boolean): number {
+  const pathname = usePathname();
+  const [count, setCount] = useState(initial);
+
+  useEffect(() => setCount(initial), [initial]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/web-requests/count", { cache: "no-store" });
+        if (!res.ok) return;
+        const body = (await res.json()) as { pending?: unknown };
+        if (alive && typeof body.pending === "number") setCount(body.pending);
+      } catch {
+        // offline or signed out: keep showing the last number
+      }
+    };
+    void load();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 60_000);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [enabled, pathname]);
+
+  return count;
+}
+
 export function Nav({
   role,
   modules,
   collapsed = false,
+  pendingRequests = 0,
 }: {
   role: Role;
   modules: ModuleFlags;
   collapsed?: boolean;
+  /** Website requests waiting when the page was drawn. */
+  pendingRequests?: number;
 }) {
   const pathname = usePathname();
+  const canBook = role === "admin" || role === "staff";
+  const waiting = usePendingRequests(pendingRequests, canBook && modules.clinic);
 
   const visible = GROUPS.map((g) => ({
     ...g,
     items: g.items.filter(
       (i) =>
         (!i.adminOnly || role === "admin") &&
+        (!i.bookersOnly || canBook) &&
         (g.module === null || modules[g.module]) &&
         (!i.alsoNeeds || modules[i.alsoNeeds]),
     ),
@@ -166,11 +221,18 @@ export function Nav({
             const active =
               pathname === item.href || pathname.startsWith(item.href + "/");
             const Icon = item.icon;
+            const bubble = item.showsWebRequests && waiting > 0 ? waiting : 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                title={collapsed ? item.label : undefined}
+                title={
+                  collapsed
+                    ? bubble
+                      ? `${item.label} — ${bubble} waiting`
+                      : item.label
+                    : undefined
+                }
                 className={cn(
                   "flex min-w-0 items-center rounded-[8px] py-2 text-[14px] transition-colors",
                   collapsed ? "justify-center px-2" : twoColumns(gi) ? "gap-2 px-2.5" : "gap-3 px-3",
@@ -179,8 +241,23 @@ export function Nav({
                     : "text-cream-50/70 hover:bg-sage-700/40 hover:text-cream-50",
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                <span className="relative shrink-0">
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                  {bubble > 0 && (
+                    <span
+                      aria-hidden
+                      className="absolute -right-2.5 -top-2 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-magenta-600 px-1 text-[10px] font-semibold leading-none text-cream-50 ring-2 ring-sage-900"
+                    >
+                      {bubble > 99 ? "99+" : bubble}
+                    </span>
+                  )}
+                </span>
                 {!collapsed && <span className="truncate">{item.label}</span>}
+                {bubble > 0 && (
+                  <span className="sr-only">
+                    , {bubble} {bubble === 1 ? "request" : "requests"} waiting
+                  </span>
+                )}
               </Link>
             );
           })}

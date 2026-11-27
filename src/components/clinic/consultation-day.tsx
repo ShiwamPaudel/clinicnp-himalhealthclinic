@@ -545,7 +545,7 @@ function alertLine(doctor: DayDoctor): string {
  * that runs to the quarter hour should not have to type, and a clinic that
  * squeezes somebody in at 13:05 should not be told it cannot.
  */
-function TimeChooser({
+export function TimeChooser({
   value,
   onChange,
 }: {

@@ -386,6 +386,17 @@ export async function mergePatients(
       sql: "UPDATE sms_reminders SET patient_id = ?, updated_at = ? WHERE patient_id = ?",
       args: [keepId, now, mergeId],
     });
+    // So do booked consultations, and the website requests that became them
+    // (C-029). Before this a merged-away record kept its bookings, so the
+    // kept one's history was missing them.
+    await tx.execute({
+      sql: "UPDATE appointments SET patient_id = ?, updated_at = ? WHERE patient_id = ?",
+      args: [keepId, now, mergeId],
+    });
+    await tx.execute({
+      sql: "UPDATE web_booking_requests SET patient_id = ?, updated_at = ? WHERE patient_id = ?",
+      args: [keepId, now, mergeId],
+    });
 
     await tx.execute({
       sql: `UPDATE patients

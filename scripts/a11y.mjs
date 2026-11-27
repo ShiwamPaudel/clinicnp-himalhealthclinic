@@ -40,6 +40,8 @@ const SCREENS = [
   ["/items/pricing", "setting prices"],
   ["/dues", "who owes money"],
   ["/reminders", "monthly SMS reminders"],
+  ["/requests", "website booking requests"],
+  ["/settings/online-booking", "online booking settings"],
 ];
 
 const findings = [];

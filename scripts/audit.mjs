@@ -46,6 +46,12 @@ const CLINIC_SEGMENTS = [
   // monthly SMS reminders: in the Pharmacy menu, but they belong to patients
   "reminders",
   "api/cron/sms-reminders",
+  // online booking (C-029): the desk's list, its setting, the menu's count,
+  // and the website's own door
+  "requests",
+  "settings/online-booking",
+  "api/web-requests",
+  "api/public",
 ];
 
 /** Routes that are shared on purpose and decide per-module inside. */
@@ -87,7 +93,9 @@ for (const file of routeFiles) {
   const guarded =
     src.includes("requireModulePage(") ||
     src.includes("requireModule(") ||
-    src.includes("getModules(");
+    src.includes("getModules(") ||
+    // the website's routes: openDoor checks the key, then the Clinic module
+    src.includes("openDoor(");
   if (!guarded) {
     failures.push(
       `module guard missing: /${routePath}  (${relative(ROOT, file)})`,

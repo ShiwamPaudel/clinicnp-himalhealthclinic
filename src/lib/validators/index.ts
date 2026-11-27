@@ -478,3 +478,67 @@ export const smsSharedMessageSchema = z.object({
 export const smsTestSchema = z.object({
   phone: z.string().min(1, "Enter a mobile number"),
 });
+
+// ---- Online booking (0023) ----
+
+/**
+ * What the clinic's website sends when somebody asks for a consultation.
+ * Messages here can reach the person filling in the form, so they are plain.
+ */
+export const publicBookingSchema = z
+  .object({
+    /** The website's own id for this submission. Sent again, it is one request. */
+    requestId: z.string().trim().min(8, "requestId is missing").max(100),
+    doctorId: z.string().trim().min(1, "Choose a doctor"),
+    /** English date, YYYY-MM-DD. Send this or dateBs. */
+    date: z.string().trim().optional(),
+    /** Nepali date, YYYY-MM-DD. Send this or date. */
+    dateBs: z.string().trim().optional(),
+    time: z.string().trim().min(1, "Choose a time"),
+    patient: z.object({
+      name: z.string().trim().min(1, "Enter the patient's name").max(100, "That name is too long"),
+      phone: z.string().trim().min(1, "Enter a mobile number").max(20),
+      sex: z
+        .string()
+        .trim()
+        .toLowerCase()
+        .transform((s) =>
+          s === "female" ? "f" : s === "male" ? "m" : s === "other" ? "o" : s,
+        )
+        .pipe(z.enum(["f", "m", "o"], { message: "Choose female, male or other" })),
+      age: z
+        .object({
+          value: z.number().int("Age is a whole number").min(0),
+          unit: z.enum(["y", "m", "d"]).default("y"),
+        })
+        .nullable()
+        .optional(),
+      address: z.string().trim().max(200, "That address is too long").default(""),
+    }),
+    reason: z.string().trim().max(300, "Keep the reason under 300 characters").default(""),
+  })
+  .refine((b) => Boolean(b.date) !== Boolean(b.dateBs), {
+    message: "Send either date or dateBs",
+    path: ["date"],
+  });
+export type PublicBookingInput = z.infer<typeof publicBookingSchema>;
+
+export const confirmWebRequestSchema = z.object({
+  id: z.string().min(1),
+  /** An existing patient's id, or "new" to register the person as they wrote themselves. */
+  patientId: z.string().min(1, "Choose the patient"),
+  dateBs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+  timeHhmm: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Pick a time"),
+  durationMin: z.number().int().min(5).max(240),
+});
+
+export const declineWebRequestSchema = z.object({
+  id: z.string().min(1),
+  reason: z.string().max(300).default(""),
+});
+
+export const webBookingSettingsSchema = z.object({
+  accepting: z.boolean(),
+  confirmSmsOn: z.boolean(),
+  confirmSms: z.string().max(600),
+});

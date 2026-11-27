@@ -380,7 +380,38 @@ Once a day, at about **6:00 in the morning** Nepal time (owner's choice: one che
 Owner only, beside the list: the **shared message** (with a warning and a one-click fix for curly quotes, which more than double what each message costs) and **Send a test SMS** to any number.
 
 ### 4E.4 Not built
-Anything else by SMS (Rules §2.4): booking confirmations, dues reminders, birthday or marketing messages, sending to a list of patients at once, reading replies, delivery reports from the network. Reminders are not shown on the patient card yet. A stopped reminder cannot be restarted — a new one is set up instead.
+Anything else by SMS (Rules §2.4): dues reminders, birthday or marketing messages, sending to a list of patients at once, reading replies, delivery reports from the network. Reminders are not shown on the patient card yet. A stopped reminder cannot be restarted — a new one is set up instead. *(A booking confirmation text has since been added, for website requests only — §4F, C-029.)*
+
+## 4F — ONLINE BOOKING FROM THE CLINIC'S WEBSITE *(Clinic module; added 2083-08-11, C-029)*
+
+The owner's request: the clinic's website (himalhealthclinic.com.np, built by another developer) lets a visitor choose a doctor, a date and a time and give their details; the booking then appears in ClinicNP. Overturns "no patient-facing booking" in Rules §2.4 (D-171). The website talks to ClinicNP through a small API — the contract the website's developer works from is `prod-docs/Website-API.md`.
+
+### 4F.1 What the website can do
+- **List the doctors** — every active doctor (owner's choice: no per-doctor switch), with name, qualification and specialty only.
+- **Show free times** for one doctor on one day.
+- **Ask for a consultation**: doctor, date, time, the patient's name, mobile number (required, a Nepali mobile), sex (required), age and address (optional), a reason (optional). The visitor is given a short code (e.g. `W7K3Q9DX`).
+- **Check a request** by its code: waiting, booked (with the time the clinic booked), declined, or not answered in time.
+
+### 4F.2 Which times are offered (owner's rules)
+- 6 AM to 10 PM, every day; a consultation is 15 minutes, so the last starts at 9:45 PM. Quarter hours only.
+- **At least three hours from now**: at 6 PM the first time is 9 PM; at 8 PM it is 6 AM tomorrow. No doctors' hours — every doctor is offered all day.
+- Up to 30 days ahead.
+- A time already booked, or held by another waiting request, is not offered. The front desk is not bound by any of this.
+
+### 4F.3 Waiting for the desk (Clinic → Requests; Admin and Staff)
+A request is **not** a booking and its person is **not** registered — a form anybody can fill in must not hand out patient numbers. It holds its time while it waits. The **Requests** tab carries a bubble with the number waiting, refreshed every minute, on every change of page and when the window comes back into focus.
+- **Book it**: choose who it is — somebody on file the software thinks may be the same person (same name and/or phone), or *Someone new* (registered from what they typed, with the next patient number). The date, time and length can be changed first, if a different time was agreed on the phone. The booking is then an ordinary booked consultation (marked as from the website), the doctor is told as with any booking, and the patient may be texted (4F.4). Pressing it twice books once.
+- **Decline**, with an optional reason kept for the staff. Nothing is sent to the patient. The time is free again.
+- A request nobody answers before its time **expires** and its time is free again.
+- **Answered** lists the rest: code, who, doctor, time, what happened (who and when), and whether the text went.
+
+### 4F.4 Settings → Online booking (Admin)
+- **Take bookings from the website** — on/off. Off, the website is told bookings are paused; requests already waiting stay.
+- **Text the patient when their booking is confirmed** — on/off (off at first). One SMS to the mobile number they gave, when the desk presses *Book it*; nothing on decline. English, editable, with `{name}` `{doctor}` `{date}` (Nepali) `{date_ad}` `{time}` `{ref}` `{clinic}`; built-in wording *"Dear {name}, your appointment with {doctor} on {date} at {time} is confirmed. - {clinic}"* (about 125 characters, 1 SMS). Preview with the SMS count, and **Send a test**.
+- Shows whether the website's key is set up.
+
+### 4F.5 Not built
+Cancelling or moving a booking from the website; texting on decline, on cancel, or as a reminder before the visit; doctors' working hours, days off or leave; a different visit length per doctor; payment online; a patient login or portal. Staff are not alerted on their phones when a request arrives — the bubble is the signal.
 
 ---
 
@@ -405,7 +436,7 @@ Anything else by SMS (Rules §2.4): booking confirmations, dues reminders, birth
 
 - **Laboratory results, reports, reference ranges, sample tracking, analyser integration.** ClinicNP bills the test and files the report it receives. Lab information management is a different product (Infobytes Nepal's **Nidanyo**); a future export of a dispatch slip to Nidanyo is a nice-to-have, not v2 scope.
 - **EMR / EHR**: no structured clinical notes, ICD coding, prescription printing, drug-interaction checks, or clinical decision support.
-- **Appointments and scheduling**, SMS/notification sending, patient portal, telemedicine. *(Since overturned in part: booked consultations, C-014 · §4B, and monthly SMS reminders, C-028 · §4E. Nothing else on this line.)*
+- **Appointments and scheduling**, SMS/notification sending, patient portal, telemedicine. *(Since overturned in part: booked consultations, C-014 · §4B; monthly SMS reminders, C-028 · §4E; and booking requests from the clinic's own website with a confirmation text, C-029 · §4F. Nothing else on this line.)*
 - Customer profiles or loyalty on the pharmacy side (unchanged from v1).
 - Insurance, Bipanna/social-security claim processing, government reporting beyond IRD CBMS.
 - Multi-branch sync; payment-gateway processing (QR recorded, not processed); barcode label printing; full double-entry accounting.

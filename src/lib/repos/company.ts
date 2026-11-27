@@ -211,3 +211,46 @@ export async function setModuleFlags(flags: ModuleFlags): Promise<void> {
     args: [flags.pharmacy ? 1 : 0, flags.clinic ? 1 : 0, new Date().toISOString()],
   });
 }
+
+// ============================================================
+// Online booking (0023). Kept off the Company profile for the same reason as
+// the floor size: Settings → Online booking owns these three columns and the
+// Company form, which rewrites every column it knows about, must not.
+// ============================================================
+
+export interface WebBookingSettings {
+  /** The website may send requests. Off, it is told bookings are paused. */
+  accepting: boolean;
+  /** Text the patient when the front desk confirms their request. */
+  confirmSmsOn: boolean;
+  /** The confirmation wording; "" means the built-in one. */
+  confirmSms: string;
+}
+
+export async function getWebBookingSettings(): Promise<WebBookingSettings> {
+  const res = await db().execute(
+    "SELECT web_booking_on, web_confirm_sms_on, web_confirm_sms FROM company WHERE id = 1",
+  );
+  const r = res.rows[0];
+  if (!r) return { accepting: false, confirmSmsOn: false, confirmSms: "" };
+  return {
+    accepting: Number(r.web_booking_on ?? 1) === 1,
+    confirmSmsOn: Number(r.web_confirm_sms_on ?? 0) === 1,
+    confirmSms: ((r.web_confirm_sms as string | null) ?? "").trim(),
+  };
+}
+
+export async function setWebBookingSettings(s: WebBookingSettings): Promise<void> {
+  await db().execute({
+    sql: `UPDATE company
+             SET web_booking_on = ?, web_confirm_sms_on = ?, web_confirm_sms = ?,
+                 updated_at = ?
+           WHERE id = 1`,
+    args: [
+      s.accepting ? 1 : 0,
+      s.confirmSmsOn ? 1 : 0,
+      s.confirmSms,
+      new Date().toISOString(),
+    ],
+  });
+}

@@ -1,8 +1,9 @@
-import { requireBackOfficeUser, canBill } from "@/lib/session";
+import { requireBackOfficeUser, canBill, canBook } from "@/lib/session";
 import { getModules } from "@/lib/modules";
 import { appNameFor } from "@/lib/app-name";
 import { listUsers } from "@/lib/repos/users";
 import { getDateCalendar } from "@/lib/repos/company";
+import { countPendingWebRequests } from "@/lib/repos/web-bookings";
 import { Sidebar } from "@/components/app/sidebar";
 import { GlobalShortcuts } from "@/components/app/global-shortcuts";
 import { DateCalendarProvider } from "@/components/ui/date-calendar-context";
@@ -16,6 +17,16 @@ export default async function AppLayout({
   const modules = await getModules();
   const all = await listUsers();
   const dateCalendar = await getDateCalendar();
+  // The bubble on Clinic → Requests. Never allowed to take a page down: if
+  // the count cannot be read, the menu shows none and asks again in a minute.
+  let pendingRequests = 0;
+  if (modules.clinic && canBook(user.role)) {
+    try {
+      pendingRequests = await countPendingWebRequests();
+    } catch (err) {
+      console.error("[layout] website requests could not be counted", (err as Error)?.name);
+    }
+  }
   const switchable = all
     // A doctor's sign-in never appears in quick-switch: it belongs to one
     // person on their own phone, not to the shared counter machine.
@@ -30,6 +41,7 @@ export default async function AppLayout({
         switchable={switchable}
         appName={appNameFor(modules)}
         modules={modules}
+        pendingRequests={pendingRequests}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <DateCalendarProvider calendar={dateCalendar}>{children}</DateCalendarProvider>

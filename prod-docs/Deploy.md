@@ -18,6 +18,14 @@ changes behaviour on the fifth, which is why it is listed with the rest.
 | `CRON_SECRET` | what the nightly jobs present to prove they are the scheduler | the crons are refused |
 | `BLOB_STORE_ID` (or `BLOB_READ_WRITE_TOKEN`) | private storage for patient files **and backups** — set by Vercel when a private Blob store is connected to the project | **patient files are written to the machine's own disk instead** (they survive nothing, and a second instance cannot see them) and **no backup is kept anywhere** — Settings → Backup says "Automatic backups are off" |
 
+### Online booking from the website (C-029) — optional
+
+| Variable | What it is | If it is missing |
+|---|---|---|
+| `WEBSITE_API_KEY` | the shared secret the clinic's website sends as `Authorization: Bearer …` to `/api/public/v1`. At least 32 characters; generated once into `.env.local` (2083-08-11). Give it to the website's developer privately, never in chat or a public repo | every website call is refused with 401; Settings → Online booking says the key is not set up. Changing it locks the website out until it has the new one |
+
+Confirmation texts to patients use the same `SMS_AUTH_TOKEN` as below and are switched on in Settings → Online booking.
+
 ### SMS reminders (C-028) — optional, but nothing is sent without them
 
 | Variable | What it is | If it is missing |

@@ -19,15 +19,13 @@ import { recordAudit } from "@/lib/repos/audit";
 import {
   createAppointment,
   getAppointment,
-  getAppointmentRow,
   rescheduleAppointment,
   setAppointmentStatus,
   DoubleBookedError,
 } from "@/lib/repos/appointments";
 import { getDoctor } from "@/lib/repos/doctors";
 import { getPatient, createPatient } from "@/lib/repos/patients";
-import { getCompany } from "@/lib/repos/company";
-import { notifyDoctorOfBooking } from "@/lib/notify";
+import { tellTheDoctor } from "@/lib/booking-alerts";
 import {
   bookConsultationSchema,
   rescheduleConsultationSchema,
@@ -117,6 +115,10 @@ export async function bookConsultationAction(
       }
       const todayAd = adToIso(new Date());
       const made = await createPatient({
+        // The booking's own id, which the browser minted once: a retried
+        // submit finds this person already registered instead of registering
+        // them a second time (createPatient is idempotent on the id).
+        id: data.id,
         name: newPatient.name.trim(),
         sex: newPatient.sex,
         ageValue: newPatient.ageValue,
@@ -232,36 +234,5 @@ export async function setConsultationStatusAction(
     return { ok: true, alerts };
   } catch (err) {
     return handle(err);
-  }
-}
-
-/**
- * Best-effort: reach the doctor and say what came of it in one plain line.
- * Never throws — a failure here is reported, not raised.
- */
-async function tellTheDoctor(
-  appointmentId: string,
-  event: "booked" | "moved" | "cancelled",
-): Promise<string> {
-  try {
-    const row = await getAppointmentRow(appointmentId);
-    if (!row) return "";
-    const doctor = await getDoctor(row.doctorId);
-    if (!doctor) return "";
-    const company = await getCompany();
-    await notifyDoctorOfBooking(doctor, row, company.name, event);
-
-    const { alertsFor } = await import("@/lib/repos/alerts");
-    const lines = await alertsFor(appointmentId);
-    const phone = lines.find((l) => l.channel === "push");
-    const email = lines.find((l) => l.channel === "email");
-    const reached: string[] = [];
-    if (phone?.status === "sent") reached.push("their phone");
-    if (email?.status === "sent") reached.push("their email");
-    if (reached.length > 0) return `${doctor.name} was told on ${reached.join(" and ")}.`;
-    return `${doctor.name} could not be told just now — the consultation is still booked.`;
-  } catch (err) {
-    console.error("[consultation alert]", err);
-    return "";
   }
 }

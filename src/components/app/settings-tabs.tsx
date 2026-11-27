@@ -18,6 +18,7 @@ const TABS: {
   { href: "/settings/modules", label: "Modules" },
   { href: "/settings/services", label: "Services", clinic: true },
   { href: "/settings/doctors", label: "Doctors", clinic: true },
+  { href: "/settings/online-booking", label: "Online booking", clinic: true },
   { href: "/settings/lab-partners", label: "Lab partners", clinic: true },
   { href: "/settings/racks", label: "Shop layout", pharmacy: true },
   { href: "/settings/fiscal-years", label: "Fiscal years" },

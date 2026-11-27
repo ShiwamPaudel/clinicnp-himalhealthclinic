@@ -54,6 +54,31 @@ export const RESTORE: RateLimitPolicy = {
   windowSeconds: 3600,
 };
 
+/**
+ * The clinic's website (C-029). Every call carries the same key, so the key
+ * is the identity: generous enough for a busy afternoon of people looking at
+ * free times, not a script walking every doctor's every day.
+ */
+export const WEBSITE_API: RateLimitPolicy = {
+  name: "website_api",
+  limit: 240,
+  windowSeconds: 60,
+};
+
+/** Booking requests from one visitor (the website forwards their address). */
+export const WEBSITE_BOOKING_VISITOR: RateLimitPolicy = {
+  name: "website_booking_ip",
+  limit: 10,
+  windowSeconds: 3600,
+};
+
+/** Booking requests for one mobile number in a day. */
+export const WEBSITE_BOOKING_PHONE: RateLimitPolicy = {
+  name: "website_booking_phone",
+  limit: 5,
+  windowSeconds: 86_400,
+};
+
 /** Reads the caller's IP from the usual proxy headers. */
 export function clientIp(req: Request): string {
   const fwd = req.headers.get("x-forwarded-for");
